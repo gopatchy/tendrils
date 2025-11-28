@@ -2,23 +2,18 @@ package tendrils
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
 	"time"
-
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
 )
 
 type Tendrils struct {
-	goroutines map[string]context.CancelFunc
+	activeInterfaces map[string]context.CancelFunc
 }
 
 func New() *Tendrils {
 	return &Tendrils{
-		goroutines: map[string]context.CancelFunc{},
+		activeInterfaces: map[string]context.CancelFunc{},
 	}
 }
 
@@ -28,7 +23,7 @@ func (t *Tendrils) Run() {
 
 	for {
 		interfaces := t.listInterfaces()
-		t.updateGoroutines(interfaces)
+		t.updateInterfaces(interfaces)
 		<-ticker.C
 	}
 }
@@ -69,71 +64,30 @@ func (t *Tendrils) listInterfaces() []net.Interface {
 	return validInterfaces
 }
 
-func (t *Tendrils) updateGoroutines(interfaces []net.Interface) {
+func (t *Tendrils) updateInterfaces(interfaces []net.Interface) {
 	current := map[string]bool{}
 	for _, iface := range interfaces {
 		current[iface.Name] = true
 	}
 
-	for name, cancel := range t.goroutines {
+	for name, cancel := range t.activeInterfaces {
 		if !current[name] {
 			log.Printf("interface removed: %s", name)
 			cancel()
-			delete(t.goroutines, name)
+			delete(t.activeInterfaces, name)
 		}
 	}
 
 	for _, iface := range interfaces {
-		if _, exists := t.goroutines[iface.Name]; !exists {
+		if _, exists := t.activeInterfaces[iface.Name]; !exists {
 			log.Printf("interface added: %s", iface.Name)
 			ctx, cancel := context.WithCancel(context.Background())
-			t.goroutines[iface.Name] = cancel
-			go t.handleInterface(ctx, iface)
+			t.activeInterfaces[iface.Name] = cancel
+			t.startInterface(ctx, iface)
 		}
 	}
 }
 
-func (t *Tendrils) handleInterface(ctx context.Context, iface net.Interface) {
-	handle, err := pcap.OpenLive(iface.Name, 65536, true, 5*time.Second)
-	if err != nil {
-		log.Printf("[ERROR] failed to open interface %s: %v", iface.Name, err)
-		return
-	}
-	defer handle.Close()
-
-	bpfFilter := fmt.Sprintf("ether proto 0x88cc")
-	if err := handle.SetBPFFilter(bpfFilter); err != nil {
-		log.Printf("[ERROR] failed to set BPF filter on %s: %v", iface.Name, err)
-		return
-	}
-
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	packets := packetSource.Packets()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case packet, ok := <-packets:
-			if !ok {
-				return
-			}
-			t.handleLLDPPacket(iface.Name, packet)
-		}
-	}
-}
-
-func (t *Tendrils) handleLLDPPacket(ifaceName string, packet gopacket.Packet) {
-	lldpLayer := packet.Layer(layers.LayerTypeLinkLayerDiscovery)
-	if lldpLayer == nil {
-		return
-	}
-
-	lldp, ok := lldpLayer.(*layers.LinkLayerDiscovery)
-	if !ok {
-		return
-	}
-
-	log.Printf("[%s] lldp packet received: ChassisID=%x PortID=%s TTL=%d",
-		ifaceName, lldp.ChassisID.ID, lldp.PortID.ID, lldp.TTL)
+func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
+	go t.listenLLDP(ctx, iface)
 }

@@ -3,3 +3,5 @@
 - Use all-lowercase log messages
 - Prepend log messages with [ERROR] if applicable
 - Don't mention claude in commit messages. Keep them to a single, short, descriptive sentence
+- Always push after commiting
+- Use git add -A so you don't miss files when committing
