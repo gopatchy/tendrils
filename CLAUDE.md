@@ -5,3 +5,4 @@
 - Don't mention claude in commit messages. Keep them to a single, short, descriptive sentence
 - Always push after commiting
 - Use git add -A so you don't miss files when committing
+- Never use go build -- use go run instead
