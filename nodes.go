@@ -122,6 +122,16 @@ func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.Hardw
 	node := n.nodes[targetID]
 	var added []string
 
+	if node.LocalPort == "" && childPort != "" {
+		node.LocalPort = childPort
+		added = append(added, "localPort="+childPort)
+	}
+
+	if node.ParentPort == "" && parentPort != "" {
+		node.ParentPort = parentPort
+		added = append(added, "parentPort="+parentPort)
+	}
+
 	for _, ip := range ips {
 		ipKey := ip.String()
 		if _, exists := node.IPs[ipKey]; !exists {
