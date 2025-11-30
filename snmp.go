@@ -114,26 +114,10 @@ func (t *Tendrils) querySNMPDevice(ip net.IP) {
 	defer snmp.Conn.Close()
 
 	t.queryBridgeMIB(snmp, ip)
-	t.queryARPTable(snmp, ip)
 }
 
 func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
-	macOID := "1.3.6.1.2.1.17.4.3.1.1"
-	portOID := "1.3.6.1.2.1.17.4.3.1.2"
-
-	macResults, err := snmp.BulkWalkAll(macOID)
-	if err != nil {
-		return
-	}
-
-	if len(macResults) == 0 {
-		macOID = "1.3.6.1.2.1.17.7.1.2.2.1.1"
-		portOID = "1.3.6.1.2.1.17.7.1.2.2.1.2"
-		macResults, err = snmp.BulkWalkAll(macOID)
-		if err != nil {
-			return
-		}
-	}
+	portOID := "1.3.6.1.2.1.17.7.1.2.2.1.2"
 
 	portResults, err := snmp.BulkWalkAll(portOID)
 	if err != nil {
@@ -232,103 +216,6 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 			t.nodes.mu.RUnlock()
 
 			t.nodes.UpdateWithParent(deviceIP, nil, []net.HardwareAddr{mac}, ifName, "", "snmp")
-		}
-	}
-}
-
-func (t *Tendrils) queryARPTable(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
-	macOID := "1.3.6.1.2.1.4.22.1.2"
-	ipOID := "1.3.6.1.2.1.4.22.1.3"
-	ifIndexOID := "1.3.6.1.2.1.4.22.1.1"
-
-	macResults, err := snmp.BulkWalkAll(macOID)
-	if err != nil {
-		return
-	}
-
-	ipResults, err := snmp.BulkWalkAll(ipOID)
-	if err != nil {
-		return
-	}
-
-	ifIndexResults, err := snmp.BulkWalkAll(ifIndexOID)
-	if err != nil {
-		return
-	}
-
-	ipMap := make(map[string]net.IP)
-	for _, result := range ipResults {
-		if result.Type == gosnmp.IPAddress {
-			oidSuffix := result.Name[len(ipOID)+1:]
-			ipBytes := result.Value.([]byte)
-			ipMap[oidSuffix] = net.IP(ipBytes)
-		}
-	}
-
-	ifIndexMap := make(map[string]int)
-	for _, result := range ifIndexResults {
-		if result.Type == gosnmp.Integer {
-			oidSuffix := result.Name[len(ifIndexOID)+1:]
-			ifIndexMap[oidSuffix] = result.Value.(int)
-		}
-	}
-
-	ifNames := t.getInterfaceNames(snmp)
-
-	for _, result := range macResults {
-		if result.Type == gosnmp.OctetString {
-			macBytes := result.Value.([]byte)
-			if len(macBytes) != 6 {
-				continue
-			}
-
-			mac := net.HardwareAddr(macBytes)
-			if isBroadcastOrZero(mac) {
-				continue
-			}
-
-			oidSuffix := result.Name[len(macOID)+1:]
-			ip, hasIP := ipMap[oidSuffix]
-			ifIndex, hasIfIndex := ifIndexMap[oidSuffix]
-
-			var ips []net.IP
-			if hasIP {
-				ips = []net.IP{ip}
-			}
-
-			ifName := ""
-			if hasIfIndex {
-				ifName = ifNames[ifIndex]
-			}
-			if ifName == "" {
-				ifName = "??"
-			}
-
-			t.nodes.mu.RLock()
-			deviceNodeID := -1
-			if id, exists := t.nodes.ipIndex[deviceIP.String()]; exists {
-				deviceNodeID = id
-			}
-			macNodeID := -1
-			if id, exists := t.nodes.macIndex[mac.String()]; exists {
-				macNodeID = id
-			}
-
-			if deviceNodeID != -1 && macNodeID != -1 {
-				deviceNode := t.nodes.nodes[deviceNodeID]
-				if deviceNode.ParentID == macNodeID {
-					t.nodes.mu.RUnlock()
-					t.nodes.mu.Lock()
-					if deviceNode.LocalPort == "" {
-						deviceNode.LocalPort = ifName
-					}
-					t.nodes.mu.Unlock()
-					continue
-				}
-			}
-			t.nodes.mu.RUnlock()
-
-			t.nodes.UpdateWithParent(deviceIP, ips, []net.HardwareAddr{mac}, ifName, "", "snmp")
 		}
 	}
 }
