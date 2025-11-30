@@ -9,13 +9,13 @@ import (
 
 type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
-	neighbors        *Neighbors
+	nodes            *Nodes
 }
 
 func New() *Tendrils {
 	return &Tendrils{
 		activeInterfaces: map[string]context.CancelFunc{},
-		neighbors:        NewNeighbors(),
+		nodes:            NewNodes(),
 	}
 }
 

@@ -51,13 +51,11 @@ func (t *Tendrils) handleLLDPPacket(ifaceName string, packet gopacket.Packet) {
 		return
 	}
 
-	log.Printf("[%s] lldp packet received: ChassisID=%x PortID=%s TTL=%d",
-		ifaceName, lldp.ChassisID.ID, lldp.PortID.ID, lldp.TTL)
-
 	if len(lldp.ChassisID.ID) == 6 {
 		mac := net.HardwareAddr(lldp.ChassisID.ID)
 		if !isBroadcastOrZero(mac) {
-			t.neighbors.Update(nil, []net.HardwareAddr{mac}, "lldp:"+ifaceName)
+			childPort := string(lldp.PortID.ID)
+			t.nodes.Update(nil, []net.HardwareAddr{mac}, ifaceName, childPort, "lldp")
 		}
 	}
 }
