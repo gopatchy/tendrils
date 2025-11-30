@@ -113,7 +113,38 @@ func (t *Tendrils) querySNMPDevice(ip net.IP) {
 	}
 	defer snmp.Conn.Close()
 
+	t.querySysName(snmp, ip)
 	t.queryBridgeMIB(snmp, ip)
+}
+
+func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
+	oid := "1.3.6.1.2.1.1.5.0"
+
+	result, err := snmp.Get([]string{oid})
+	if err != nil {
+		return
+	}
+
+	if len(result.Variables) > 0 {
+		variable := result.Variables[0]
+		if variable.Type == gosnmp.OctetString {
+			sysName := string(variable.Value.([]byte))
+			if sysName != "" {
+				t.nodes.mu.RLock()
+				if id, exists := t.nodes.ipIndex[deviceIP.String()]; exists {
+					t.nodes.mu.RUnlock()
+					t.nodes.mu.Lock()
+					node := t.nodes.nodes[id]
+					if node.Name == "" {
+						node.Name = sysName
+					}
+					t.nodes.mu.Unlock()
+					return
+				}
+				t.nodes.mu.RUnlock()
+			}
+		}
+	}
 }
 
 func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {

@@ -55,7 +55,20 @@ func (t *Tendrils) handleLLDPPacket(ifaceName string, packet gopacket.Packet) {
 		mac := net.HardwareAddr(lldp.ChassisID.ID)
 		if !isBroadcastOrZero(mac) {
 			childPort := string(lldp.PortID.ID)
+
+			var systemName string
+			for _, opt := range lldp.Values {
+				if opt.Type == layers.LLDPTLVSysName {
+					systemName = string(opt.Value)
+					break
+				}
+			}
+
 			t.nodes.Update(nil, []net.HardwareAddr{mac}, ifaceName, childPort, "lldp")
+
+			if systemName != "" {
+				t.nodes.SetName(mac, systemName)
+			}
 		}
 	}
 }

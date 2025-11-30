@@ -9,6 +9,7 @@ import (
 )
 
 type Node struct {
+	Name       string
 	IPs        map[string]net.IP
 	MACs       map[string]net.HardwareAddr
 	ParentID   int
@@ -29,7 +30,12 @@ func (n *Node) String() string {
 	}
 	sort.Strings(ips)
 
-	return fmt.Sprintf("{macs=%v ips=%v}", macs, ips)
+	name := n.Name
+	if name == "" {
+		name = "??"
+	}
+
+	return fmt.Sprintf("%s {macs=%v ips=%v}", name, macs, ips)
 }
 
 type Nodes struct {
@@ -117,6 +123,9 @@ func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.Hardw
 			n.mergeNodes(targetID, ids[i])
 		}
 		log.Printf("merged nodes %v into %s (via %s)", merging, n.nodes[targetID], source)
+		n.mu.Unlock()
+		n.LogTree()
+		n.mu.Lock()
 	}
 
 	node := n.nodes[targetID]
@@ -197,6 +206,18 @@ func (n *Nodes) GetByMAC(mac net.HardwareAddr) *Node {
 	return nil
 }
 
+func (n *Nodes) SetName(mac net.HardwareAddr, name string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if id, exists := n.macIndex[mac.String()]; exists {
+		node := n.nodes[id]
+		if node.Name == "" {
+			node.Name = name
+		}
+	}
+}
+
 func (n *Nodes) All() []*Node {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -219,7 +240,7 @@ func (n *Nodes) logNode(id int, prefix string, isLast bool) {
 	node := n.nodes[id]
 
 	if id == 0 {
-		log.Printf("[root] %s", node)
+		log.Printf("%s", node)
 		n.logChildrenByInterface(id, "")
 	} else {
 		connector := "├──"

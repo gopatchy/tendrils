@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
 	"time"
 )
 
@@ -48,6 +49,11 @@ func (t *Tendrils) populateLocalAddresses() {
 	defer t.nodes.mu.Unlock()
 
 	root := t.nodes.nodes[0]
+
+	hostname, err := os.Hostname()
+	if err == nil {
+		root.Name = hostname
+	}
 
 	for _, iface := range interfaces {
 		if len(iface.HardwareAddr) > 0 {
