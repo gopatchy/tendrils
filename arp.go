@@ -63,6 +63,11 @@ func (t *Tendrils) parseARPDarwin() []arpEntry {
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		if strings.Contains(line, "permanent") {
+			continue
+		}
+
 		fields := strings.Fields(line)
 		if len(fields) < 6 {
 			continue

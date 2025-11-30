@@ -207,6 +207,30 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 		if addToParent {
 			t.nodes.Update([]net.IP{deviceIP}, []net.HardwareAddr{mac}, "", "", "snmp")
 		} else {
+			t.nodes.mu.RLock()
+			deviceNodeID := -1
+			if id, exists := t.nodes.ipIndex[deviceIP.String()]; exists {
+				deviceNodeID = id
+			}
+			macNodeID := -1
+			if id, exists := t.nodes.macIndex[mac.String()]; exists {
+				macNodeID = id
+			}
+
+			if deviceNodeID != -1 && macNodeID != -1 {
+				deviceNode := t.nodes.nodes[deviceNodeID]
+				if deviceNode.ParentID == macNodeID {
+					t.nodes.mu.RUnlock()
+					t.nodes.mu.Lock()
+					if deviceNode.LocalPort == "" {
+						deviceNode.LocalPort = ifName
+					}
+					t.nodes.mu.Unlock()
+					continue
+				}
+			}
+			t.nodes.mu.RUnlock()
+
 			t.nodes.UpdateWithParent(deviceIP, nil, []net.HardwareAddr{mac}, ifName, "", "snmp")
 		}
 	}
@@ -279,6 +303,30 @@ func (t *Tendrils) queryARPTable(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 			if ifName == "" {
 				ifName = "??"
 			}
+
+			t.nodes.mu.RLock()
+			deviceNodeID := -1
+			if id, exists := t.nodes.ipIndex[deviceIP.String()]; exists {
+				deviceNodeID = id
+			}
+			macNodeID := -1
+			if id, exists := t.nodes.macIndex[mac.String()]; exists {
+				macNodeID = id
+			}
+
+			if deviceNodeID != -1 && macNodeID != -1 {
+				deviceNode := t.nodes.nodes[deviceNodeID]
+				if deviceNode.ParentID == macNodeID {
+					t.nodes.mu.RUnlock()
+					t.nodes.mu.Lock()
+					if deviceNode.LocalPort == "" {
+						deviceNode.LocalPort = ifName
+					}
+					t.nodes.mu.Unlock()
+					continue
+				}
+			}
+			t.nodes.mu.RUnlock()
 
 			t.nodes.UpdateWithParent(deviceIP, ips, []net.HardwareAddr{mac}, ifName, "", "snmp")
 		}

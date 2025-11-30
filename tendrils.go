@@ -23,6 +23,8 @@ func (t *Tendrils) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	t.populateLocalAddresses()
+
 	go t.pollARP(ctx)
 	go t.pollSNMP(ctx)
 
@@ -33,6 +35,41 @@ func (t *Tendrils) Run() {
 		interfaces := t.listInterfaces()
 		t.updateInterfaces(interfaces)
 		<-ticker.C
+	}
+}
+
+func (t *Tendrils) populateLocalAddresses() {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+
+	t.nodes.mu.Lock()
+	defer t.nodes.mu.Unlock()
+
+	root := t.nodes.nodes[0]
+
+	for _, iface := range interfaces {
+		if len(iface.HardwareAddr) > 0 {
+			macKey := iface.HardwareAddr.String()
+			root.MACs[macKey] = iface.HardwareAddr
+			t.nodes.macIndex[macKey] = 0
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				if ipnet.IP.To4() != nil && !ipnet.IP.IsLoopback() {
+					ipKey := ipnet.IP.String()
+					root.IPs[ipKey] = ipnet.IP
+					t.nodes.ipIndex[ipKey] = 0
+				}
+			}
+		}
 	}
 }
 
