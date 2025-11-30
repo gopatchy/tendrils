@@ -24,6 +24,7 @@ func (t *Tendrils) Run() {
 	defer cancel()
 
 	go t.pollARP(ctx)
+	go t.pollSNMP(ctx)
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
