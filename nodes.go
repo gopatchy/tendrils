@@ -58,11 +58,22 @@ func NewNodes() *Nodes {
 }
 
 func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, parentPort, childPort, source string) {
+	n.UpdateWithParent(nil, ips, macs, parentPort, childPort, source)
+}
+
+func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.HardwareAddr, parentPort, childPort, source string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	if len(ips) == 0 && len(macs) == 0 {
 		return
+	}
+
+	parentID := 0
+	if parentIP != nil {
+		if id, exists := n.ipIndex[parentIP.String()]; exists {
+			parentID = id
+		}
 	}
 
 	existingIDs := map[int]bool{}
@@ -86,7 +97,7 @@ func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, parentPort, childP
 		n.nodes[targetID] = &Node{
 			IPs:        map[string]net.IP{},
 			MACs:       map[string]net.HardwareAddr{},
-			ParentID:   0,
+			ParentID:   parentID,
 			LocalPort:  childPort,
 			ParentPort: parentPort,
 		}
@@ -105,7 +116,7 @@ func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, parentPort, childP
 			merging = append(merging, n.nodes[ids[i]].String())
 			n.mergeNodes(targetID, ids[i])
 		}
-		log.Printf("[%s] merged nodes %v into %s", source, merging, n.nodes[targetID])
+		log.Printf("merged nodes %v into %s (via %s)", merging, n.nodes[targetID], source)
 	}
 
 	node := n.nodes[targetID]

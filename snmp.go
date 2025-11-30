@@ -3,22 +3,36 @@ package tendrils
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
 )
 
+var (
+	addToParentRules = []*regexp.Regexp{
+		regexp.MustCompile(`CPU Interface`),
+	}
+
+	portNameRewrites = []struct {
+		regex       *regexp.Regexp
+		replacement string
+	}{
+		{regexp.MustCompile(`Slot: (\d+) Port: (\d+) .+`), "$1/$2"},
+	}
+)
+
 type snmpConfig struct {
-	username   string
-	authKey    string
-	privKey    string
-	authProto  gosnmp.SnmpV3AuthProtocol
-	privProto  gosnmp.SnmpV3PrivProtocol
-	secLevel   gosnmp.SnmpV3MsgFlags
-	timeout    time.Duration
-	retries    int
+	username  string
+	authKey   string
+	privKey   string
+	authProto gosnmp.SnmpV3AuthProtocol
+	privProto gosnmp.SnmpV3PrivProtocol
+	secLevel  gosnmp.SnmpV3MsgFlags
+	timeout   time.Duration
+	retries   int
 }
 
 func defaultSNMPConfig() *snmpConfig {
@@ -63,7 +77,7 @@ func (t *Tendrils) connectSNMP(ip net.IP) (*gosnmp.GoSNMP, error) {
 }
 
 func (t *Tendrils) pollSNMP(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	t.querySwitches()
@@ -112,55 +126,90 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 		return
 	}
 
+	if len(macResults) == 0 {
+		macOID = "1.3.6.1.2.1.17.7.1.2.2.1.1"
+		portOID = "1.3.6.1.2.1.17.7.1.2.2.1.2"
+		macResults, err = snmp.BulkWalkAll(macOID)
+		if err != nil {
+			return
+		}
+	}
+
 	portResults, err := snmp.BulkWalkAll(portOID)
 	if err != nil {
 		return
 	}
 
-	portMap := make(map[string]int)
+	type macPortEntry struct {
+		mac        net.HardwareAddr
+		bridgePort int
+	}
+	var macPorts []macPortEntry
+
 	for _, result := range portResults {
 		if result.Type == gosnmp.Integer {
-			oidSuffix := result.Name[len(portOID)+1:]
-			portMap[oidSuffix] = result.Value.(int)
+			oidSuffix := strings.TrimPrefix(result.Name[len(portOID):], ".")
+			parts := strings.Split(oidSuffix, ".")
+
+			if len(parts) >= 8 {
+				var macBytes []byte
+				for j := 2; j <= 7; j++ {
+					var b int
+					fmt.Sscanf(parts[j], "%d", &b)
+					macBytes = append(macBytes, byte(b))
+				}
+
+				if len(macBytes) == 6 {
+					mac := net.HardwareAddr(macBytes)
+					bridgePort := result.Value.(int)
+					macPorts = append(macPorts, macPortEntry{mac: mac, bridgePort: bridgePort})
+				}
+			}
 		}
 	}
 
 	bridgePortToIfIndex := t.getBridgePortMapping(snmp)
 	ifNames := t.getInterfaceNames(snmp)
 
-	for _, result := range macResults {
-		if result.Type == gosnmp.OctetString {
-			macBytes := result.Value.([]byte)
-			if len(macBytes) != 6 {
-				continue
-			}
+	for _, entry := range macPorts {
+		mac := entry.mac
+		bridgePort := entry.bridgePort
 
-			mac := net.HardwareAddr(macBytes)
-			if isBroadcastOrZero(mac) {
-				continue
-			}
+		if isBroadcastOrZero(mac) {
+			continue
+		}
 
-			oidSuffix := result.Name[len(macOID)+1:]
-			bridgePort, exists := portMap[oidSuffix]
-			if !exists {
-				continue
-			}
+		ifIndex, exists := bridgePortToIfIndex[bridgePort]
+		if !exists {
+			ifIndex = bridgePort
+		}
 
-			ifIndex, exists := bridgePortToIfIndex[bridgePort]
-			if !exists {
-				ifIndex = bridgePort
-			}
+		ifName := ifNames[ifIndex]
+		if ifName == "" {
+			ifName = "??"
+		}
 
-			ifName := ifNames[ifIndex]
-			if ifName == "" {
-				ifName = "??"
+		addToParent := false
+		for _, rule := range addToParentRules {
+			if rule.MatchString(ifName) {
+				addToParent = true
+				break
 			}
+		}
 
-			t.nodes.Update(nil, []net.HardwareAddr{mac}, ifName, "", "snmp")
+		for _, rewrite := range portNameRewrites {
+			if rewrite.regex.MatchString(ifName) {
+				ifName = rewrite.regex.ReplaceAllString(ifName, rewrite.replacement)
+				break
+			}
+		}
+
+		if addToParent {
+			t.nodes.Update([]net.IP{deviceIP}, []net.HardwareAddr{mac}, "", "", "snmp")
+		} else {
+			t.nodes.UpdateWithParent(deviceIP, nil, []net.HardwareAddr{mac}, ifName, "", "snmp")
 		}
 	}
-
-	log.Printf("[snmp] queried bridge mib on %s", deviceIP)
 }
 
 func (t *Tendrils) queryARPTable(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
@@ -231,11 +280,9 @@ func (t *Tendrils) queryARPTable(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 				ifName = "??"
 			}
 
-			t.nodes.Update(ips, []net.HardwareAddr{mac}, ifName, "", "snmp")
+			t.nodes.UpdateWithParent(deviceIP, ips, []net.HardwareAddr{mac}, ifName, "", "snmp")
 		}
 	}
-
-	log.Printf("[snmp] queried arp table on %s", deviceIP)
 }
 
 func (t *Tendrils) getBridgePortMapping(snmp *gosnmp.GoSNMP) map[int]int {
@@ -249,7 +296,7 @@ func (t *Tendrils) getBridgePortMapping(snmp *gosnmp.GoSNMP) map[int]int {
 	mapping := make(map[int]int)
 	for _, result := range results {
 		if result.Type == gosnmp.Integer {
-			oidParts := result.Name[len(oid)+1:]
+			oidParts := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+oid), ".")
 			var bridgePort int
 			_, err := fmt.Sscanf(oidParts, "%d", &bridgePort)
 			if err != nil {
@@ -274,7 +321,7 @@ func (t *Tendrils) getInterfaceNames(snmp *gosnmp.GoSNMP) map[int]string {
 	names := make(map[int]string)
 	for _, result := range results {
 		if result.Type == gosnmp.OctetString {
-			oidParts := result.Name[len(oid)+1:]
+			oidParts := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+oid), ".")
 			var ifIndex int
 			_, err := fmt.Sscanf(oidParts, "%d", &ifIndex)
 			if err != nil {
