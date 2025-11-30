@@ -20,6 +20,11 @@ func New() *Tendrils {
 }
 
 func (t *Tendrils) Run() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go t.pollARP(ctx)
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 

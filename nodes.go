@@ -197,31 +197,96 @@ func (n *Nodes) logNode(id int, prefix string, isLast bool) {
 
 	if id == 0 {
 		log.Printf("[root] %s", node)
+		n.logChildrenByInterface(id, "")
 	} else {
 		connector := "├──"
 		if isLast {
 			connector = "└──"
 		}
 
-		if node.ParentPort != "" && node.LocalPort != "" {
-			log.Printf("%s%s %s -> %s on %s", prefix, connector, node.ParentPort, node.LocalPort, node)
-		} else {
-			log.Printf("%s%s %s", prefix, connector, node)
+		childPort := node.LocalPort
+		if childPort == "" {
+			childPort = "??"
 		}
-	}
 
-	children := n.getChildren(id)
-	for i, childID := range children {
-		childIsLast := i == len(children)-1
-		childPrefix := prefix
-		if id != 0 {
+		log.Printf("%s%s %s on %s", prefix, connector, childPort, node)
+
+		children := n.getChildren(id)
+		for i, childID := range children {
+			childIsLast := i == len(children)-1
+			childPrefix := prefix
 			if isLast {
 				childPrefix += "    "
 			} else {
 				childPrefix += "│   "
 			}
+			n.logNode(childID, childPrefix, childIsLast)
 		}
-		n.logNode(childID, childPrefix, childIsLast)
+	}
+}
+
+func (n *Nodes) logChildrenByInterface(parentID int, prefix string) {
+	children := n.getChildren(parentID)
+
+	byInterface := map[string][]int{}
+	for _, childID := range children {
+		child := n.nodes[childID]
+		iface := child.ParentPort
+		if iface == "" {
+			iface = "??"
+		}
+		byInterface[iface] = append(byInterface[iface], childID)
+	}
+
+	var interfaces []string
+	for iface := range byInterface {
+		interfaces = append(interfaces, iface)
+	}
+	sort.Strings(interfaces)
+
+	for i, iface := range interfaces {
+		isLastInterface := i == len(interfaces)-1
+		connector := "├──"
+		if isLastInterface {
+			connector = "└──"
+		}
+
+		log.Printf("%s%s %s", prefix, connector, iface)
+
+		nodes := byInterface[iface]
+		for j, nodeID := range nodes {
+			isLastNode := j == len(nodes)-1
+			nodeConnector := "├──"
+			if isLastNode {
+				nodeConnector = "└──"
+			}
+
+			nodePrefix := prefix
+			if isLastInterface {
+				nodePrefix += "    "
+			} else {
+				nodePrefix += "│   "
+			}
+
+			node := n.nodes[nodeID]
+			childPort := node.LocalPort
+			if childPort == "" {
+				childPort = "??"
+			}
+
+			log.Printf("%s%s %s on %s", nodePrefix, nodeConnector, childPort, node)
+
+			grandchildren := n.getChildren(nodeID)
+			if len(grandchildren) > 0 {
+				grandchildPrefix := nodePrefix
+				if isLastNode {
+					grandchildPrefix += "    "
+				} else {
+					grandchildPrefix += "│   "
+				}
+				n.logChildrenByInterface(nodeID, grandchildPrefix)
+			}
+		}
 	}
 }
 

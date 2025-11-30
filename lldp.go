@@ -77,5 +77,17 @@ func isBroadcastOrZero(mac net.HardwareAddr) bool {
 		}
 	}
 
-	return allZero || allFF
+	if allZero || allFF {
+		return true
+	}
+
+	if mac[0] == 0x01 && mac[1] == 0x00 && mac[2] == 0x5e {
+		return true
+	}
+
+	if mac[0] == 0x33 && mac[1] == 0x33 {
+		return true
+	}
+
+	return false
 }
