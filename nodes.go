@@ -84,6 +84,7 @@ func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, source string) {
 	}
 
 	var targetID int
+	isNew := false
 	if len(existingIDs) == 0 {
 		targetID = n.nextID
 		n.nextID++
@@ -91,6 +92,7 @@ func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, source string) {
 			IPs:  map[string]net.IP{},
 			MACs: map[string]net.HardwareAddr{},
 		}
+		isNew = true
 	} else if len(existingIDs) == 1 {
 		for id := range existingIDs {
 			targetID = id
@@ -106,8 +108,8 @@ func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, source string) {
 			merging = append(merging, n.nodes[ids[i]].String())
 			n.mergeNodes(targetID, ids[i])
 		}
-		if n.t.LogReasons {
-			log.Printf("merged nodes %v into %s (via %s)", merging, n.nodes[targetID], source)
+		if n.t.LogEvents {
+			log.Printf("[merge] %v into %s (via %s)", merging, n.nodes[targetID], source)
 		}
 	}
 
@@ -132,8 +134,12 @@ func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, source string) {
 		n.macIndex[macKey] = targetID
 	}
 
-	if len(added) > 0 && n.t.LogReasons {
-		log.Printf("updated %s +%v (via %s)", node, added, source)
+	if len(added) > 0 && n.t.LogEvents {
+		if isNew {
+			log.Printf("[add] %s %v (via %s)", node, added, source)
+		} else {
+			log.Printf("[update] %s +%v (via %s)", node, added, source)
+		}
 	}
 }
 
