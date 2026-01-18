@@ -6,6 +6,8 @@ import (
 	"net"
 	"sort"
 	"sync"
+
+	"github.com/fvbommel/sortorder"
 )
 
 type Interface struct {
@@ -52,7 +54,7 @@ func (n *Node) String() string {
 	for _, iface := range n.Interfaces {
 		ifaces = append(ifaces, iface.String())
 	}
-	sort.Strings(ifaces)
+	sort.Slice(ifaces, func(i, j int) bool { return sortorder.NaturalLess(ifaces[i], ifaces[j]) })
 
 	return fmt.Sprintf("%s {%v}", name, ifaces)
 }
@@ -255,14 +257,14 @@ func (n *Nodes) logNode(node *Node) {
 	}
 	log.Printf("[node] %s", name)
 
-	var macKeys []string
-	for macKey := range node.Interfaces {
-		macKeys = append(macKeys, macKey)
+	var ifaceKeys []string
+	for ifaceKey := range node.Interfaces {
+		ifaceKeys = append(ifaceKeys, ifaceKey)
 	}
-	sort.Strings(macKeys)
+	sort.Slice(ifaceKeys, func(i, j int) bool { return sortorder.NaturalLess(ifaceKeys[i], ifaceKeys[j]) })
 
-	for _, macKey := range macKeys {
-		iface := node.Interfaces[macKey]
+	for _, ifaceKey := range ifaceKeys {
+		iface := node.Interfaces[ifaceKey]
 		log.Printf("[node]   %s", iface)
 	}
 }
