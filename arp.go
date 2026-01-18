@@ -44,6 +44,10 @@ func (t *Tendrils) readARPTable() {
 			continue
 		}
 
+		if t.DebugARP {
+			log.Printf("[arp] %s: ip=%s mac=%s", entry.iface, entry.ip, entry.mac)
+		}
+
 		t.nodes.Update([]net.IP{entry.ip}, []net.HardwareAddr{entry.mac}, entry.iface, "", "arp")
 	}
 }

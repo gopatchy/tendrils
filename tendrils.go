@@ -18,6 +18,9 @@ type Tendrils struct {
 	DisableSNMP bool
 	LogTree     bool
 	LogReasons  bool
+	DebugARP    bool
+	DebugLLDP   bool
+	DebugSNMP   bool
 }
 
 func New() *Tendrils {

@@ -64,6 +64,10 @@ func (t *Tendrils) handleLLDPPacket(ifaceName string, packet gopacket.Packet) {
 				}
 			}
 
+			if t.DebugLLDP {
+				log.Printf("[lldp] %s: mac=%s port=%s name=%s", ifaceName, mac, childPort, systemName)
+			}
+
 			t.nodes.Update(nil, []net.HardwareAddr{mac}, ifaceName, childPort, "lldp")
 
 			if systemName != "" {

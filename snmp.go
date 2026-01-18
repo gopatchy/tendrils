@@ -3,6 +3,7 @@ package tendrils
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"regexp"
 	"strings"
@@ -109,9 +110,16 @@ func (t *Tendrils) querySwitches() {
 func (t *Tendrils) querySNMPDevice(ip net.IP) {
 	snmp, err := t.connectSNMP(ip)
 	if err != nil {
+		if t.DebugSNMP {
+			log.Printf("[snmp] %s: connect failed: %v", ip, err)
+		}
 		return
 	}
 	defer snmp.Conn.Close()
+
+	if t.DebugSNMP {
+		log.Printf("[snmp] %s: connected", ip)
+	}
 
 	t.querySysName(snmp, ip)
 	t.queryBridgeMIB(snmp, ip)
@@ -217,6 +225,10 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 				ifName = rewrite.regex.ReplaceAllString(ifName, rewrite.replacement)
 				break
 			}
+		}
+
+		if t.DebugSNMP {
+			log.Printf("[snmp] %s: mac=%s port=%s", deviceIP, mac, ifName)
 		}
 
 		if addToParent {
