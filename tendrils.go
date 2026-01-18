@@ -17,6 +17,7 @@ type Tendrils struct {
 	DisableLLDP bool
 	DisableSNMP bool
 	LogEvents   bool
+	LogNodes    bool
 	DebugARP    bool
 	DebugLLDP   bool
 	DebugSNMP   bool

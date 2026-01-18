@@ -12,6 +12,7 @@ func main() {
 	noLLDP := flag.Bool("no-lldp", false, "disable LLDP discovery")
 	noSNMP := flag.Bool("no-snmp", false, "disable SNMP discovery")
 	logEvents := flag.Bool("log-events", false, "log node events")
+	logNodes := flag.Bool("log-nodes", false, "log full node details on changes")
 	debugARP := flag.Bool("debug-arp", false, "debug ARP discovery")
 	debugLLDP := flag.Bool("debug-lldp", false, "debug LLDP discovery")
 	debugSNMP := flag.Bool("debug-snmp", false, "debug SNMP discovery")
@@ -23,6 +24,7 @@ func main() {
 	t.DisableLLDP = *noLLDP
 	t.DisableSNMP = *noSNMP
 	t.LogEvents = *logEvents
+	t.LogNodes = *logNodes
 	t.DebugARP = *debugARP
 	t.DebugLLDP = *debugLLDP
 	t.DebugSNMP = *debugSNMP

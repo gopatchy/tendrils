@@ -15,21 +15,26 @@ type Interface struct {
 }
 
 func (i *Interface) String() string {
-	name := i.Name
-	if name == "" {
-		name = "??"
-	}
-
 	var ips []string
 	for _, ip := range i.IPs {
 		ips = append(ips, ip.String())
 	}
 	sort.Strings(ips)
 
-	if len(ips) == 0 {
-		return fmt.Sprintf("%s/%s", name, i.MAC)
+	var parts []string
+	parts = append(parts, i.MAC.String())
+	if i.Name != "" {
+		parts = append(parts, fmt.Sprintf("(%s)", i.Name))
 	}
-	return fmt.Sprintf("%s/%s %v", name, i.MAC, ips)
+	if len(ips) > 0 {
+		parts = append(parts, fmt.Sprintf("%v", ips))
+	}
+
+	result := parts[0]
+	for _, p := range parts[1:] {
+		result += " " + p
+	}
+	return result
 }
 
 type Node struct {
@@ -131,11 +136,16 @@ func (n *Nodes) Update(mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, 
 		node.Name = nodeName
 	}
 
-	if len(added) > 0 && n.t.LogEvents {
-		if isNew {
-			log.Printf("[add] %s %v (via %s)", node, added, source)
-		} else {
-			log.Printf("[update] %s +%v (via %s)", node, added, source)
+	if len(added) > 0 {
+		if n.t.LogEvents {
+			if isNew {
+				log.Printf("[add] %s %v (via %s)", node, added, source)
+			} else {
+				log.Printf("[update] %s +%v (via %s)", node, added, source)
+			}
+		}
+		if n.t.LogNodes {
+			n.logNode(node)
 		}
 	}
 }
@@ -171,6 +181,10 @@ func (n *Nodes) Merge(macs []net.HardwareAddr, source string) {
 			log.Printf("[merge] %s into %s (via %s)", n.nodes[ids[i]], n.nodes[targetID], source)
 		}
 		n.mergeNodes(targetID, ids[i])
+	}
+
+	if n.t.LogNodes {
+		n.logNode(n.nodes[targetID])
 	}
 }
 
@@ -221,6 +235,25 @@ func (n *Nodes) GetByMAC(mac net.HardwareAddr) *Node {
 		return n.nodes[id]
 	}
 	return nil
+}
+
+func (n *Nodes) logNode(node *Node) {
+	name := node.Name
+	if name == "" {
+		name = "??"
+	}
+	log.Printf("[node] %s", name)
+
+	var macKeys []string
+	for macKey := range node.Interfaces {
+		macKeys = append(macKeys, macKey)
+	}
+	sort.Strings(macKeys)
+
+	for _, macKey := range macKeys {
+		iface := node.Interfaces[macKey]
+		log.Printf("[node]   %s", iface)
+	}
 }
 
 func (n *Nodes) All() []*Node {
