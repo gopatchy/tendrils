@@ -207,6 +207,14 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 		t.nodes.Update(iface.mac, nil, iface.name, "", "snmp-ifmac")
 		macs = append(macs, iface.mac)
 	}
+
+	existingNode := t.nodes.GetByIP(deviceIP)
+	if existingNode != nil {
+		for _, iface := range existingNode.Interfaces {
+			macs = append(macs, iface.MAC)
+		}
+	}
+
 	if len(macs) > 1 {
 		t.nodes.Merge(macs, "snmp-ifmac")
 	}

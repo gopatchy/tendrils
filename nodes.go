@@ -233,6 +233,10 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 	keep := n.nodes[keepID]
 	merge := n.nodes[mergeID]
 
+	if keep == nil || merge == nil {
+		return
+	}
+
 	if merge.Name != "" && keep.Name == "" {
 		keep.Name = merge.Name
 	}
@@ -243,6 +247,7 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 			ips = append(ips, ip)
 		}
 		n.updateNodeInterface(keep, keepID, iface.MAC, ips, iface.Name)
+		n.macIndex[iface.MAC.String()] = keepID
 	}
 
 	delete(n.nodes, mergeID)
