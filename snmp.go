@@ -83,12 +83,14 @@ func (t *Tendrils) querySwitches() {
 	nodes := t.nodes.All()
 
 	for _, node := range nodes {
-		for _, ip := range node.IPs {
-			if ip.To4() == nil {
-				continue
-			}
+		for _, iface := range node.Interfaces {
+			for _, ip := range iface.IPs {
+				if ip.To4() == nil {
+					continue
+				}
 
-			go t.querySNMPDevice(ip)
+				go t.querySNMPDevice(ip)
+			}
 		}
 	}
 }
@@ -166,8 +168,11 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 		}
 	}
 
-	if len(macs) > 0 {
-		t.nodes.Update([]net.IP{deviceIP}, macs, "snmp-ifmac")
+	for _, mac := range macs {
+		t.nodes.Update(mac, nil, "", "", "snmp-ifmac")
+	}
+	if len(macs) > 1 {
+		t.nodes.Merge(macs, "snmp-ifmac")
 	}
 }
 
@@ -229,7 +234,7 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 			log.Printf("[snmp] %s: mac=%s port=%s", deviceIP, mac, ifName)
 		}
 
-		t.nodes.Update(nil, []net.HardwareAddr{mac}, "snmp")
+		t.nodes.Update(mac, nil, "", "", "snmp")
 	}
 }
 

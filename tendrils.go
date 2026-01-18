@@ -69,27 +69,33 @@ func (t *Tendrils) populateLocalAddresses() {
 		root.Name = hostname
 	}
 
-	for _, iface := range interfaces {
-		if len(iface.HardwareAddr) > 0 {
-			macKey := iface.HardwareAddr.String()
-			root.MACs[macKey] = iface.HardwareAddr
-			t.nodes.macIndex[macKey] = 0
-		}
-
-		addrs, err := iface.Addrs()
-		if err != nil {
+	for _, netIface := range interfaces {
+		if len(netIface.HardwareAddr) == 0 {
 			continue
 		}
 
-		for _, addr := range addrs {
-			if ipnet, ok := addr.(*net.IPNet); ok {
-				if ipnet.IP.To4() != nil && !ipnet.IP.IsLoopback() {
-					ipKey := ipnet.IP.String()
-					root.IPs[ipKey] = ipnet.IP
-					t.nodes.ipIndex[ipKey] = 0
+		macKey := netIface.HardwareAddr.String()
+		iface := &Interface{
+			Name: netIface.Name,
+			MAC:  netIface.HardwareAddr,
+			IPs:  map[string]net.IP{},
+		}
+
+		addrs, err := netIface.Addrs()
+		if err == nil {
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok {
+					if ipnet.IP.To4() != nil && !ipnet.IP.IsLoopback() {
+						ipKey := ipnet.IP.String()
+						iface.IPs[ipKey] = ipnet.IP
+						t.nodes.ipIndex[ipKey] = 0
+					}
 				}
 			}
 		}
+
+		root.Interfaces[macKey] = iface
+		t.nodes.macIndex[macKey] = 0
 	}
 }
 
