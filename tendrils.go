@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -35,6 +37,14 @@ func (t *Tendrils) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGUSR1)
+	go func() {
+		for range sigCh {
+			t.nodes.LogAll()
+		}
+	}()
+
 	t.populateLocalAddresses()
 
 	if !t.DisableARP {
@@ -60,43 +70,30 @@ func (t *Tendrils) populateLocalAddresses() {
 		return
 	}
 
-	t.nodes.mu.Lock()
-	defer t.nodes.mu.Unlock()
+	hostname, _ := os.Hostname()
 
-	root := t.nodes.nodes[0]
-
-	hostname, err := os.Hostname()
-	if err == nil {
-		root.Name = hostname
-	}
-
+	var target *Node
 	for _, netIface := range interfaces {
 		if len(netIface.HardwareAddr) == 0 {
 			continue
 		}
 
-		macKey := netIface.HardwareAddr.String()
-		iface := &Interface{
-			Name: netIface.Name,
-			MAC:  netIface.HardwareAddr,
-			IPs:  map[string]net.IP{},
-		}
-
+		var ips []net.IP
 		addrs, err := netIface.Addrs()
 		if err == nil {
 			for _, addr := range addrs {
 				if ipnet, ok := addr.(*net.IPNet); ok {
 					if ipnet.IP.To4() != nil && !ipnet.IP.IsLoopback() {
-						ipKey := ipnet.IP.String()
-						iface.IPs[ipKey] = ipnet.IP
-						t.nodes.ipIndex[ipKey] = 0
+						ips = append(ips, ipnet.IP)
 					}
 				}
 			}
 		}
 
-		root.Interfaces[macKey] = iface
-		t.nodes.macIndex[macKey] = 0
+		t.nodes.Update(target, netIface.HardwareAddr, ips, netIface.Name, hostname, "local")
+		if target == nil {
+			target = t.nodes.GetByMAC(netIface.HardwareAddr)
+		}
 	}
 }
 
@@ -147,7 +144,7 @@ func (t *Tendrils) updateInterfaces(interfaces []net.Interface) {
 
 	for name, cancel := range t.activeInterfaces {
 		if !current[name] {
-			log.Printf("interface removed: %s", name)
+			log.Printf("[iface] remove: %s", name)
 			cancel()
 			delete(t.activeInterfaces, name)
 		}
@@ -155,7 +152,7 @@ func (t *Tendrils) updateInterfaces(interfaces []net.Interface) {
 
 	for _, iface := range interfaces {
 		if _, exists := t.activeInterfaces[iface.Name]; !exists {
-			log.Printf("interface added: %s", iface.Name)
+			log.Printf("[iface] add: %s", iface.Name)
 			ctx, cancel := context.WithCancel(context.Background())
 			t.activeInterfaces[iface.Name] = cancel
 			t.startInterface(ctx, iface)

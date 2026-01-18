@@ -68,7 +68,7 @@ func (t *Tendrils) handleLLDPPacket(ifaceName string, packet gopacket.Packet) {
 				log.Printf("[lldp] %s: mac=%s port=%s name=%s", ifaceName, mac, childPort, systemName)
 			}
 
-			t.nodes.Update(mac, nil, childPort, systemName, "lldp")
+			t.nodes.Update(nil, mac, nil, childPort, systemName, "lldp")
 		}
 	}
 }

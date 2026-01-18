@@ -106,13 +106,13 @@ func (t *Tendrils) querySwitches() {
 					continue
 				}
 
-				go t.querySNMPDevice(ip)
+				go t.querySNMPDevice(node, ip)
 			}
 		}
 	}
 }
 
-func (t *Tendrils) querySNMPDevice(ip net.IP) {
+func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {
 	snmp, err := t.connectSNMP(ip)
 	if err != nil {
 		if t.DebugSNMP {
@@ -122,12 +122,12 @@ func (t *Tendrils) querySNMPDevice(ip net.IP) {
 	}
 	defer snmp.Conn.Close()
 
-	t.querySysName(snmp, ip)
-	t.queryInterfaceMACs(snmp, ip)
+	t.querySysName(snmp, node)
+	t.queryInterfaceMACs(snmp, node)
 	t.queryBridgeMIB(snmp, ip)
 }
 
-func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
+func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, node *Node) {
 	oid := "1.3.6.1.2.1.1.5.0"
 
 	result, err := snmp.Get([]string{oid})
@@ -135,29 +135,24 @@ func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 		return
 	}
 
-	if len(result.Variables) > 0 {
-		variable := result.Variables[0]
-		if variable.Type == gosnmp.OctetString {
-			sysName := string(variable.Value.([]byte))
-			if sysName != "" {
-				t.nodes.mu.RLock()
-				if id, exists := t.nodes.ipIndex[deviceIP.String()]; exists {
-					t.nodes.mu.RUnlock()
-					t.nodes.mu.Lock()
-					node := t.nodes.nodes[id]
-					if node.Name == "" {
-						node.Name = sysName
-					}
-					t.nodes.mu.Unlock()
-					return
-				}
-				t.nodes.mu.RUnlock()
-			}
-		}
+	if len(result.Variables) == 0 {
+		return
 	}
+
+	variable := result.Variables[0]
+	if variable.Type != gosnmp.OctetString {
+		return
+	}
+
+	sysName := string(variable.Value.([]byte))
+	if sysName == "" {
+		return
+	}
+
+	t.nodes.Update(node, nil, nil, "", sysName, "snmp-sysname")
 }
 
-func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
+func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, node *Node) {
 	oid := "1.3.6.1.2.1.2.2.1.6"
 
 	results, err := snmp.BulkWalkAll(oid)
@@ -166,12 +161,6 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 	}
 
 	ifNames := t.getInterfaceNames(snmp)
-
-	type ifaceEntry struct {
-		mac  net.HardwareAddr
-		name string
-	}
-	var ifaces []ifaceEntry
 
 	for _, result := range results {
 		if result.Type != gosnmp.OctetString {
@@ -196,27 +185,10 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 
 		name := rewritePortName(ifNames[ifIndex])
 		if t.DebugSNMP {
-			log.Printf("[snmp] %s: interface %d mac=%s name=%s", deviceIP, ifIndex, mac, name)
+			log.Printf("[snmp] %s: interface %d mac=%s name=%s", snmp.Target, ifIndex, mac, name)
 		}
 
-		ifaces = append(ifaces, ifaceEntry{mac: mac, name: name})
-	}
-
-	var macs []net.HardwareAddr
-	for _, iface := range ifaces {
-		t.nodes.Update(iface.mac, nil, iface.name, "", "snmp-ifmac")
-		macs = append(macs, iface.mac)
-	}
-
-	existingNode := t.nodes.GetByIP(deviceIP)
-	if existingNode != nil {
-		for _, iface := range existingNode.Interfaces {
-			macs = append(macs, iface.MAC)
-		}
-	}
-
-	if len(macs) > 1 {
-		t.nodes.Merge(macs, "snmp-ifmac")
+		t.nodes.Update(node, mac, nil, name, "", "snmp-ifmac")
 	}
 }
 
@@ -278,7 +250,7 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 			log.Printf("[snmp] %s: mac=%s port=%s", deviceIP, mac, ifName)
 		}
 
-		t.nodes.Update(mac, nil, "", "", "snmp")
+		t.nodes.Update(nil, mac, nil, "", "", "snmp")
 	}
 }
 

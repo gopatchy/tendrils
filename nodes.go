@@ -69,38 +69,43 @@ type Nodes struct {
 }
 
 func NewNodes(t *Tendrils) *Nodes {
-	n := &Nodes{
+	return &Nodes{
 		nodes:    map[int]*Node{},
 		ipIndex:  map[string]int{},
 		macIndex: map[string]int{},
 		nextID:   1,
 		t:        t,
 	}
-
-	n.nodes[0] = &Node{
-		Interfaces: map[string]*Interface{},
-	}
-
-	return n
 }
 
-func (n *Nodes) Update(mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) {
+func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if mac == nil {
+	if mac == nil && target == nil {
 		return
 	}
 
-	macKey := mac.String()
 	targetID := -1
 	isNew := false
 
-	if id, exists := n.macIndex[macKey]; exists {
-		if _, nodeExists := n.nodes[id]; nodeExists {
-			targetID = id
-		} else {
-			delete(n.macIndex, macKey)
+	if target != nil {
+		for id, node := range n.nodes {
+			if node == target {
+				targetID = id
+				break
+			}
+		}
+	}
+
+	if targetID == -1 && mac != nil {
+		macKey := mac.String()
+		if id, exists := n.macIndex[macKey]; exists {
+			if _, nodeExists := n.nodes[id]; nodeExists {
+				targetID = id
+			} else {
+				delete(n.macIndex, macKey)
+			}
 		}
 	}
 
@@ -115,10 +120,14 @@ func (n *Nodes) Update(mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, 
 
 	node := n.nodes[targetID]
 
-	added := n.updateNodeInterface(node, targetID, mac, ips, ifaceName)
+	var added []string
+	if mac != nil {
+		added = n.updateNodeInterface(node, targetID, mac, ips, ifaceName)
+	}
 
 	if nodeName != "" && node.Name == "" {
 		node.Name = nodeName
+		added = append(added, "name="+nodeName)
 	}
 
 	if len(added) > 0 {
@@ -301,4 +310,14 @@ func (n *Nodes) All() []*Node {
 		result = append(result, node)
 	}
 	return result
+}
+
+func (n *Nodes) LogAll() {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	log.Printf("[sigusr1] ================ %d nodes ================", len(n.nodes))
+	for _, node := range n.nodes {
+		n.logNode(node)
+	}
 }
