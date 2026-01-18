@@ -11,12 +11,14 @@ import (
 type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
 	nodes            *Nodes
+	iface            string
 }
 
-func New() *Tendrils {
+func New(iface string) *Tendrils {
 	return &Tendrils{
 		activeInterfaces: map[string]context.CancelFunc{},
 		nodes:            NewNodes(),
+		iface:            iface,
 	}
 }
 
@@ -88,6 +90,9 @@ func (t *Tendrils) listInterfaces() []net.Interface {
 
 	var validInterfaces []net.Interface
 	for _, iface := range interfaces {
+		if t.iface != "" && iface.Name != t.iface {
+			continue
+		}
 		if iface.Flags&net.FlagUp == 0 {
 			continue
 		}

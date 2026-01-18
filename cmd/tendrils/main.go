@@ -1,10 +1,15 @@
 package main
 
 import (
+	"flag"
+
 	"github.com/gopatchy/tendrils"
 )
 
 func main() {
-	t := tendrils.New()
+	iface := flag.String("i", "", "interface to use (default: all interfaces)")
+	flag.Parse()
+
+	t := tendrils.New(*iface)
 	t.Run()
 }

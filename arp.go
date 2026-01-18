@@ -37,6 +37,9 @@ func (t *Tendrils) readARPTable() {
 	entries := t.parseARPTable()
 
 	for _, entry := range entries {
+		if t.iface != "" && entry.iface != t.iface {
+			continue
+		}
 		if isBroadcastOrZero(entry.mac) {
 			continue
 		}
