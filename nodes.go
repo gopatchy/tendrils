@@ -114,36 +114,8 @@ func (n *Nodes) Update(mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, 
 	}
 
 	node := n.nodes[targetID]
-	var added []string
 
-	ifaceKey := macKey
-	if ifaceName != "" {
-		ifaceKey = ifaceName
-	}
-
-	iface, exists := node.Interfaces[ifaceKey]
-	if !exists {
-		iface = &Interface{
-			Name: ifaceName,
-			MAC:  mac,
-			IPs:  map[string]net.IP{},
-		}
-		node.Interfaces[ifaceKey] = iface
-		added = append(added, "iface="+ifaceKey)
-	}
-
-	if _, exists := n.macIndex[macKey]; !exists {
-		n.macIndex[macKey] = targetID
-	}
-
-	for _, ip := range ips {
-		ipKey := ip.String()
-		if _, exists := iface.IPs[ipKey]; !exists {
-			added = append(added, "ip="+ipKey)
-		}
-		iface.IPs[ipKey] = ip
-		n.ipIndex[ipKey] = targetID
-	}
+	added := n.updateNodeInterface(node, targetID, mac, ips, ifaceName)
 
 	if nodeName != "" && node.Name == "" {
 		node.Name = nodeName
@@ -161,6 +133,62 @@ func (n *Nodes) Update(mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, 
 			n.logNode(node)
 		}
 	}
+}
+
+func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr, ips []net.IP, ifaceName string) []string {
+	macKey := mac.String()
+	var added []string
+
+	ifaceKey := macKey
+	if ifaceName != "" {
+		ifaceKey = ifaceName
+	}
+
+	iface, exists := node.Interfaces[ifaceKey]
+	if !exists {
+		if ifaceName != "" {
+			if oldIface, oldExists := node.Interfaces[macKey]; oldExists && oldIface.MAC.String() == macKey {
+				iface = oldIface
+				iface.Name = ifaceName
+				delete(node.Interfaces, macKey)
+				node.Interfaces[ifaceKey] = iface
+				added = append(added, "iface="+ifaceKey)
+				exists = true
+			}
+		} else {
+			for _, existing := range node.Interfaces {
+				if existing.MAC.String() == macKey {
+					iface = existing
+					exists = true
+					break
+				}
+			}
+		}
+	}
+	if !exists {
+		iface = &Interface{
+			Name: ifaceName,
+			MAC:  mac,
+			IPs:  map[string]net.IP{},
+		}
+		node.Interfaces[ifaceKey] = iface
+		added = append(added, "iface="+ifaceKey)
+	}
+
+	if _, exists := n.macIndex[macKey]; !exists {
+		n.macIndex[macKey] = nodeID
+	}
+
+	for _, ip := range ips {
+		ipKey := ip.String()
+		if _, exists := iface.IPs[ipKey]; !exists {
+			added = append(added, "ip="+ipKey)
+		}
+		iface.IPs[ipKey] = ip
+		n.ipIndex[ipKey] = nodeID
+	}
+
+	return added
 }
 
 func (n *Nodes) Merge(macs []net.HardwareAddr, source string) {
@@ -209,22 +237,12 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 		keep.Name = merge.Name
 	}
 
-	for macKey, iface := range merge.Interfaces {
-		if existing, exists := keep.Interfaces[macKey]; exists {
-			for ipKey, ip := range iface.IPs {
-				existing.IPs[ipKey] = ip
-				n.ipIndex[ipKey] = keepID
-			}
-			if existing.Name == "" && iface.Name != "" {
-				existing.Name = iface.Name
-			}
-		} else {
-			keep.Interfaces[macKey] = iface
-			n.macIndex[macKey] = keepID
-			for ipKey := range iface.IPs {
-				n.ipIndex[ipKey] = keepID
-			}
+	for _, iface := range merge.Interfaces {
+		var ips []net.IP
+		for _, ip := range iface.IPs {
+			ips = append(ips, ip)
 		}
+		n.updateNodeInterface(keep, keepID, iface.MAC, ips, iface.Name)
 	}
 
 	delete(n.nodes, mergeID)
