@@ -42,6 +42,7 @@ func (i *Interface) String() string {
 type Node struct {
 	Name       string
 	Interfaces map[string]*Interface
+	MACTable   map[string]string // peer MAC -> local interface name
 }
 
 func (n *Node) String() string {
@@ -118,6 +119,7 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		n.nextID++
 		n.nodes[targetID] = &Node{
 			Interfaces: map[string]*Interface{},
+			MACTable:   map[string]string{},
 		}
 		isNew = true
 	}
@@ -263,6 +265,13 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 		n.macIndex[iface.MAC.String()] = keepID
 	}
 
+	for peerMAC, ifaceName := range merge.MACTable {
+		if keep.MACTable == nil {
+			keep.MACTable = map[string]string{}
+		}
+		keep.MACTable[peerMAC] = ifaceName
+	}
+
 	delete(n.nodes, mergeID)
 }
 
@@ -286,6 +295,16 @@ func (n *Nodes) GetByMAC(mac net.HardwareAddr) *Node {
 	return nil
 }
 
+func (n *Nodes) UpdateMACTable(node *Node, peerMAC net.HardwareAddr, ifaceName string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if node.MACTable == nil {
+		node.MACTable = map[string]string{}
+	}
+	node.MACTable[peerMAC.String()] = ifaceName
+}
+
 func (n *Nodes) logNode(node *Node) {
 	name := node.Name
 	if name == "" {
@@ -302,6 +321,10 @@ func (n *Nodes) logNode(node *Node) {
 	for _, ifaceKey := range ifaceKeys {
 		iface := node.Interfaces[ifaceKey]
 		log.Printf("[node]   %s", iface)
+	}
+
+	if len(node.MACTable) > 0 {
+		log.Printf("[node]   mac table: %d entries", len(node.MACTable))
 	}
 }
 

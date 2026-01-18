@@ -124,7 +124,7 @@ func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {
 
 	t.querySysName(snmp, node)
 	t.queryInterfaceMACs(snmp, node)
-	t.queryBridgeMIB(snmp, ip)
+	t.queryBridgeMIB(snmp, node)
 }
 
 func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, node *Node) {
@@ -192,7 +192,7 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, node *Node) {
 	}
 }
 
-func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
+func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, node *Node) {
 	portOID := "1.3.6.1.2.1.17.7.1.2.2.1.2"
 
 	portResults, err := snmp.BulkWalkAll(portOID)
@@ -238,19 +238,18 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 			continue
 		}
 
+		ifIndex, exists := bridgePortToIfIndex[entry.bridgePort]
+		if !exists {
+			ifIndex = entry.bridgePort
+		}
+		ifName := rewritePortName(ifNames[ifIndex])
+
 		if t.DebugSNMP {
-			ifIndex, exists := bridgePortToIfIndex[entry.bridgePort]
-			if !exists {
-				ifIndex = entry.bridgePort
-			}
-			ifName := ifNames[ifIndex]
-			if ifName == "" {
-				ifName = "??"
-			}
-			log.Printf("[snmp] %s: mac=%s port=%s", deviceIP, mac, ifName)
+			log.Printf("[snmp] %s: mac=%s port=%s", snmp.Target, mac, ifName)
 		}
 
 		t.nodes.Update(nil, mac, nil, "", "", "snmp")
+		t.nodes.UpdateMACTable(node, mac, ifName)
 	}
 }
 

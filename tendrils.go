@@ -97,6 +97,22 @@ func (t *Tendrils) populateLocalAddresses() {
 	}
 }
 
+func (t *Tendrils) getLocalNode() *Node {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+
+	for _, iface := range interfaces {
+		if len(iface.HardwareAddr) > 0 {
+			if node := t.nodes.GetByMAC(iface.HardwareAddr); node != nil {
+				return node
+			}
+		}
+	}
+	return nil
+}
+
 func (t *Tendrils) listInterfaces() []net.Interface {
 	interfaces, err := net.Interfaces()
 	if err != nil {

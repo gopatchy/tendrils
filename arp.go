@@ -36,6 +36,8 @@ type arpEntry struct {
 func (t *Tendrils) readARPTable() {
 	entries := t.parseARPTable()
 
+	localNode := t.getLocalNode()
+
 	for _, entry := range entries {
 		if t.Interface != "" && entry.iface != t.Interface {
 			continue
@@ -49,6 +51,9 @@ func (t *Tendrils) readARPTable() {
 		}
 
 		t.nodes.Update(nil, entry.mac, []net.IP{entry.ip}, "", "", "arp")
+		if localNode != nil {
+			t.nodes.UpdateMACTable(localNode, entry.mac, entry.iface)
+		}
 	}
 }
 
