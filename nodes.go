@@ -98,11 +98,15 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		}
 	}
 
-	if targetID == -1 && mac != nil {
+	if mac != nil {
 		macKey := mac.String()
 		if id, exists := n.macIndex[macKey]; exists {
 			if _, nodeExists := n.nodes[id]; nodeExists {
-				targetID = id
+				if targetID == -1 {
+					targetID = id
+				} else if id != targetID {
+					n.mergeNodes(targetID, id)
+				}
 			} else {
 				delete(n.macIndex, macKey)
 			}
