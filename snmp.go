@@ -5,11 +5,28 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
 )
+
+var portNameRewrites = []struct {
+	re   *regexp.Regexp
+	repl string
+}{
+	{regexp.MustCompile(`.*Slot: (\d+) Port: (\d+).*`), "$1/$2"},
+}
+
+func rewritePortName(name string) string {
+	for _, rw := range portNameRewrites {
+		if rw.re.MatchString(name) {
+			return rw.re.ReplaceAllString(name, rw.repl)
+		}
+	}
+	return name
+}
 
 type snmpConfig struct {
 	username  string
@@ -105,10 +122,6 @@ func (t *Tendrils) querySNMPDevice(ip net.IP) {
 	}
 	defer snmp.Conn.Close()
 
-	if t.DebugSNMP {
-		log.Printf("[snmp] %s: connected", ip)
-	}
-
 	t.querySysName(snmp, ip)
 	t.queryInterfaceMACs(snmp, ip)
 	t.queryBridgeMIB(snmp, ip)
@@ -152,24 +165,47 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 		return
 	}
 
-	var macs []net.HardwareAddr
+	ifNames := t.getInterfaceNames(snmp)
+
+	type ifaceEntry struct {
+		mac  net.HardwareAddr
+		name string
+	}
+	var ifaces []ifaceEntry
+
 	for _, result := range results {
-		if result.Type == gosnmp.OctetString {
-			macBytes := result.Value.([]byte)
-			if len(macBytes) == 6 {
-				mac := net.HardwareAddr(macBytes)
-				if !isBroadcastOrZero(mac) {
-					macs = append(macs, mac)
-					if t.DebugSNMP {
-						log.Printf("[snmp] %s: interface mac=%s", deviceIP, mac)
-					}
-				}
-			}
+		if result.Type != gosnmp.OctetString {
+			continue
 		}
+
+		macBytes := result.Value.([]byte)
+		if len(macBytes) != 6 {
+			continue
+		}
+
+		mac := net.HardwareAddr(macBytes)
+		if isBroadcastOrZero(mac) {
+			continue
+		}
+
+		oidSuffix := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+oid), ".")
+		var ifIndex int
+		if _, err := fmt.Sscanf(oidSuffix, "%d", &ifIndex); err != nil {
+			continue
+		}
+
+		name := rewritePortName(ifNames[ifIndex])
+		if t.DebugSNMP {
+			log.Printf("[snmp] %s: interface %d mac=%s name=%s", deviceIP, ifIndex, mac, name)
+		}
+
+		ifaces = append(ifaces, ifaceEntry{mac: mac, name: name})
 	}
 
-	for _, mac := range macs {
-		t.nodes.Update(mac, nil, "", "", "snmp-ifmac")
+	var macs []net.HardwareAddr
+	for _, iface := range ifaces {
+		t.nodes.Update(iface.mac, nil, iface.name, "", "snmp-ifmac")
+		macs = append(macs, iface.mac)
 	}
 	if len(macs) > 1 {
 		t.nodes.Merge(macs, "snmp-ifmac")
