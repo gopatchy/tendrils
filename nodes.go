@@ -44,14 +44,16 @@ type Nodes struct {
 	ipIndex  map[string]int
 	macIndex map[string]int
 	nextID   int
+	t        *Tendrils
 }
 
-func NewNodes() *Nodes {
+func NewNodes(t *Tendrils) *Nodes {
 	n := &Nodes{
 		nodes:    map[int]*Node{},
 		ipIndex:  map[string]int{},
 		macIndex: map[string]int{},
 		nextID:   1,
+		t:        t,
 	}
 
 	n.nodes[0] = &Node{
@@ -122,10 +124,14 @@ func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.Hardw
 			merging = append(merging, n.nodes[ids[i]].String())
 			n.mergeNodes(targetID, ids[i])
 		}
-		log.Printf("merged nodes %v into %s (via %s)", merging, n.nodes[targetID], source)
-		n.mu.Unlock()
-		n.LogTree()
-		n.mu.Lock()
+		if n.t.LogReasons {
+			log.Printf("merged nodes %v into %s (via %s)", merging, n.nodes[targetID], source)
+		}
+		if n.t.LogTree {
+			n.mu.Unlock()
+			n.LogTree()
+			n.mu.Lock()
+		}
 	}
 
 	node := n.nodes[targetID]
@@ -162,10 +168,14 @@ func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.Hardw
 	}
 
 	if len(added) > 0 {
-		log.Printf("updated %s +%v (via %s)", node, added, source)
-		n.mu.Unlock()
-		n.LogTree()
-		n.mu.Lock()
+		if n.t.LogReasons {
+			log.Printf("updated %s +%v (via %s)", node, added, source)
+		}
+		if n.t.LogTree {
+			n.mu.Unlock()
+			n.LogTree()
+			n.mu.Lock()
+		}
 	}
 }
 

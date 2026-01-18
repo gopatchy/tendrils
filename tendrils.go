@@ -11,15 +11,21 @@ import (
 type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
 	nodes            *Nodes
-	iface            string
+
+	Interface   string
+	DisableARP  bool
+	DisableLLDP bool
+	DisableSNMP bool
+	LogTree     bool
+	LogReasons  bool
 }
 
-func New(iface string) *Tendrils {
-	return &Tendrils{
+func New() *Tendrils {
+	t := &Tendrils{
 		activeInterfaces: map[string]context.CancelFunc{},
-		nodes:            NewNodes(),
-		iface:            iface,
 	}
+	t.nodes = NewNodes(t)
+	return t
 }
 
 func (t *Tendrils) Run() {
@@ -28,8 +34,12 @@ func (t *Tendrils) Run() {
 
 	t.populateLocalAddresses()
 
-	go t.pollARP(ctx)
-	go t.pollSNMP(ctx)
+	if !t.DisableARP {
+		go t.pollARP(ctx)
+	}
+	if !t.DisableSNMP {
+		go t.pollSNMP(ctx)
+	}
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -90,7 +100,7 @@ func (t *Tendrils) listInterfaces() []net.Interface {
 
 	var validInterfaces []net.Interface
 	for _, iface := range interfaces {
-		if t.iface != "" && iface.Name != t.iface {
+		if t.Interface != "" && iface.Name != t.Interface {
 			continue
 		}
 		if iface.Flags&net.FlagUp == 0 {
@@ -145,5 +155,7 @@ func (t *Tendrils) updateInterfaces(interfaces []net.Interface) {
 }
 
 func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
-	go t.listenLLDP(ctx, iface)
+	if !t.DisableLLDP {
+		go t.listenLLDP(ctx, iface)
+	}
 }
