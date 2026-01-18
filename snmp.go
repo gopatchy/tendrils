@@ -5,24 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
-)
-
-var (
-	addToParentRules = []*regexp.Regexp{
-		regexp.MustCompile(`CPU Interface`),
-	}
-
-	portNameRewrites = []struct {
-		regex       *regexp.Regexp
-		replacement string
-	}{
-		{regexp.MustCompile(`Slot: (\d+) Port: (\d+) .+`), "$1/$2"},
-	}
 )
 
 type snmpConfig struct {
@@ -181,7 +167,7 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 	}
 
 	if len(macs) > 0 {
-		t.nodes.Update([]net.IP{deviceIP}, macs, "", "", "snmp-ifmac")
+		t.nodes.Update([]net.IP{deviceIP}, macs, "snmp-ifmac")
 	}
 }
 
@@ -226,70 +212,24 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 
 	for _, entry := range macPorts {
 		mac := entry.mac
-		bridgePort := entry.bridgePort
 
 		if isBroadcastOrZero(mac) {
 			continue
 		}
 
-		ifIndex, exists := bridgePortToIfIndex[bridgePort]
-		if !exists {
-			ifIndex = bridgePort
-		}
-
-		ifName := ifNames[ifIndex]
-		if ifName == "" {
-			ifName = "??"
-		}
-
-		addToParent := false
-		for _, rule := range addToParentRules {
-			if rule.MatchString(ifName) {
-				addToParent = true
-				break
-			}
-		}
-
-		for _, rewrite := range portNameRewrites {
-			if rewrite.regex.MatchString(ifName) {
-				ifName = rewrite.regex.ReplaceAllString(ifName, rewrite.replacement)
-				break
-			}
-		}
-
 		if t.DebugSNMP {
+			ifIndex, exists := bridgePortToIfIndex[entry.bridgePort]
+			if !exists {
+				ifIndex = entry.bridgePort
+			}
+			ifName := ifNames[ifIndex]
+			if ifName == "" {
+				ifName = "??"
+			}
 			log.Printf("[snmp] %s: mac=%s port=%s", deviceIP, mac, ifName)
 		}
 
-		if addToParent {
-			t.nodes.Update([]net.IP{deviceIP}, []net.HardwareAddr{mac}, "", "", "snmp")
-		} else {
-			t.nodes.mu.RLock()
-			deviceNodeID := -1
-			if id, exists := t.nodes.ipIndex[deviceIP.String()]; exists {
-				deviceNodeID = id
-			}
-			macNodeID := -1
-			if id, exists := t.nodes.macIndex[mac.String()]; exists {
-				macNodeID = id
-			}
-
-			if deviceNodeID != -1 && macNodeID != -1 {
-				deviceNode := t.nodes.nodes[deviceNodeID]
-				if deviceNode.ParentID == macNodeID {
-					t.nodes.mu.RUnlock()
-					t.nodes.mu.Lock()
-					if deviceNode.LocalPort == "" {
-						deviceNode.LocalPort = ifName
-					}
-					t.nodes.mu.Unlock()
-					continue
-				}
-			}
-			t.nodes.mu.RUnlock()
-
-			t.nodes.UpdateWithParent(deviceIP, nil, []net.HardwareAddr{mac}, ifName, "", "snmp")
-		}
+		t.nodes.Update(nil, []net.HardwareAddr{mac}, "snmp")
 	}
 }
 

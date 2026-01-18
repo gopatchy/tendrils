@@ -9,12 +9,9 @@ import (
 )
 
 type Node struct {
-	Name       string
-	IPs        map[string]net.IP
-	MACs       map[string]net.HardwareAddr
-	ParentID   int
-	LocalPort  string
-	ParentPort string
+	Name string
+	IPs  map[string]net.IP
+	MACs map[string]net.HardwareAddr
 }
 
 func (n *Node) String() string {
@@ -57,31 +54,19 @@ func NewNodes(t *Tendrils) *Nodes {
 	}
 
 	n.nodes[0] = &Node{
-		IPs:      map[string]net.IP{},
-		MACs:     map[string]net.HardwareAddr{},
-		ParentID: 0,
+		IPs:  map[string]net.IP{},
+		MACs: map[string]net.HardwareAddr{},
 	}
 
 	return n
 }
 
-func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, parentPort, childPort, source string) {
-	n.UpdateWithParent(nil, ips, macs, parentPort, childPort, source)
-}
-
-func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.HardwareAddr, parentPort, childPort, source string) {
+func (n *Nodes) Update(ips []net.IP, macs []net.HardwareAddr, source string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	if len(ips) == 0 && len(macs) == 0 {
 		return
-	}
-
-	parentID := 0
-	if parentIP != nil {
-		if id, exists := n.ipIndex[parentIP.String()]; exists {
-			parentID = id
-		}
 	}
 
 	existingIDs := map[int]bool{}
@@ -103,11 +88,8 @@ func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.Hardw
 		targetID = n.nextID
 		n.nextID++
 		n.nodes[targetID] = &Node{
-			IPs:        map[string]net.IP{},
-			MACs:       map[string]net.HardwareAddr{},
-			ParentID:   parentID,
-			LocalPort:  childPort,
-			ParentPort: parentPort,
+			IPs:  map[string]net.IP{},
+			MACs: map[string]net.HardwareAddr{},
 		}
 	} else if len(existingIDs) == 1 {
 		for id := range existingIDs {
@@ -127,27 +109,10 @@ func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.Hardw
 		if n.t.LogReasons {
 			log.Printf("merged nodes %v into %s (via %s)", merging, n.nodes[targetID], source)
 		}
-		if n.t.LogTree {
-			n.mu.Unlock()
-			n.LogTree()
-			n.mu.Lock()
-		}
 	}
 
 	node := n.nodes[targetID]
 	var added []string
-
-	if targetID != 0 {
-		if node.LocalPort == "" && childPort != "" {
-			node.LocalPort = childPort
-			added = append(added, "localPort="+childPort)
-		}
-
-		if node.ParentPort == "" && parentPort != "" {
-			node.ParentPort = parentPort
-			added = append(added, "parentPort="+parentPort)
-		}
-	}
 
 	for _, ip := range ips {
 		ipKey := ip.String()
@@ -167,15 +132,8 @@ func (n *Nodes) UpdateWithParent(parentIP net.IP, ips []net.IP, macs []net.Hardw
 		n.macIndex[macKey] = targetID
 	}
 
-	if len(added) > 0 {
-		if n.t.LogReasons {
-			log.Printf("updated %s +%v (via %s)", node, added, source)
-		}
-		if n.t.LogTree {
-			n.mu.Unlock()
-			n.LogTree()
-			n.mu.Lock()
-		}
+	if len(added) > 0 && n.t.LogReasons {
+		log.Printf("updated %s +%v (via %s)", node, added, source)
 	}
 }
 
@@ -237,120 +195,4 @@ func (n *Nodes) All() []*Node {
 		result = append(result, node)
 	}
 	return result
-}
-
-func (n *Nodes) LogTree() {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-
-	n.logNode(0, "", true)
-}
-
-func (n *Nodes) logNode(id int, prefix string, isLast bool) {
-	node := n.nodes[id]
-
-	if id == 0 {
-		log.Printf("%s", node)
-		n.logChildrenByInterface(id, "")
-	} else {
-		connector := "├──"
-		if isLast {
-			connector = "└──"
-		}
-
-		childPort := node.LocalPort
-		if childPort == "" {
-			childPort = "??"
-		}
-
-		log.Printf("%s%s %s on %s", prefix, connector, childPort, node)
-
-		children := n.getChildren(id)
-		for i, childID := range children {
-			childIsLast := i == len(children)-1
-			childPrefix := prefix
-			if isLast {
-				childPrefix += "    "
-			} else {
-				childPrefix += "│   "
-			}
-			n.logNode(childID, childPrefix, childIsLast)
-		}
-	}
-}
-
-func (n *Nodes) logChildrenByInterface(parentID int, prefix string) {
-	children := n.getChildren(parentID)
-
-	byInterface := map[string][]int{}
-	for _, childID := range children {
-		child := n.nodes[childID]
-		iface := child.ParentPort
-		if iface == "" {
-			iface = "??"
-		}
-		byInterface[iface] = append(byInterface[iface], childID)
-	}
-
-	var interfaces []string
-	for iface := range byInterface {
-		interfaces = append(interfaces, iface)
-	}
-	sort.Strings(interfaces)
-
-	for i, iface := range interfaces {
-		isLastInterface := i == len(interfaces)-1
-		connector := "├──"
-		if isLastInterface {
-			connector = "└──"
-		}
-
-		log.Printf("%s%s %s", prefix, connector, iface)
-
-		nodes := byInterface[iface]
-		for j, nodeID := range nodes {
-			isLastNode := j == len(nodes)-1
-			nodeConnector := "├──"
-			if isLastNode {
-				nodeConnector = "└──"
-			}
-
-			nodePrefix := prefix
-			if isLastInterface {
-				nodePrefix += "    "
-			} else {
-				nodePrefix += "│   "
-			}
-
-			node := n.nodes[nodeID]
-			childPort := node.LocalPort
-			if childPort == "" {
-				childPort = "??"
-			}
-
-			log.Printf("%s%s %s on %s", nodePrefix, nodeConnector, childPort, node)
-
-			grandchildren := n.getChildren(nodeID)
-			if len(grandchildren) > 0 {
-				grandchildPrefix := nodePrefix
-				if isLastNode {
-					grandchildPrefix += "    "
-				} else {
-					grandchildPrefix += "│   "
-				}
-				n.logChildrenByInterface(nodeID, grandchildPrefix)
-			}
-		}
-	}
-}
-
-func (n *Nodes) getChildren(parentID int) []int {
-	var children []int
-	for id, node := range n.nodes {
-		if node.ParentID == parentID && id != 0 {
-			children = append(children, id)
-		}
-	}
-	sort.Ints(children)
-	return children
 }
