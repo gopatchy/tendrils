@@ -122,6 +122,7 @@ func (t *Tendrils) querySNMPDevice(ip net.IP) {
 	}
 
 	t.querySysName(snmp, ip)
+	t.queryInterfaceMACs(snmp, ip)
 	t.queryBridgeMIB(snmp, ip)
 }
 
@@ -152,6 +153,35 @@ func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
 				t.nodes.mu.RUnlock()
 			}
 		}
+	}
+}
+
+func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, deviceIP net.IP) {
+	oid := "1.3.6.1.2.1.2.2.1.6"
+
+	results, err := snmp.BulkWalkAll(oid)
+	if err != nil {
+		return
+	}
+
+	var macs []net.HardwareAddr
+	for _, result := range results {
+		if result.Type == gosnmp.OctetString {
+			macBytes := result.Value.([]byte)
+			if len(macBytes) == 6 {
+				mac := net.HardwareAddr(macBytes)
+				if !isBroadcastOrZero(mac) {
+					macs = append(macs, mac)
+					if t.DebugSNMP {
+						log.Printf("[snmp] %s: interface mac=%s", deviceIP, mac)
+					}
+				}
+			}
+		}
+	}
+
+	if len(macs) > 0 {
+		t.nodes.Update([]net.IP{deviceIP}, macs, "", "", "snmp-ifmac")
 	}
 }
 
