@@ -84,8 +84,6 @@ func (t *Tendrils) handleMDNSPacket(ifaceName string, srcIP net.IP, data []byte)
 }
 
 func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.Msg) {
-	var hostname string
-
 	allRecords := append(msg.Answer, msg.Extra...)
 
 	if t.DebugMDNS {
@@ -103,10 +101,6 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 		case *dns.A:
 			name := strings.TrimSuffix(r.Hdr.Name, ".")
 			aRecords[name] = r.A
-			localName := strings.TrimSuffix(name, ".local")
-			if localName != "" && r.A.Equal(srcIP) {
-				hostname = localName
-			}
 		case *dns.AAAA:
 			continue
 		case *dns.PTR:
@@ -115,19 +109,16 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 				if name != "" {
 					danteNames[name] = true
 				}
-			} else {
-				name := strings.TrimSuffix(r.Ptr, ".local.")
-				name = strings.TrimSuffix(name, ".")
-				if hostname == "" && name != "" && !strings.HasPrefix(name, "_") {
-					hostname = name
-				}
 			}
 		case *dns.SRV:
 			if isDanteService(r.Hdr.Name) {
 				name := extractDanteName(r.Hdr.Name)
 				target := strings.TrimSuffix(r.Target, ".")
-				if name != "" && target != "" {
-					srvTargets[name] = target
+				if name != "" {
+					danteNames[name] = true
+					if target != "" {
+						srvTargets[name] = target
+					}
 				}
 			}
 		}
@@ -147,11 +138,16 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 		t.nodes.UpdateDante(name, ip)
 	}
 
-	if len(danteNames) == 0 && hostname != "" {
-		if t.DebugMDNS {
-			log.Printf("[mdns] %s: %s -> %s", ifaceName, srcIP, hostname)
+	if len(danteNames) == 0 {
+		for aName, ip := range aRecords {
+			hostname := strings.TrimSuffix(aName, ".local")
+			if hostname != "" && hostname != aName {
+				if t.DebugMDNS {
+					log.Printf("[mdns] %s: %s -> %s", ifaceName, ip, hostname)
+				}
+				t.nodes.Update(nil, nil, []net.IP{ip}, "", hostname, "mdns")
+			}
 		}
-		t.nodes.Update(nil, nil, []net.IP{srcIP}, "", hostname, "mdns")
 	}
 }
 

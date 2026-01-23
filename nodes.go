@@ -102,12 +102,12 @@ type PoEBudget struct {
 }
 
 type Node struct {
-	Name              string
-	Interfaces        map[string]*Interface
-	MACTable          map[string]string // peer MAC -> local interface name
-	PoEBudget         *PoEBudget
+	Name               string
+	Interfaces         map[string]*Interface
+	MACTable           map[string]string // peer MAC -> local interface name
+	PoEBudget          *PoEBudget
 	IsDanteClockMaster bool
-	pollTrigger       chan struct{}
+	pollTrigger        chan struct{}
 }
 
 func (n *Node) String() string {
@@ -283,6 +283,14 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 			ipKey := ip.String()
 			if _, exists := n.ipIndex[ipKey]; !exists {
 				n.ipIndex[ipKey] = targetID
+				iface, exists := node.Interfaces[ipKey]
+				if !exists {
+					iface = &Interface{
+						IPs: map[string]net.IP{},
+					}
+					node.Interfaces[ipKey] = iface
+				}
+				iface.IPs[ipKey] = ip
 				added = append(added, "ip="+ipKey)
 				go n.t.requestARP(ip)
 			}
