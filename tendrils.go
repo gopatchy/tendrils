@@ -18,11 +18,13 @@ type Tendrils struct {
 	DisableARP  bool
 	DisableLLDP bool
 	DisableSNMP bool
+	DisableIGMP bool
 	LogEvents   bool
 	LogNodes    bool
 	DebugARP    bool
 	DebugLLDP   bool
 	DebugSNMP   bool
+	DebugIGMP   bool
 }
 
 func New() *Tendrils {
@@ -177,5 +179,8 @@ func (t *Tendrils) updateInterfaces(interfaces []net.Interface) {
 func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 	if !t.DisableLLDP {
 		go t.listenLLDP(ctx, iface)
+	}
+	if !t.DisableIGMP {
+		go t.listenIGMP(ctx, iface)
 	}
 }

@@ -133,29 +133,59 @@ func (n *Node) String() string {
 	return joinParts(parts)
 }
 
+type MulticastGroup struct {
+	IP net.IP
+}
+
+func (g *MulticastGroup) Name() string {
+	ip := g.IP.To4()
+	if ip == nil {
+		return g.IP.String()
+	}
+
+	if ip[0] == 239 && ip[1] == 255 {
+		universe := int(ip[2])*256 + int(ip[3])
+		return fmt.Sprintf("sacn:%d", universe)
+	}
+
+	return g.IP.String()
+}
+
+type MulticastMembership struct {
+	Node     *Node
+	LastSeen time.Time
+}
+
+type MulticastGroupMembers struct {
+	Group   *MulticastGroup
+	Members map[string]*MulticastMembership // source IP -> membership
+}
+
 type Nodes struct {
-	mu          sync.RWMutex
-	nodes       map[int]*Node
-	ipIndex     map[string]int
-	macIndex    map[string]int
-	nodeCancel  map[int]context.CancelFunc
-	nextID      int
-	t           *Tendrils
-	ctx         context.Context
-	cancelAll   context.CancelFunc
+	mu              sync.RWMutex
+	nodes           map[int]*Node
+	ipIndex         map[string]int
+	macIndex        map[string]int
+	nodeCancel      map[int]context.CancelFunc
+	multicastGroups map[string]*MulticastGroupMembers // group IP string -> group with members
+	nextID          int
+	t               *Tendrils
+	ctx             context.Context
+	cancelAll       context.CancelFunc
 }
 
 func NewNodes(t *Tendrils) *Nodes {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Nodes{
-		nodes:      map[int]*Node{},
-		ipIndex:    map[string]int{},
-		macIndex:   map[string]int{},
-		nodeCancel: map[int]context.CancelFunc{},
-		nextID:     1,
-		t:          t,
-		ctx:        ctx,
-		cancelAll:  cancel,
+		nodes:           map[int]*Node{},
+		ipIndex:         map[string]int{},
+		macIndex:        map[string]int{},
+		nodeCancel:      map[int]context.CancelFunc{},
+		multicastGroups: map[string]*MulticastGroupMembers{},
+		nextID:          1,
+		t:               t,
+		ctx:             ctx,
+		cancelAll:       cancel,
 	}
 }
 
@@ -433,6 +463,52 @@ func (n *Nodes) UpdateMACTable(node *Node, peerMAC net.HardwareAddr, ifaceName s
 	node.MACTable[peerMAC.String()] = ifaceName
 }
 
+func (n *Nodes) UpdateMulticastMembership(sourceIP, groupIP net.IP) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	node := n.getNodeByIPLocked(sourceIP)
+
+	groupKey := groupIP.String()
+	sourceKey := sourceIP.String()
+
+	gm := n.multicastGroups[groupKey]
+	if gm == nil {
+		gm = &MulticastGroupMembers{
+			Group:   &MulticastGroup{IP: groupIP},
+			Members: map[string]*MulticastMembership{},
+		}
+		n.multicastGroups[groupKey] = gm
+	}
+
+	gm.Members[sourceKey] = &MulticastMembership{
+		Node:     node,
+		LastSeen: time.Now(),
+	}
+}
+
+func (n *Nodes) RemoveMulticastMembership(sourceIP, groupIP net.IP) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	groupKey := groupIP.String()
+	sourceKey := sourceIP.String()
+
+	if gm := n.multicastGroups[groupKey]; gm != nil {
+		delete(gm.Members, sourceKey)
+		if len(gm.Members) == 0 {
+			delete(n.multicastGroups, groupKey)
+		}
+	}
+}
+
+func (n *Nodes) getNodeByIPLocked(ip net.IP) *Node {
+	if id, exists := n.ipIndex[ip.String()]; exists {
+		return n.nodes[id]
+	}
+	return nil
+}
+
 func (n *Nodes) logNode(node *Node) {
 	name := node.Name
 	if name == "" {
@@ -506,6 +582,53 @@ func (n *Nodes) LogAll() {
 		log.Printf("[sigusr1] ================ %d links ================", len(links))
 		for _, link := range links {
 			log.Printf("[sigusr1]   %s", link)
+		}
+	}
+
+	n.expireMulticastMemberships()
+
+	if len(n.multicastGroups) > 0 {
+		var groups []*MulticastGroupMembers
+		for _, gm := range n.multicastGroups {
+			groups = append(groups, gm)
+		}
+		sort.Slice(groups, func(i, j int) bool {
+			return sortorder.NaturalLess(groups[i].Group.Name(), groups[j].Group.Name())
+		})
+
+		log.Printf("[sigusr1] ================ %d multicast groups ================", len(groups))
+		for _, gm := range groups {
+			var memberNames []string
+			for sourceIP, membership := range gm.Members {
+				var name string
+				if membership.Node != nil {
+					name = membership.Node.Name
+					if name == "" {
+						name = sourceIP
+					}
+				} else {
+					name = sourceIP
+				}
+				memberNames = append(memberNames, name)
+			}
+			sort.Slice(memberNames, func(i, j int) bool {
+				return sortorder.NaturalLess(memberNames[i], memberNames[j])
+			})
+			log.Printf("[sigusr1]   %s: %v", gm.Group.Name(), memberNames)
+		}
+	}
+}
+
+func (n *Nodes) expireMulticastMemberships() {
+	expireTime := time.Now().Add(-5 * time.Minute)
+	for groupKey, gm := range n.multicastGroups {
+		for sourceKey, membership := range gm.Members {
+			if membership.LastSeen.Before(expireTime) {
+				delete(gm.Members, sourceKey)
+			}
+		}
+		if len(gm.Members) == 0 {
+			delete(n.multicastGroups, groupKey)
 		}
 	}
 }
