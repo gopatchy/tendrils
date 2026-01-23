@@ -35,6 +35,18 @@ func isDanteService(s string) bool {
 	return strings.Contains(s, "_netaudio-") || strings.Contains(s, "._dante")
 }
 
+func isSkaarhojService(s string) bool {
+	return strings.Contains(s, "_skaarhoj._tcp")
+}
+
+func extractSkaarhojName(s string) string {
+	idx := strings.Index(s, "._skaarhoj._tcp")
+	if idx <= 0 {
+		return ""
+	}
+	return strings.ReplaceAll(s[:idx], "\\", "")
+}
+
 func (t *Tendrils) listenMDNS(ctx context.Context, iface net.Interface) {
 	addr, err := net.ResolveUDPAddr("udp4", mdnsAddr)
 	if err != nil {
@@ -95,6 +107,7 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 	aRecords := map[string]net.IP{}
 	srvTargets := map[string]string{}
 	danteNames := map[string]bool{}
+	skaarhojNames := map[string]bool{}
 
 	for _, rr := range allRecords {
 		switch r := rr.(type) {
@@ -110,12 +123,27 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 					danteNames[name] = true
 				}
 			}
+			if isSkaarhojService(r.Ptr) {
+				name := extractSkaarhojName(r.Ptr)
+				if name != "" {
+					skaarhojNames[name] = true
+				}
+			}
 		case *dns.SRV:
+			target := strings.TrimSuffix(r.Target, ".")
 			if isDanteService(r.Hdr.Name) {
 				name := extractDanteName(r.Hdr.Name)
-				target := strings.TrimSuffix(r.Target, ".")
 				if name != "" {
 					danteNames[name] = true
+					if target != "" {
+						srvTargets[name] = target
+					}
+				}
+			}
+			if isSkaarhojService(r.Hdr.Name) {
+				name := extractSkaarhojName(r.Hdr.Name)
+				if name != "" {
+					skaarhojNames[name] = true
 					if target != "" {
 						srvTargets[name] = target
 					}
@@ -138,7 +166,21 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 		t.nodes.UpdateDante(name, ip)
 	}
 
-	if len(danteNames) == 0 {
+	for name := range skaarhojNames {
+		var ip net.IP
+		if target, ok := srvTargets[name]; ok {
+			ip = aRecords[target]
+		}
+		if ip == nil {
+			ip = srcIP
+		}
+		if t.DebugMDNS {
+			log.Printf("[mdns] %s: skaarhoj %s -> %s", ifaceName, name, ip)
+		}
+		t.nodes.Update(nil, nil, []net.IP{ip}, "", name, "skaarhoj")
+	}
+
+	if len(danteNames) == 0 && len(skaarhojNames) == 0 {
 		for aName, ip := range aRecords {
 			hostname := strings.TrimSuffix(aName, ".local")
 			if hostname != "" && hostname != aName {

@@ -59,7 +59,6 @@ func (t *Tendrils) sendDanteMDNSQuery(ifaceName string, srcIP net.IP) {
 		"_netaudio-dbc._udp.local.",
 		"_netaudio-chan._udp.local.",
 		"_dantevideo._udp.local.",
-		"_dantevid-flow._udp.local.",
 		"_danteancil._udp.local.",
 	}
 
