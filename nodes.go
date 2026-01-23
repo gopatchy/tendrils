@@ -102,11 +102,12 @@ type PoEBudget struct {
 }
 
 type Node struct {
-	Name        string
-	Interfaces  map[string]*Interface
-	MACTable    map[string]string // peer MAC -> local interface name
-	PoEBudget   *PoEBudget
-	pollTrigger chan struct{}
+	Name              string
+	Interfaces        map[string]*Interface
+	MACTable          map[string]string // peer MAC -> local interface name
+	PoEBudget         *PoEBudget
+	IsDanteClockMaster bool
+	pollTrigger       chan struct{}
 }
 
 func (n *Node) String() string {
@@ -148,7 +149,26 @@ func (g *MulticastGroup) Name() string {
 		return fmt.Sprintf("sacn:%d", universe)
 	}
 
+	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
+		flowID := (int(ip[1]-69) << 16) | (int(ip[2]) << 8) | int(ip[3])
+		return fmt.Sprintf("dante-mcast:%d", flowID)
+	}
+
 	return g.IP.String()
+}
+
+func (g *MulticastGroup) IsDante() bool {
+	ip := g.IP.To4()
+	if ip == nil {
+		return false
+	}
+	if ip[0] == 239 && ip[1] == 255 {
+		return false
+	}
+	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
+		return true
+	}
+	return false
 }
 
 type MulticastMembership struct {
@@ -197,7 +217,7 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if mac == nil && target == nil {
+	if mac == nil && target == nil && len(ips) == 0 {
 		return
 	}
 
@@ -228,6 +248,17 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		}
 	}
 
+	if targetID == -1 {
+		for _, ip := range ips {
+			if id, exists := n.ipIndex[ip.String()]; exists {
+				if _, nodeExists := n.nodes[id]; nodeExists {
+					targetID = id
+					break
+				}
+			}
+		}
+	}
+
 	var node *Node
 	if targetID == -1 {
 		targetID = n.nextID
@@ -247,6 +278,15 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 	var added []string
 	if mac != nil {
 		added = n.updateNodeInterface(node, targetID, mac, ips, ifaceName)
+	} else {
+		for _, ip := range ips {
+			ipKey := ip.String()
+			if _, exists := n.ipIndex[ipKey]; !exists {
+				n.ipIndex[ipKey] = targetID
+				added = append(added, "ip="+ipKey)
+				go n.t.requestARP(ip)
+			}
+		}
 	}
 
 	if nodeName != "" && node.Name == "" {
@@ -463,6 +503,33 @@ func (n *Nodes) UpdateMACTable(node *Node, peerMAC net.HardwareAddr, ifaceName s
 	node.MACTable[peerMAC.String()] = ifaceName
 }
 
+func (n *Nodes) SetDanteClockMaster(ip net.IP) {
+	n.mu.RLock()
+	currentMaster := ""
+	for _, node := range n.nodes {
+		if node.IsDanteClockMaster {
+			currentMaster = ip.String()
+			break
+		}
+	}
+	n.mu.RUnlock()
+
+	if currentMaster != ip.String() {
+		n.Update(nil, nil, []net.IP{ip}, "", "", "ptp")
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	for _, node := range n.nodes {
+		node.IsDanteClockMaster = false
+	}
+
+	if id, exists := n.ipIndex[ip.String()]; exists {
+		n.nodes[id].IsDanteClockMaster = true
+	}
+}
+
 func (n *Nodes) UpdateMulticastMembership(sourceIP, groupIP net.IP) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -514,8 +581,15 @@ func (n *Nodes) logNode(node *Node) {
 	if name == "" {
 		name = "??"
 	}
+	var tags []string
 	if node.PoEBudget != nil {
-		log.Printf("[node] %s [poe:%.0f/%.0fW]", name, node.PoEBudget.Power, node.PoEBudget.MaxPower)
+		tags = append(tags, fmt.Sprintf("poe:%.0f/%.0fW", node.PoEBudget.Power, node.PoEBudget.MaxPower))
+	}
+	if node.IsDanteClockMaster {
+		tags = append(tags, "dante-clock-master")
+	}
+	if len(tags) > 0 {
+		log.Printf("[node] %s [%s]", name, joinParts(tags))
 	} else {
 		log.Printf("[node] %s", name)
 	}

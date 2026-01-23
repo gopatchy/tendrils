@@ -126,3 +126,13 @@ func normalizeMACAddress(mac string) string {
 	}
 	return strings.Join(parts, ":")
 }
+
+func (t *Tendrils) requestARP(ip net.IP) {
+	if t.DisableARP {
+		return
+	}
+	conn, err := net.DialTimeout("udp4", ip.String()+":1", 100*time.Millisecond)
+	if err == nil {
+		conn.Close()
+	}
+}

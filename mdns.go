@@ -14,6 +14,27 @@ const (
 	mdnsAddr = "224.0.0.251:5353"
 )
 
+func extractDanteName(s string) string {
+	var name string
+	for _, prefix := range []string{"._netaudio-", "._dante"} {
+		if idx := strings.Index(s, prefix); idx > 0 {
+			name = s[:idx]
+			break
+		}
+	}
+	if name == "" {
+		return ""
+	}
+	if at := strings.LastIndex(name, "@"); at >= 0 {
+		name = name[at+1:]
+	}
+	return name
+}
+
+func isDanteService(s string) bool {
+	return strings.Contains(s, "_netaudio-") || strings.Contains(s, "._dante")
+}
+
 func (t *Tendrils) listenMDNS(ctx context.Context, iface net.Interface) {
 	addr, err := net.ResolveUDPAddr("udp4", mdnsAddr)
 	if err != nil {
@@ -66,26 +87,67 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 	var hostname string
 
 	allRecords := append(msg.Answer, msg.Extra...)
+
+	if t.DebugMDNS {
+		for _, rr := range allRecords {
+			log.Printf("[mdns] %s: record %s", ifaceName, rr.String())
+		}
+	}
+
+	aRecords := map[string]net.IP{}
+	srvTargets := map[string]string{}
+	danteNames := map[string]bool{}
+
 	for _, rr := range allRecords {
 		switch r := rr.(type) {
 		case *dns.A:
-			name := strings.TrimSuffix(r.Hdr.Name, ".local.")
-			name = strings.TrimSuffix(name, ".")
-			if name != "" && r.A.Equal(srcIP) {
-				hostname = name
+			name := strings.TrimSuffix(r.Hdr.Name, ".")
+			aRecords[name] = r.A
+			localName := strings.TrimSuffix(name, ".local")
+			if localName != "" && r.A.Equal(srcIP) {
+				hostname = localName
 			}
 		case *dns.AAAA:
 			continue
 		case *dns.PTR:
-			name := strings.TrimSuffix(r.Ptr, ".local.")
-			name = strings.TrimSuffix(name, ".")
-			if hostname == "" && name != "" && !strings.HasPrefix(name, "_") {
-				hostname = name
+			if isDanteService(r.Hdr.Name) {
+				name := extractDanteName(r.Ptr)
+				if name != "" {
+					danteNames[name] = true
+				}
+			} else {
+				name := strings.TrimSuffix(r.Ptr, ".local.")
+				name = strings.TrimSuffix(name, ".")
+				if hostname == "" && name != "" && !strings.HasPrefix(name, "_") {
+					hostname = name
+				}
+			}
+		case *dns.SRV:
+			if isDanteService(r.Hdr.Name) {
+				name := extractDanteName(r.Hdr.Name)
+				target := strings.TrimSuffix(r.Target, ".")
+				if name != "" && target != "" {
+					srvTargets[name] = target
+				}
 			}
 		}
 	}
 
-	if hostname != "" {
+	for name := range danteNames {
+		var ip net.IP
+		if target, ok := srvTargets[name]; ok {
+			ip = aRecords[target]
+		}
+		if ip == nil {
+			ip = aRecords[name+".local"]
+		}
+		if ip == nil {
+			ip = srcIP
+		}
+		t.nodes.UpdateDante(name, ip)
+	}
+
+	if len(danteNames) == 0 && hostname != "" {
 		if t.DebugMDNS {
 			log.Printf("[mdns] %s: %s -> %s", ifaceName, srcIP, hostname)
 		}
