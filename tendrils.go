@@ -13,23 +13,29 @@ import (
 type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
 	nodes            *Nodes
+	artnet           *ArtNetNodes
 
-	Interface   string
-	DisableARP  bool
-	DisableLLDP bool
-	DisableSNMP bool
-	DisableIGMP bool
-	LogEvents   bool
-	LogNodes    bool
-	DebugARP    bool
-	DebugLLDP   bool
-	DebugSNMP   bool
-	DebugIGMP   bool
+	Interface     string
+	DisableARP    bool
+	DisableLLDP   bool
+	DisableSNMP   bool
+	DisableIGMP   bool
+	DisableMDNS   bool
+	DisableArtNet bool
+	LogEvents     bool
+	LogNodes      bool
+	DebugARP      bool
+	DebugLLDP     bool
+	DebugSNMP     bool
+	DebugIGMP     bool
+	DebugMDNS     bool
+	DebugArtNet   bool
 }
 
 func New() *Tendrils {
 	t := &Tendrils{
 		activeInterfaces: map[string]context.CancelFunc{},
+		artnet:           NewArtNetNodes(),
 	}
 	t.nodes = NewNodes(t)
 	return t
@@ -182,5 +188,11 @@ func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 	}
 	if !t.DisableIGMP {
 		go t.listenIGMP(ctx, iface)
+	}
+	if !t.DisableMDNS {
+		go t.listenMDNS(ctx, iface)
+	}
+	if !t.DisableArtNet {
+		go t.listenArtNet(ctx, iface)
 	}
 }

@@ -617,6 +617,8 @@ func (n *Nodes) LogAll() {
 			log.Printf("[sigusr1]   %s: %v", gm.Group.Name(), memberNames)
 		}
 	}
+
+	n.t.artnet.LogAll()
 }
 
 func (n *Nodes) expireMulticastMemberships() {
