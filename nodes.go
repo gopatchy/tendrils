@@ -475,8 +475,142 @@ func (n *Nodes) LogAll() {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	log.Printf("[sigusr1] ================ %d nodes ================", len(n.nodes))
+	nodes := make([]*Node, 0, len(n.nodes))
 	for _, node := range n.nodes {
+		nodes = append(nodes, node)
+	}
+	sort.Slice(nodes, func(i, j int) bool {
+		return sortorder.NaturalLess(nodes[i].Name, nodes[j].Name)
+	})
+
+	log.Printf("[sigusr1] ================ %d nodes ================", len(nodes))
+	for _, node := range nodes {
 		n.logNode(node)
 	}
+
+	links := n.getDirectLinks()
+	sort.Slice(links, func(i, j int) bool {
+		if links[i].NodeA.Name != links[j].NodeA.Name {
+			return sortorder.NaturalLess(links[i].NodeA.Name, links[j].NodeA.Name)
+		}
+		if links[i].InterfaceA != links[j].InterfaceA {
+			return sortorder.NaturalLess(links[i].InterfaceA, links[j].InterfaceA)
+		}
+		if links[i].NodeB.Name != links[j].NodeB.Name {
+			return sortorder.NaturalLess(links[i].NodeB.Name, links[j].NodeB.Name)
+		}
+		return sortorder.NaturalLess(links[i].InterfaceB, links[j].InterfaceB)
+	})
+
+	if len(links) > 0 {
+		log.Printf("[sigusr1] ================ %d links ================", len(links))
+		for _, link := range links {
+			log.Printf("[sigusr1]   %s", link)
+		}
+	}
+}
+
+type Link struct {
+	NodeA      *Node
+	InterfaceA string
+	NodeB      *Node
+	InterfaceB string
+}
+
+func (l *Link) String() string {
+	nameA := l.NodeA.Name
+	if nameA == "" {
+		nameA = "??"
+	}
+	nameB := l.NodeB.Name
+	if nameB == "" {
+		nameB = "??"
+	}
+	return fmt.Sprintf("%s:%s <-> %s:%s", nameA, l.InterfaceA, nameB, l.InterfaceB)
+}
+
+func (n *Nodes) getDirectLinks() []*Link {
+	macToNode := map[string]*Node{}
+	for _, node := range n.nodes {
+		for _, iface := range node.Interfaces {
+			macToNode[iface.MAC.String()] = node
+		}
+	}
+
+	seen := map[string]bool{}
+	var links []*Link
+
+	for _, target := range n.nodes {
+		seenMACs := map[string]bool{}
+		for _, iface := range target.Interfaces {
+			mac := iface.MAC.String()
+			if seenMACs[mac] {
+				continue
+			}
+			seenMACs[mac] = true
+
+			var lastHop *Node
+			var lastPort string
+
+			for _, node := range n.nodes {
+				port, sees := node.MACTable[mac]
+				if !sees || node == target {
+					continue
+				}
+
+				hasCloserNode := false
+				for otherMAC, otherPort := range node.MACTable {
+					if otherPort != port {
+						continue
+					}
+					otherNode := macToNode[otherMAC]
+					if otherNode == nil || otherNode == node || otherNode == target {
+						continue
+					}
+					if _, alsoSees := otherNode.MACTable[mac]; alsoSees {
+						hasCloserNode = true
+						break
+					}
+				}
+
+				if !hasCloserNode {
+					lastHop = node
+					lastPort = port
+					break
+				}
+			}
+
+			if lastHop != nil {
+				targetIface := mac
+				for lastHopMAC, targetPort := range target.MACTable {
+					if macToNode[lastHopMAC] == lastHop {
+						targetIface = targetPort
+						break
+					}
+				}
+
+				key := makeLinkKey(lastHop, lastPort, target, targetIface)
+				if !seen[key] {
+					seen[key] = true
+					links = append(links, &Link{
+						NodeA:      lastHop,
+						InterfaceA: lastPort,
+						NodeB:      target,
+						InterfaceB: targetIface,
+					})
+				}
+			}
+		}
+	}
+
+	return links
+}
+
+func makeLinkKey(nodeA *Node, ifaceA string, nodeB *Node, ifaceB string) string {
+	ptrA := fmt.Sprintf("%p", nodeA)
+	ptrB := fmt.Sprintf("%p", nodeB)
+	if ptrA < ptrB {
+		return ptrA + ":" + ifaceA + "-" + ptrB + ":" + ifaceB
+	}
+	return ptrB + ":" + ifaceB + "-" + ptrA + ":" + ifaceA
 }
