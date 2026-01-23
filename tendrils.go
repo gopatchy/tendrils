@@ -48,10 +48,8 @@ func (t *Tendrils) Run() {
 	t.populateLocalAddresses()
 
 	if !t.DisableARP {
+		t.readARPTable()
 		go t.pollARP(ctx)
-	}
-	if !t.DisableSNMP {
-		go t.pollSNMP(ctx)
 	}
 
 	ticker := time.NewTicker(1 * time.Second)

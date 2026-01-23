@@ -1,11 +1,13 @@
 package tendrils
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/fvbommel/sortorder"
 )
@@ -100,10 +102,11 @@ type PoEBudget struct {
 }
 
 type Node struct {
-	Name       string
-	Interfaces map[string]*Interface
-	MACTable   map[string]string // peer MAC -> local interface name
-	PoEBudget  *PoEBudget
+	Name        string
+	Interfaces  map[string]*Interface
+	MACTable    map[string]string // peer MAC -> local interface name
+	PoEBudget   *PoEBudget
+	pollTrigger chan struct{}
 }
 
 func (n *Node) String() string {
@@ -131,22 +134,33 @@ func (n *Node) String() string {
 }
 
 type Nodes struct {
-	mu       sync.RWMutex
-	nodes    map[int]*Node
-	ipIndex  map[string]int
-	macIndex map[string]int
-	nextID   int
-	t        *Tendrils
+	mu          sync.RWMutex
+	nodes       map[int]*Node
+	ipIndex     map[string]int
+	macIndex    map[string]int
+	nodeCancel  map[int]context.CancelFunc
+	nextID      int
+	t           *Tendrils
+	ctx         context.Context
+	cancelAll   context.CancelFunc
 }
 
 func NewNodes(t *Tendrils) *Nodes {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Nodes{
-		nodes:    map[int]*Node{},
-		ipIndex:  map[string]int{},
-		macIndex: map[string]int{},
-		nextID:   1,
-		t:        t,
+		nodes:      map[int]*Node{},
+		ipIndex:    map[string]int{},
+		macIndex:   map[string]int{},
+		nodeCancel: map[int]context.CancelFunc{},
+		nextID:     1,
+		t:          t,
+		ctx:        ctx,
+		cancelAll:  cancel,
 	}
+}
+
+func (n *Nodes) Shutdown() {
+	n.cancelAll()
 }
 
 func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) {
@@ -184,17 +198,21 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		}
 	}
 
+	var node *Node
 	if targetID == -1 {
 		targetID = n.nextID
 		n.nextID++
-		n.nodes[targetID] = &Node{
-			Interfaces: map[string]*Interface{},
-			MACTable:   map[string]string{},
+		node = &Node{
+			Interfaces:  map[string]*Interface{},
+			MACTable:    map[string]string{},
+			pollTrigger: make(chan struct{}, 1),
 		}
+		n.nodes[targetID] = node
 		isNew = true
+		n.startNodePoller(targetID, node)
+	} else {
+		node = n.nodes[targetID]
 	}
-
-	node := n.nodes[targetID]
 
 	var added []string
 	if mac != nil {
@@ -204,6 +222,14 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 	if nodeName != "" && node.Name == "" {
 		node.Name = nodeName
 		added = append(added, "name="+nodeName)
+	}
+
+	hasNewIP := false
+	for _, a := range added {
+		if len(a) > 3 && a[:3] == "ip=" {
+			hasNewIP = true
+			break
+		}
 	}
 
 	if len(added) > 0 {
@@ -217,6 +243,38 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		if n.t.LogNodes {
 			n.logNode(node)
 		}
+	}
+
+	if hasNewIP {
+		n.triggerPoll(node)
+	}
+}
+
+func (n *Nodes) startNodePoller(nodeID int, node *Node) {
+	ctx, cancel := context.WithCancel(n.ctx)
+	n.nodeCancel[nodeID] = cancel
+
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-node.pollTrigger:
+				n.t.pollNode(node)
+			case <-ticker.C:
+				n.t.pollNode(node)
+			}
+		}
+	}()
+}
+
+func (n *Nodes) triggerPoll(node *Node) {
+	select {
+	case node.pollTrigger <- struct{}{}:
+	default:
 	}
 }
 

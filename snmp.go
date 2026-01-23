@@ -1,7 +1,6 @@
 package tendrils
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net"
@@ -80,35 +79,24 @@ func (t *Tendrils) connectSNMP(ip net.IP) (*gosnmp.GoSNMP, error) {
 	return snmp, nil
 }
 
-func (t *Tendrils) pollSNMP(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	t.querySwitches()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			t.querySwitches()
-		}
+func (t *Tendrils) pollNode(node *Node) {
+	if t.DisableSNMP {
+		return
 	}
-}
 
-func (t *Tendrils) querySwitches() {
-	nodes := t.nodes.All()
-
-	for _, node := range nodes {
-		for _, iface := range node.Interfaces {
-			for _, ip := range iface.IPs {
-				if ip.To4() == nil {
-					continue
-				}
-
-				go t.querySNMPDevice(node, ip)
+	t.nodes.mu.RLock()
+	var ips []net.IP
+	for _, iface := range node.Interfaces {
+		for _, ip := range iface.IPs {
+			if ip.To4() != nil {
+				ips = append(ips, ip)
 			}
 		}
+	}
+	t.nodes.mu.RUnlock()
+
+	for _, ip := range ips {
+		t.querySNMPDevice(node, ip)
 	}
 }
 

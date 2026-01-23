@@ -15,8 +15,6 @@ func (t *Tendrils) pollARP(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	t.readARPTable()
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -35,7 +33,6 @@ type arpEntry struct {
 
 func (t *Tendrils) readARPTable() {
 	entries := t.parseARPTable()
-
 	localNode := t.getLocalNode()
 
 	for _, entry := range entries {
@@ -65,7 +62,7 @@ func (t *Tendrils) parseARPTable() []arpEntry {
 }
 
 func (t *Tendrils) parseARPDarwin() []arpEntry {
-	cmd := exec.Command("arp", "-a")
+	cmd := exec.Command("arp", "-an")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
