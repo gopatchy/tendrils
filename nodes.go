@@ -144,11 +144,25 @@ func (g *MulticastGroup) Name() string {
 		return g.IP.String()
 	}
 
-	if ip[0] == 239 && ip[1] == 255 {
-		universe := int(ip[2])*256 + int(ip[3])
-		return fmt.Sprintf("sacn:%d", universe)
+	// Well-known multicast addresses
+	switch g.IP.String() {
+	case "224.0.0.251":
+		return "mdns"
+	case "224.0.1.129":
+		return "ptp"
+	case "224.2.127.254":
+		return "sap"
 	}
 
+	// sACN (239.255.x.x, universes 1-63999)
+	if ip[0] == 239 && ip[1] == 255 {
+		universe := int(ip[2])*256 + int(ip[3])
+		if universe >= 1 && universe <= 63999 {
+			return fmt.Sprintf("sacn:%d", universe)
+		}
+	}
+
+	// Dante audio multicast (239.69-71.x.x)
 	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
 		flowID := (int(ip[1]-69) << 16) | (int(ip[2]) << 8) | int(ip[3])
 		return fmt.Sprintf("dante-mcast:%d", flowID)
