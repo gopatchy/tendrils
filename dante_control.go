@@ -117,19 +117,54 @@ func (d *DanteFlows) LogAll() {
 
 	log.Printf("[sigusr1] ================ %d dante flows ================", len(flows))
 	for _, flow := range flows {
-		var subNames []string
-		for _, sub := range flow.Subscribers {
-			name := sub.Name
-			if len(sub.Channels) > 0 {
-				name = fmt.Sprintf("%s[%s]", name, strings.Join(sub.Channels, ","))
-			}
-			subNames = append(subNames, name)
+		type channelFlow struct {
+			txCh   string
+			rxName string
+			rxCh   string
 		}
-		sort.Slice(subNames, func(i, j int) bool {
-			return sortorder.NaturalLess(subNames[i], subNames[j])
+		var channelFlows []channelFlow
+		var noChannelSubs []string
+
+		for _, sub := range flow.Subscribers {
+			if len(sub.Channels) == 0 {
+				noChannelSubs = append(noChannelSubs, sub.Name)
+			} else {
+				for _, ch := range sub.Channels {
+					parts := strings.Split(ch, "->")
+					if len(parts) == 2 {
+						channelFlows = append(channelFlows, channelFlow{
+							txCh:   parts[0],
+							rxName: sub.Name,
+							rxCh:   parts[1],
+						})
+					} else {
+						noChannelSubs = append(noChannelSubs, fmt.Sprintf("%s[%s]", sub.Name, ch))
+					}
+				}
+			}
+		}
+
+		sort.Slice(channelFlows, func(i, j int) bool {
+			if channelFlows[i].txCh != channelFlows[j].txCh {
+				return sortorder.NaturalLess(channelFlows[i].txCh, channelFlows[j].txCh)
+			}
+			return sortorder.NaturalLess(channelFlows[i].rxName, channelFlows[j].rxName)
+		})
+		sort.Slice(noChannelSubs, func(i, j int) bool {
+			return sortorder.NaturalLess(noChannelSubs[i], noChannelSubs[j])
 		})
 
-		log.Printf("[sigusr1]   %s -> %s", flow.SourceName, strings.Join(subNames, ", "))
+		sourceName := flow.SourceName
+		if strings.HasPrefix(sourceName, "dante-av:") || strings.HasPrefix(sourceName, "dante-mcast:") {
+			sourceName = "?? (" + sourceName + ")"
+		}
+
+		for _, cf := range channelFlows {
+			log.Printf("[sigusr1]   %s[%s] -> %s[%s]", sourceName, cf.txCh, cf.rxName, cf.rxCh)
+		}
+		if len(noChannelSubs) > 0 {
+			log.Printf("[sigusr1]   %s -> %s", sourceName, strings.Join(noChannelSubs, ", "))
+		}
 	}
 }
 
@@ -431,7 +466,6 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 			t.nodes.Update(nil, nil, []net.IP{ip}, "", info.Name, "dante-control")
 		}
 
-		var multicastChannels []string
 		for _, sub := range info.Subscriptions {
 			if t.DebugDante {
 				log.Printf("[dante] %s: subscription rx=%d -> %s@%s",
@@ -443,8 +477,6 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 					channelInfo = fmt.Sprintf("%s->%d", sub.TxChannelName, sub.RxChannel)
 				}
 				t.danteFlows.Update(sub.TxDeviceName, info.Name, channelInfo)
-			} else if sub.TxChannelName != "" {
-				multicastChannels = append(multicastChannels, sub.TxChannelName)
 			}
 		}
 
@@ -458,11 +490,7 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 				if sourceName == "" {
 					sourceName = (&MulticastGroup{IP: groupIP}).Name()
 				}
-				channelInfo := ""
-				if len(multicastChannels) > 0 {
-					channelInfo = strings.Join(multicastChannels, ",")
-				}
-				t.danteFlows.Update(sourceName, info.Name, channelInfo)
+				t.danteFlows.Update(sourceName, info.Name, "")
 			}
 		}
 	}
