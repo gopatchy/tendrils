@@ -31,19 +31,6 @@ func extractDanteName(s string) string {
 	return name
 }
 
-func extractDanteChanService(s string) (channel, device string) {
-	idx := strings.Index(s, "._netaudio-chan.")
-	if idx <= 0 {
-		return "", ""
-	}
-	name := s[:idx]
-	at := strings.Index(name, "@")
-	if at <= 0 {
-		return "", ""
-	}
-	return name[:at], name[at+1:]
-}
-
 func isDanteService(s string) bool {
 	return strings.Contains(s, "_netaudio-") || strings.Contains(s, "._dante")
 }
@@ -121,7 +108,6 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 	srvTargets := map[string]string{}
 	danteNames := map[string]bool{}
 	danteARCPorts := map[string]uint16{}
-	danteTxChannels := map[string]string{} // device name -> channel names
 	skaarhojNames := map[string]bool{}
 
 	for _, rr := range allRecords {
@@ -157,16 +143,6 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 						danteARCPorts[name] = r.Port
 					}
 				}
-				if strings.Contains(r.Hdr.Name, "_netaudio-chan.") {
-					channel, device := extractDanteChanService(r.Hdr.Name)
-					if channel != "" && device != "" {
-						if existing, ok := danteTxChannels[device]; ok {
-							danteTxChannels[device] = existing + "," + channel
-						} else {
-							danteTxChannels[device] = channel
-						}
-					}
-				}
 			}
 			if isSkaarhojService(r.Hdr.Name) {
 				name := extractSkaarhojName(r.Hdr.Name)
@@ -193,23 +169,6 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 		}
 		arcPort := int(danteARCPorts[name])
 		t.nodes.UpdateDante(name, ip, arcPort)
-	}
-
-	for device, channels := range danteTxChannels {
-		var ip net.IP
-		if target, ok := srvTargets[device]; ok {
-			ip = aRecords[target]
-		}
-		if ip == nil {
-			ip = aRecords[device+".local"]
-		}
-		if ip == nil {
-			ip = srcIP
-		}
-		if t.DebugMDNS {
-			log.Printf("[mdns] %s: dante tx channels %s@%s (%s)", ifaceName, channels, device, ip)
-		}
-		t.nodes.UpdateDanteTxChannels(device, ip, channels)
 	}
 
 	for name := range skaarhojNames {
