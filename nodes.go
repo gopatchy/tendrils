@@ -151,8 +151,22 @@ func (g *MulticastGroup) Name() string {
 		return "mdns"
 	case "224.0.1.129":
 		return "ptp"
+	case "224.0.1.130":
+		return "ptp-announce"
+	case "224.0.1.131":
+		return "ptp-sync"
+	case "224.0.1.132":
+		return "ptp-delay"
 	case "224.2.127.254":
 		return "sap"
+	case "239.255.254.253":
+		return "shure-slp"
+	case "239.255.255.250":
+		return "ssdp"
+	case "239.255.255.253":
+		return "slp"
+	case "239.255.255.255":
+		return "admin-scoped-broadcast"
 	}
 
 	// sACN (239.255.x.x, universes 1-63999)
