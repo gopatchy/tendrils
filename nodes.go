@@ -94,10 +94,16 @@ func joinParts(parts []string) string {
 	return result
 }
 
+type PoEBudget struct {
+	Power    float64 // watts in use
+	MaxPower float64 // watts total budget
+}
+
 type Node struct {
 	Name       string
 	Interfaces map[string]*Interface
 	MACTable   map[string]string // peer MAC -> local interface name
+	PoEBudget  *PoEBudget
 }
 
 func (n *Node) String() string {
@@ -106,13 +112,22 @@ func (n *Node) String() string {
 		name = "??"
 	}
 
+	var parts []string
+	parts = append(parts, name)
+
+	if n.PoEBudget != nil {
+		parts = append(parts, fmt.Sprintf("[poe:%.0f/%.0fW]", n.PoEBudget.Power, n.PoEBudget.MaxPower))
+	}
+
 	var ifaces []string
 	for _, iface := range n.Interfaces {
 		ifaces = append(ifaces, iface.String())
 	}
 	sort.Slice(ifaces, func(i, j int) bool { return sortorder.NaturalLess(ifaces[i], ifaces[j]) })
 
-	return fmt.Sprintf("%s {%v}", name, ifaces)
+	parts = append(parts, fmt.Sprintf("{%v}", ifaces))
+
+	return joinParts(parts)
 }
 
 type Nodes struct {
@@ -365,7 +380,11 @@ func (n *Nodes) logNode(node *Node) {
 	if name == "" {
 		name = "??"
 	}
-	log.Printf("[node] %s", name)
+	if node.PoEBudget != nil {
+		log.Printf("[node] %s [poe:%.0f/%.0fW]", name, node.PoEBudget.Power, node.PoEBudget.MaxPower)
+	} else {
+		log.Printf("[node] %s", name)
+	}
 
 	var ifaceKeys []string
 	for ifaceKey := range node.Interfaces {

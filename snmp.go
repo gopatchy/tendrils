@@ -125,6 +125,7 @@ func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {
 	t.querySysName(snmp, node)
 	t.queryInterfaceMACs(snmp, node)
 	t.queryInterfaceStats(snmp, node)
+	t.queryPoEBudget(snmp, node)
 	t.queryBridgeMIB(snmp, node)
 }
 
@@ -239,6 +240,45 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node) {
 		}
 
 		iface.Stats = stats
+	}
+}
+
+func (t *Tendrils) queryPoEBudget(snmp *gosnmp.GoSNMP, node *Node) {
+	maxPowerOID := "1.3.6.1.2.1.105.1.3.1.1.2.1"
+	powerOID := "1.3.6.1.2.1.105.1.3.1.1.4.1"
+
+	result, err := snmp.Get([]string{maxPowerOID, powerOID})
+	if err != nil {
+		return
+	}
+
+	var power, maxPower float64
+	for _, v := range result.Variables {
+		var val int
+		switch x := v.Value.(type) {
+		case int:
+			val = x
+		case uint:
+			val = int(x)
+		case int64:
+			val = int(x)
+		case uint64:
+			val = int(x)
+		default:
+			continue
+		}
+
+		if v.Name == "."+powerOID {
+			power = float64(val)
+		} else if v.Name == "."+maxPowerOID {
+			maxPower = float64(val)
+		}
+	}
+
+	if maxPower > 0 {
+		t.nodes.mu.Lock()
+		node.PoEBudget = &PoEBudget{Power: power, MaxPower: maxPower}
+		t.nodes.mu.Unlock()
 	}
 }
 
