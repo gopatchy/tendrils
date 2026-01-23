@@ -80,10 +80,6 @@ func (t *Tendrils) connectSNMP(ip net.IP) (*gosnmp.GoSNMP, error) {
 }
 
 func (t *Tendrils) pollNode(node *Node) {
-	if t.DisableSNMP {
-		return
-	}
-
 	t.nodes.mu.RLock()
 	var ips []net.IP
 	for _, iface := range node.Interfaces {
@@ -93,10 +89,19 @@ func (t *Tendrils) pollNode(node *Node) {
 			}
 		}
 	}
+	nodeName := node.Name
 	t.nodes.mu.RUnlock()
 
-	for _, ip := range ips {
-		t.querySNMPDevice(node, ip)
+	if !t.DisableSNMP {
+		for _, ip := range ips {
+			t.querySNMPDevice(node, ip)
+		}
+	}
+
+	if !t.DisableBMD && nodeName == "" {
+		for _, ip := range ips {
+			t.probeBMDDevice(ip)
+		}
 	}
 }
 

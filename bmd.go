@@ -10,6 +10,10 @@ import (
 )
 
 func (t *Tendrils) listenBMD(ctx context.Context, iface net.Interface) {
+	go t.discoverATEMs(ctx, iface)
+}
+
+func (t *Tendrils) discoverATEMs(ctx context.Context, iface net.Interface) {
 	addrs, err := iface.Addrs()
 	if err != nil {
 		return
@@ -197,3 +201,70 @@ func (t *Tendrils) parseATEMCommands(data []byte, sess *atemSession) {
 		offset += cmdLen
 	}
 }
+
+func (t *Tendrils) probeBMDDevice(ip net.IP) {
+	if name := t.probeHyperDeck(ip); name != "" {
+		t.nodes.Update(nil, nil, []net.IP{ip}, "", name, "bmd")
+		return
+	}
+	if name := t.probeVideoHub(ip); name != "" {
+		t.nodes.Update(nil, nil, []net.IP{ip}, "", name, "bmd")
+		return
+	}
+}
+
+func (t *Tendrils) probeHyperDeck(ip net.IP) string {
+	conn, err := net.DialTimeout("tcp", ip.String()+":9993", 500*time.Millisecond)
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil || n == 0 {
+		return ""
+	}
+
+	response := string(buf[:n])
+	for _, line := range strings.Split(response, "\r\n") {
+		if strings.HasPrefix(line, "model: ") {
+			model := strings.TrimPrefix(line, "model: ")
+			if t.DebugBMD {
+				log.Printf("[bmd] hyperdeck %s at %s", model, ip)
+			}
+			return model
+		}
+	}
+	return ""
+}
+
+func (t *Tendrils) probeVideoHub(ip net.IP) string {
+	conn, err := net.DialTimeout("tcp", ip.String()+":9990", 500*time.Millisecond)
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil || n == 0 {
+		return ""
+	}
+
+	response := string(buf[:n])
+	for _, line := range strings.Split(response, "\n") {
+		if strings.HasPrefix(line, "Model name: ") {
+			model := strings.TrimSpace(strings.TrimPrefix(line, "Model name: "))
+			if t.DebugBMD {
+				log.Printf("[bmd] videohub %s at %s", model, ip)
+			}
+			return model
+		}
+	}
+	return ""
+}
+
+
