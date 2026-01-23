@@ -2,8 +2,10 @@ package tendrils
 
 import (
 	"context"
+	"encoding/binary"
 	"log"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -39,56 +41,50 @@ func (t *Tendrils) listenBMD(ctx context.Context, iface net.Interface) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	t.sendATEMDiscovery(conn, broadcast, iface.Name)
-
-	go t.receiveATEMResponses(ctx, conn, iface.Name)
+	go t.atemDiscoveryLoop(ctx, conn, broadcast, iface.Name)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			t.sendATEMDiscovery(conn, broadcast, iface.Name)
+			go t.atemDiscoveryLoop(ctx, conn, broadcast, iface.Name)
 		}
 	}
 }
 
-func (t *Tendrils) sendATEMDiscovery(conn *net.UDPConn, broadcast net.IP, ifaceName string) {
-	// ATEM protocol hello packet
-	// Flag 0x10 (hello), length 20 bytes
-	packet := []byte{
-		0x10, 0x14, // Flags (0x10 = hello) + length (20 = 0x14)
-		0x00, 0x00, // Session ID
-		0x00, 0x00, // Ack number
-		0x00, 0x00, // Local sequence
-		0x00, 0x00, // Remote sequence
-		0x00, 0x00, // Unknown
-		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Client hello data
+func (t *Tendrils) atemDiscoveryLoop(ctx context.Context, conn *net.UDPConn, broadcast net.IP, ifaceName string) {
+	// Send hello to broadcast
+	hello := []byte{
+		0x10, 0x14,
+		0x00, 0x00,
+		0x00, 0x00,
+		0x00, 0x00,
+		0x00, 0x00,
+		0x00, 0x00,
+		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	}
-
-	conn.WriteToUDP(packet, &net.UDPAddr{IP: broadcast, Port: 9910})
+	conn.WriteToUDP(hello, &net.UDPAddr{IP: broadcast, Port: 9910})
 
 	if t.DebugBMD {
 		log.Printf("[bmd] %s: sent atem discovery to %s", ifaceName, broadcast)
 	}
-}
 
-func (t *Tendrils) receiveATEMResponses(ctx context.Context, conn *net.UDPConn, ifaceName string) {
-	seen := map[string]bool{}
+	// Collect responses and initiate sessions
+	sessions := map[string]*atemSession{}
 	buf := make([]byte, 2048)
-	for {
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
 
-		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, src, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				continue
-			}
 			continue
 		}
 
@@ -97,15 +93,107 @@ func (t *Tendrils) receiveATEMResponses(ctx context.Context, conn *net.UDPConn, 
 		}
 
 		ipKey := src.IP.String()
-		if seen[ipKey] {
-			continue
-		}
-		seen[ipKey] = true
-
-		if t.DebugBMD {
-			log.Printf("[bmd] %s: atem at %s", ifaceName, src.IP)
+		sess := sessions[ipKey]
+		if sess == nil {
+			sess = &atemSession{ip: src.IP}
+			sessions[ipKey] = sess
 		}
 
-		t.nodes.Update(nil, nil, []net.IP{src.IP}, "", "atem", "bmd")
+		t.handleATEMPacket(conn, src, buf[:n], sess, ifaceName)
+
+		if sess.productName != "" && !sess.updated {
+			sess.updated = true
+			if t.DebugBMD {
+				log.Printf("[bmd] %s: atem %s at %s", ifaceName, sess.productName, src.IP)
+			}
+			t.nodes.Update(nil, nil, []net.IP{src.IP}, "", sess.productName, "bmd")
+		}
+	}
+
+	// Update any ATEMs we found but couldn't get name for
+	for _, sess := range sessions {
+		if !sess.updated {
+			if t.DebugBMD {
+				log.Printf("[bmd] %s: atem (unknown) at %s", ifaceName, sess.ip)
+			}
+			t.nodes.Update(nil, nil, []net.IP{sess.ip}, "", "atem", "bmd")
+		}
+	}
+}
+
+type atemSession struct {
+	ip          net.IP
+	sessionID   uint16
+	remoteSeq   uint16
+	productName string
+	updated     bool
+}
+
+func (t *Tendrils) handleATEMPacket(conn *net.UDPConn, src *net.UDPAddr, data []byte, sess *atemSession, ifaceName string) {
+	flags := data[0] >> 3
+	length := int(binary.BigEndian.Uint16(data[0:2]) & 0x07FF)
+
+	if length > len(data) {
+		return
+	}
+
+	sessionID := binary.BigEndian.Uint16(data[2:4])
+	remoteSeq := binary.BigEndian.Uint16(data[10:12])
+
+	// Hello response - extract session ID
+	if flags&0x02 != 0 {
+		sess.sessionID = sessionID
+		// Send ACK
+		ack := make([]byte, 12)
+		ack[0] = 0x80
+		ack[1] = 0x0c
+		binary.BigEndian.PutUint16(ack[2:4], sessionID)
+		binary.BigEndian.PutUint16(ack[4:6], remoteSeq)
+		conn.WriteToUDP(ack, src)
+	}
+
+	// ACK request - send ACK
+	if flags&0x01 != 0 {
+		sess.remoteSeq = remoteSeq
+		ack := make([]byte, 12)
+		ack[0] = 0x80
+		ack[1] = 0x0c
+		binary.BigEndian.PutUint16(ack[2:4], sessionID)
+		binary.BigEndian.PutUint16(ack[4:6], remoteSeq)
+		conn.WriteToUDP(ack, src)
+	}
+
+	// Parse commands in payload
+	if length > 12 {
+		t.parseATEMCommands(data[12:length], sess)
+	}
+}
+
+func (t *Tendrils) parseATEMCommands(data []byte, sess *atemSession) {
+	offset := 0
+	for offset+8 <= len(data) {
+		cmdLen := int(binary.BigEndian.Uint16(data[offset : offset+2]))
+		if cmdLen < 8 || offset+cmdLen > len(data) {
+			break
+		}
+
+		cmdName := string(data[offset+4 : offset+8])
+
+		if cmdName == "_pin" && cmdLen > 8 {
+			// Product Information Name
+			nameData := data[offset+8 : offset+cmdLen]
+			nullIdx := 0
+			for i, b := range nameData {
+				if b == 0 {
+					nullIdx = i
+					break
+				}
+			}
+			if nullIdx > 0 {
+				sess.productName = strings.TrimSpace(string(nameData[:nullIdx]))
+			}
+		}
+
+		offset += cmdLen
 	}
 }
