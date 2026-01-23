@@ -103,6 +103,12 @@ func (t *Tendrils) pollNode(node *Node) {
 			t.probeBMDDevice(ip)
 		}
 	}
+
+	if !t.DisableDante {
+		for _, ip := range ips {
+			t.probeDanteDevice(ip)
+		}
+	}
 }
 
 func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {

@@ -183,6 +183,12 @@ func (g *MulticastGroup) Name() string {
 		return fmt.Sprintf("dante-mcast:%d", flowID)
 	}
 
+	// Dante AV multicast (239.253.x.x)
+	if ip[0] == 239 && ip[1] == 253 {
+		flowID := (int(ip[2]) << 8) | int(ip[3])
+		return fmt.Sprintf("dante-av:%d", flowID)
+	}
+
 	return g.IP.String()
 }
 
@@ -191,10 +197,10 @@ func (g *MulticastGroup) IsDante() bool {
 	if ip == nil {
 		return false
 	}
-	if ip[0] == 239 && ip[1] == 255 {
-		return false
-	}
 	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
+		return true
+	}
+	if ip[0] == 239 && ip[1] == 253 {
 		return true
 	}
 	return false
@@ -530,6 +536,7 @@ func (n *Nodes) GetByMAC(mac net.HardwareAddr) *Node {
 	return nil
 }
 
+
 func (n *Nodes) UpdateMACTable(node *Node, peerMAC net.HardwareAddr, ifaceName string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -610,6 +617,25 @@ func (n *Nodes) getNodeByIPLocked(ip net.IP) *Node {
 	if id, exists := n.ipIndex[ip.String()]; exists {
 		return n.nodes[id]
 	}
+	return nil
+}
+
+func (n *Nodes) GetDanteMulticastGroups(deviceIP net.IP) []net.IP {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	deviceKey := deviceIP.String()
+	var groups []net.IP
+
+	for _, gm := range n.multicastGroups {
+		if !gm.Group.IsDante() {
+			continue
+		}
+		if _, exists := gm.Members[deviceKey]; exists {
+			groups = append(groups, gm.Group.IP)
+		}
+	}
+	return groups
 	return nil
 }
 
@@ -730,6 +756,7 @@ func (n *Nodes) LogAll() {
 	}
 
 	n.t.artnet.LogAll()
+	n.t.danteFlows.LogAll()
 }
 
 func (n *Nodes) expireMulticastMemberships() {

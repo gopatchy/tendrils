@@ -107,6 +107,7 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 	aRecords := map[string]net.IP{}
 	srvTargets := map[string]string{}
 	danteNames := map[string]bool{}
+	danteARCPorts := map[string]uint16{}
 	skaarhojNames := map[string]bool{}
 
 	for _, rr := range allRecords {
@@ -138,6 +139,9 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 					if target != "" {
 						srvTargets[name] = target
 					}
+					if strings.Contains(r.Hdr.Name, "_netaudio-arc.") && r.Port > 0 {
+						danteARCPorts[name] = r.Port
+					}
 				}
 			}
 			if isSkaarhojService(r.Hdr.Name) {
@@ -163,7 +167,8 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 		if ip == nil {
 			ip = srcIP
 		}
-		t.nodes.UpdateDante(name, ip)
+		arcPort := int(danteARCPorts[name])
+		t.nodes.UpdateDante(name, ip, arcPort)
 	}
 
 	for name := range skaarhojNames {

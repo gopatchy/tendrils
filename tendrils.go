@@ -14,6 +14,7 @@ type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
 	nodes            *Nodes
 	artnet           *ArtNetNodes
+	danteFlows       *DanteFlows
 
 	Interface     string
 	DisableARP    bool
@@ -42,6 +43,7 @@ func New() *Tendrils {
 	t := &Tendrils{
 		activeInterfaces: map[string]context.CancelFunc{},
 		artnet:           NewArtNetNodes(),
+		danteFlows:       NewDanteFlows(),
 	}
 	t.nodes = NewNodes(t)
 	return t
