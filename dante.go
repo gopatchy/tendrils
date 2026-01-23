@@ -85,3 +85,32 @@ func (n *Nodes) UpdateDante(name string, ip net.IP, arcPort int) {
 		go n.t.probeDanteDeviceWithPort(ip, arcPort)
 	}
 }
+
+func (n *Nodes) UpdateDanteTxChannels(name string, ip net.IP, channels string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	node := n.getNodeByIPLocked(ip)
+	if node == nil {
+		return
+	}
+	node.DanteTxChannels = channels
+}
+
+func (n *Nodes) GetDanteTxDeviceInGroup(groupIP net.IP) string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	groupKey := groupIP.String()
+	gm := n.multicastGroups[groupKey]
+	if gm == nil {
+		return ""
+	}
+
+	for _, membership := range gm.Members {
+		if membership.Node != nil && membership.Node.DanteTxChannels != "" {
+			return membership.Node.Name
+		}
+	}
+	return ""
+}

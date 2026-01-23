@@ -26,9 +26,9 @@ type DanteFlow struct {
 }
 
 type DanteFlowSubscriber struct {
-	Name     string
-	Channels []int
-	LastSeen time.Time
+	Name        string
+	Channels    []string
+	LastSeen    time.Time
 }
 
 type DanteFlows struct {
@@ -42,7 +42,7 @@ func NewDanteFlows() *DanteFlows {
 	}
 }
 
-func (d *DanteFlows) Update(sourceName, subscriberName string, channel int) {
+func (d *DanteFlows) Update(sourceName, subscriberName, channelInfo string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -63,17 +63,17 @@ func (d *DanteFlows) Update(sourceName, subscriberName string, channel int) {
 		flow.Subscribers[subscriberName] = sub
 	}
 
-	if channel > 0 {
+	if channelInfo != "" {
 		hasChannel := false
 		for _, ch := range sub.Channels {
-			if ch == channel {
+			if ch == channelInfo {
 				hasChannel = true
-					break
+				break
 			}
 		}
 		if !hasChannel {
-			sub.Channels = append(sub.Channels, channel)
-			sort.Ints(sub.Channels)
+			sub.Channels = append(sub.Channels, channelInfo)
+			sort.Strings(sub.Channels)
 		}
 	}
 
@@ -121,11 +121,7 @@ func (d *DanteFlows) LogAll() {
 		for _, sub := range flow.Subscribers {
 			name := sub.Name
 			if len(sub.Channels) > 0 {
-				var chStrs []string
-				for _, ch := range sub.Channels {
-					chStrs = append(chStrs, fmt.Sprintf("%d", ch))
-				}
-				name = fmt.Sprintf("%s[%s]", name, strings.Join(chStrs, ","))
+				name = fmt.Sprintf("%s[%s]", name, strings.Join(sub.Channels, ","))
 			}
 			subNames = append(subNames, name)
 		}
@@ -168,6 +164,10 @@ func (t *Tendrils) queryDanteDeviceWithPort(ip net.IP, port int) *DanteDeviceInf
 
 	if info.RxChannelCount > 0 || info.TxChannelCount > 0 {
 		info.Subscriptions, info.HasMulticast = t.queryDanteSubscriptions(conn, ip, info.RxChannelCount, info.TxChannelCount)
+	}
+
+	if info.TxChannelCount > 0 {
+		t.queryDanteTxChannels(conn, ip, info.TxChannelCount)
 	}
 
 	return info
@@ -278,6 +278,27 @@ func (t *Tendrils) queryDanteChannelCount(conn *net.UDPConn, ip net.IP) (int, in
 	return rxCount, txCount
 }
 
+func (t *Tendrils) queryDanteTxChannels(conn *net.UDPConn, ip net.IP, txCount int) {
+	if txCount == 0 {
+		return
+	}
+
+	pagesNeeded := (txCount + 15) / 16
+	for page := 0; page < pagesNeeded; page++ {
+		pageNum := byte(page + 1)
+		args := []byte{0x00, 0x01, 0x00, pageNum, 0x00, 0x00}
+
+		resp := t.sendDanteCommand(conn, ip, 0x2000, args)
+		if t.DebugDante {
+			if resp == nil {
+				log.Printf("[dante] %s: tx channels 0x2000 page %d: no response", ip, page)
+			} else {
+				log.Printf("[dante] %s: tx channels 0x2000 page %d (%d bytes): %x", ip, page, len(resp), resp)
+			}
+		}
+	}
+}
+
 func (t *Tendrils) queryDanteSubscriptions(conn *net.UDPConn, ip net.IP, rxCount, txCount int) ([]DanteSubscription, bool) {
 	if rxCount == 0 {
 		return nil, false
@@ -311,23 +332,37 @@ func (t *Tendrils) queryDanteSubscriptions(conn *net.UDPConn, ip net.IP, rxCount
 		hasMulticast = hasMulticast || isMulticast
 
 		if isMulticast {
+			if t.DebugDante {
+				stringTableStart := 12 + subCount*20
+				if stringTableStart < len(resp) {
+					log.Printf("[dante] %s: multicast string table at offset %d: %x", ip, stringTableStart, resp[stringTableStart:])
+				}
+			}
 			recordOffset := 12
 			for idx := 0; idx < subCount; idx++ {
 				if recordOffset+20 > len(resp) {
 					break
 				}
 
+				if t.DebugDante {
+					log.Printf("[dante] %s: multicast record %d at offset %d: %x", ip, idx, recordOffset, resp[recordOffset:recordOffset+20])
+				}
+
 				rxChannelNum := int(binary.BigEndian.Uint16(resp[recordOffset : recordOffset+2]))
 				txDeviceOffset := int(binary.BigEndian.Uint16(resp[recordOffset+4 : recordOffset+6]))
+				txChannelOffset := int(binary.BigEndian.Uint16(resp[recordOffset+10 : recordOffset+12]))
 				txDeviceName := extractNullTerminatedString(resp, txDeviceOffset)
+				txChannelName := extractNullTerminatedString(resp, txChannelOffset)
 
-
-				if txDeviceName != "" {
-					subscriptions = append(subscriptions, DanteSubscription{
-						RxChannel:    rxChannelNum,
-						TxDeviceName: txDeviceName,
-					})
+				if t.DebugDante {
+					log.Printf("[dante] %s: multicast record %d: rx=%d txDevOffset=%d txDev=%q txChOffset=%d txCh=%q", ip, idx, rxChannelNum, txDeviceOffset, txDeviceName, txChannelOffset, txChannelName)
 				}
+
+				subscriptions = append(subscriptions, DanteSubscription{
+					RxChannel:     rxChannelNum,
+					TxDeviceName:  txDeviceName,
+					TxChannelName: txChannelName,
+				})
 
 				recordOffset += 20
 			}
@@ -396,21 +431,38 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 			t.nodes.Update(nil, nil, []net.IP{ip}, "", info.Name, "dante-control")
 		}
 
+		var multicastChannels []string
 		for _, sub := range info.Subscriptions {
 			if t.DebugDante {
 				log.Printf("[dante] %s: subscription rx=%d -> %s@%s",
 					ip, sub.RxChannel, sub.TxChannelName, sub.TxDeviceName)
 			}
 			if sub.TxDeviceName != "" && info.Name != "" {
-				t.danteFlows.Update(sub.TxDeviceName, info.Name, sub.RxChannel)
+				channelInfo := ""
+				if sub.TxChannelName != "" {
+					channelInfo = fmt.Sprintf("%s->%d", sub.TxChannelName, sub.RxChannel)
+				}
+				t.danteFlows.Update(sub.TxDeviceName, info.Name, channelInfo)
+			} else if sub.TxChannelName != "" {
+				multicastChannels = append(multicastChannels, sub.TxChannelName)
 			}
 		}
 
 		if info.HasMulticast && info.Name != "" {
 			groups := t.nodes.GetDanteMulticastGroups(ip)
 			for _, groupIP := range groups {
-				groupName := (&MulticastGroup{IP: groupIP}).Name()
-				t.danteFlows.Update(groupName, info.Name, 0)
+				sourceName := t.nodes.GetDanteTxDeviceInGroup(groupIP)
+				if t.DebugDante {
+					log.Printf("[dante] %s: multicast group %s -> tx device %q", ip, groupIP, sourceName)
+				}
+				if sourceName == "" {
+					sourceName = (&MulticastGroup{IP: groupIP}).Name()
+				}
+				channelInfo := ""
+				if len(multicastChannels) > 0 {
+					channelInfo = strings.Join(multicastChannels, ",")
+				}
+				t.danteFlows.Update(sourceName, info.Name, channelInfo)
 			}
 		}
 	}

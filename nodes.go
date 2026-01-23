@@ -108,6 +108,7 @@ type Node struct {
 	MACTable           map[string]string // peer MAC -> local interface name
 	PoEBudget          *PoEBudget
 	IsDanteClockMaster bool
+	DanteTxChannels    string
 	pollTrigger        chan struct{}
 }
 
@@ -636,7 +637,25 @@ func (n *Nodes) GetDanteMulticastGroups(deviceIP net.IP) []net.IP {
 		}
 	}
 	return groups
-	return nil
+}
+
+func (n *Nodes) GetMulticastGroupMembers(groupIP net.IP) []*Node {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	groupKey := groupIP.String()
+	gm := n.multicastGroups[groupKey]
+	if gm == nil {
+		return nil
+	}
+
+	var members []*Node
+	for _, membership := range gm.Members {
+		if membership.Node != nil {
+			members = append(members, membership.Node)
+		}
+	}
+	return members
 }
 
 func (n *Nodes) logNode(node *Node) {
