@@ -61,7 +61,7 @@ func (t *Tendrils) listenMDNS(ctx context.Context, iface net.Interface) {
 	}
 	defer conn.Close()
 
-	go t.runMDNSQuerier(ctx, iface)
+	go t.runMDNSQuerier(ctx, iface, conn)
 
 	buf := make([]byte, 65536)
 	for {
@@ -193,57 +193,49 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 	}
 }
 
-func (t *Tendrils) runMDNSQuerier(ctx context.Context, iface net.Interface) {
-	addrs, err := iface.Addrs()
-	if err != nil {
-		return
-	}
+var mdnsServices = []string{
+	"_services._dns-sd._udp.local.",
+	"_netaudio-arc._udp.local.",
+	"_netaudio-cmc._udp.local.",
+	"_netaudio-dbc._udp.local.",
+	"_netaudio-chan._udp.local.",
+	"_dantevideo._udp.local.",
+	"_danteancil._udp.local.",
+}
 
-	var srcIP net.IP
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
-			srcIP = ipnet.IP.To4()
-			break
-		}
-	}
-	if srcIP == nil {
-		return
-	}
-
-	ticker := time.NewTicker(60 * time.Second)
+func (t *Tendrils) runMDNSQuerier(ctx context.Context, iface net.Interface, conn *net.UDPConn) {
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	t.sendMDNSQuery(iface.Name, srcIP)
+	t.sendMDNSQueries(iface.Name, conn)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			t.sendMDNSQuery(iface.Name, srcIP)
+			t.sendMDNSQueries(iface.Name, conn)
 		}
 	}
 }
 
-func (t *Tendrils) sendMDNSQuery(ifaceName string, srcIP net.IP) {
-	conn, err := net.DialUDP("udp4", &net.UDPAddr{IP: srcIP}, &net.UDPAddr{IP: net.IPv4(224, 0, 0, 251), Port: 5353})
-	if err != nil {
-		return
+func (t *Tendrils) sendMDNSQueries(ifaceName string, conn *net.UDPConn) {
+	dest := &net.UDPAddr{IP: net.IPv4(224, 0, 0, 251), Port: 5353}
+
+	for _, service := range mdnsServices {
+		msg := new(dns.Msg)
+		msg.SetQuestion(service, dns.TypePTR)
+		msg.RecursionDesired = false
+
+		data, err := msg.Pack()
+		if err != nil {
+			continue
+		}
+
+		conn.WriteToUDP(data, dest)
 	}
-	defer conn.Close()
-
-	msg := new(dns.Msg)
-	msg.SetQuestion("_services._dns-sd._udp.local.", dns.TypePTR)
-	msg.RecursionDesired = false
-
-	data, err := msg.Pack()
-	if err != nil {
-		return
-	}
-
-	conn.Write(data)
 
 	if t.DebugMDNS {
-		log.Printf("[mdns] %s: sent query", ifaceName)
+		log.Printf("[mdns] %s: sent queries for %d services", ifaceName, len(mdnsServices))
 	}
 }
