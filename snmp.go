@@ -124,6 +124,7 @@ func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {
 
 	t.querySysName(snmp, node)
 	t.queryInterfaceMACs(snmp, node)
+	t.queryInterfaceStats(snmp, node)
 	t.queryBridgeMIB(snmp, node)
 }
 
@@ -190,6 +191,192 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, node *Node) {
 
 		t.nodes.Update(node, mac, nil, name, "", "snmp-ifmac")
 	}
+}
+
+func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node) {
+	ifNames := t.getInterfaceNames(snmp)
+
+	ifOperStatus := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.8")
+	ifHighSpeed := t.getInterfaceTable(snmp, "1.3.6.1.2.1.31.1.1.1.15")
+	ifInErrors := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.14")
+	ifOutErrors := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.20")
+
+	poeStats := t.getPoEStats(snmp, ifNames)
+
+	t.nodes.mu.Lock()
+	defer t.nodes.mu.Unlock()
+
+	for ifIndex, name := range ifNames {
+		name = rewritePortName(name)
+		iface, exists := node.Interfaces[name]
+		if !exists {
+			continue
+		}
+
+		status, hasStatus := ifOperStatus[ifIndex]
+		isUp := hasStatus && status == 1
+		if !isUp {
+			iface.Stats = nil
+			continue
+		}
+
+		stats := &InterfaceStats{}
+
+		if speed, ok := ifHighSpeed[ifIndex]; ok {
+			stats.Speed = uint64(speed) * 1000000
+		}
+
+		if inErr, ok := ifInErrors[ifIndex]; ok {
+			stats.InErrors = uint64(inErr)
+		}
+
+		if outErr, ok := ifOutErrors[ifIndex]; ok {
+			stats.OutErrors = uint64(outErr)
+		}
+
+		if poe, ok := poeStats[name]; ok {
+			stats.PoE = poe
+		}
+
+		iface.Stats = stats
+	}
+}
+
+func (t *Tendrils) getInterfaceTable(snmp *gosnmp.GoSNMP, oid string) map[int]int {
+	results, err := snmp.BulkWalkAll(oid)
+	if err != nil {
+		return nil
+	}
+
+	table := map[int]int{}
+	for _, result := range results {
+		oidSuffix := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+oid), ".")
+		var ifIndex int
+		if _, err := fmt.Sscanf(oidSuffix, "%d", &ifIndex); err != nil {
+			continue
+		}
+
+		var value int
+		switch v := result.Value.(type) {
+		case int:
+			value = v
+		case uint:
+			value = int(v)
+		case int64:
+			value = int(v)
+		case uint64:
+			value = int(v)
+		default:
+			continue
+		}
+
+		table[ifIndex] = value
+	}
+	return table
+}
+
+func (t *Tendrils) getPoEStats(snmp *gosnmp.GoSNMP, ifNames map[int]string) map[string]*PoEStats {
+	statusOID := "1.3.6.1.2.1.105.1.1.1.6"
+
+	statusResults, err := snmp.BulkWalkAll(statusOID)
+	if err != nil {
+		return nil
+	}
+
+	powerTable := t.getPoETable(snmp, "1.3.6.1.4.1.4526.10.15.1.1.1.2")
+	maxPowerTable := t.getPoETable(snmp, "1.3.6.1.4.1.4526.10.15.1.1.1.1")
+
+	stats := map[string]*PoEStats{}
+	for _, result := range statusResults {
+		oidSuffix := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+statusOID), ".")
+		parts := strings.Split(oidSuffix, ".")
+		if len(parts) < 2 {
+			continue
+		}
+
+		var portIndex int
+		if _, err := fmt.Sscanf(parts[1], "%d", &portIndex); err != nil {
+			continue
+		}
+
+		var status int
+		switch v := result.Value.(type) {
+		case int:
+			status = v
+		case uint:
+			status = int(v)
+		case int64:
+			status = int(v)
+		case uint64:
+			status = int(v)
+		default:
+			continue
+		}
+
+		ifName := rewritePortName(ifNames[portIndex])
+		if ifName == "" {
+			continue
+		}
+
+		if status != 3 {
+			continue
+		}
+
+		poe := &PoEStats{}
+		if power, ok := powerTable[portIndex]; ok {
+			poe.Power = float64(power) / 1000.0
+		}
+		if maxPower, ok := maxPowerTable[portIndex]; ok {
+			poe.MaxPower = float64(maxPower) / 1000.0
+		}
+
+		if t.DebugSNMP {
+			log.Printf("[snmp] %s: poe port %d (%s) power=%v maxpower=%v", snmp.Target, portIndex, ifName, powerTable[portIndex], maxPowerTable[portIndex])
+		}
+
+		if poe.Power > 0 || poe.MaxPower > 0 {
+			stats[ifName] = poe
+		}
+	}
+	return stats
+}
+
+func (t *Tendrils) getPoETable(snmp *gosnmp.GoSNMP, oid string) map[int]int {
+	results, err := snmp.BulkWalkAll(oid)
+	if err != nil {
+		return nil
+	}
+
+	table := map[int]int{}
+	for _, result := range results {
+		oidSuffix := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+oid), ".")
+		parts := strings.Split(oidSuffix, ".")
+		if len(parts) < 2 {
+			continue
+		}
+
+		var portIndex int
+		if _, err := fmt.Sscanf(parts[1], "%d", &portIndex); err != nil {
+			continue
+		}
+
+		var value int
+		switch v := result.Value.(type) {
+		case int:
+			value = v
+		case uint:
+			value = int(v)
+		case int64:
+			value = int(v)
+		case uint64:
+			value = int(v)
+		default:
+			continue
+		}
+
+		table[portIndex] = value
+	}
+	return table
 }
 
 func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, node *Node) {
