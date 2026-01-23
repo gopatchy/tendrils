@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -710,7 +711,7 @@ func (n *Nodes) LogAll() {
 			sort.Slice(memberNames, func(i, j int) bool {
 				return sortorder.NaturalLess(memberNames[i], memberNames[j])
 			})
-			log.Printf("[sigusr1]   %s: %v", gm.Group.Name(), memberNames)
+			log.Printf("[sigusr1]   %s: %s", gm.Group.Name(), strings.Join(memberNames, ", "))
 		}
 	}
 

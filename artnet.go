@@ -348,16 +348,16 @@ func (a *ArtNetNodes) LogAll() {
 		var parts []string
 		if len(ins) > 0 {
 			sort.Slice(ins, func(i, j int) bool { return sortorder.NaturalLess(ins[i], ins[j]) })
-			parts = append(parts, fmt.Sprintf("in:%v", ins))
+			parts = append(parts, fmt.Sprintf("in: %s", strings.Join(ins, ", ")))
 		}
 		if len(outs) > 0 {
 			sort.Slice(outs, func(i, j int) bool { return sortorder.NaturalLess(outs[i], outs[j]) })
-			parts = append(parts, fmt.Sprintf("out:%v", outs))
+			parts = append(parts, fmt.Sprintf("out: %s", strings.Join(outs, ", ")))
 		}
 		net := (u >> 8) & 0x7f
 		subnet := (u >> 4) & 0x0f
 		universe := u & 0x0f
-		log.Printf("[sigusr1]   artnet:%d (%d/%d/%d) %s", u, net, subnet, universe, strings.Join(parts, " "))
+		log.Printf("[sigusr1]   artnet:%d (%d/%d/%d) %s", u, net, subnet, universe, strings.Join(parts, "; "))
 	}
 }
 
