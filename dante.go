@@ -109,7 +109,7 @@ func (n *Nodes) GetDanteTxDeviceInGroup(groupIP net.IP) string {
 
 	for _, membership := range gm.Members {
 		if membership.Node != nil && membership.Node.DanteTxChannels != "" {
-			return membership.Node.Name
+			return membership.Node.DisplayName()
 		}
 	}
 	return ""

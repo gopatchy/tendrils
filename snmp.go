@@ -89,7 +89,7 @@ func (t *Tendrils) pollNode(node *Node) {
 			}
 		}
 	}
-	nodeName := node.Name
+	nodeName := node.DisplayName()
 	t.nodes.mu.RUnlock()
 
 	if !t.DisableSNMP {

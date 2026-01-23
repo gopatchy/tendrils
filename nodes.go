@@ -103,7 +103,7 @@ type PoEBudget struct {
 }
 
 type Node struct {
-	Name               string
+	Names              map[string]bool
 	Interfaces         map[string]*Interface
 	MACTable           map[string]string // peer MAC -> local interface name
 	PoEBudget          *PoEBudget
@@ -113,7 +113,7 @@ type Node struct {
 }
 
 func (n *Node) String() string {
-	name := n.Name
+	name := n.DisplayName()
 	if name == "" {
 		name = "??"
 	}
@@ -134,6 +134,18 @@ func (n *Node) String() string {
 	parts = append(parts, fmt.Sprintf("{%v}", ifaces))
 
 	return joinParts(parts)
+}
+
+func (n *Node) DisplayName() string {
+	if len(n.Names) == 0 {
+		return ""
+	}
+	var names []string
+	for name := range n.Names {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, "/")
 }
 
 type MulticastGroup struct {
@@ -333,9 +345,14 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		}
 	}
 
-	if nodeName != "" && node.Name == "" {
-		node.Name = nodeName
-		added = append(added, "name="+nodeName)
+	if nodeName != "" {
+		if node.Names == nil {
+			node.Names = map[string]bool{}
+		}
+		if !node.Names[nodeName] {
+			node.Names[nodeName] = true
+			added = append(added, "name="+nodeName)
+		}
 	}
 
 	hasNewIP := false
@@ -494,8 +511,11 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 		return
 	}
 
-	if merge.Name != "" && keep.Name == "" {
-		keep.Name = merge.Name
+	for name := range merge.Names {
+		if keep.Names == nil {
+			keep.Names = map[string]bool{}
+		}
+		keep.Names[name] = true
 	}
 
 	for _, iface := range merge.Interfaces {
@@ -659,7 +679,7 @@ func (n *Nodes) GetMulticastGroupMembers(groupIP net.IP) []*Node {
 }
 
 func (n *Nodes) logNode(node *Node) {
-	name := node.Name
+	name := node.DisplayName()
 	if name == "" {
 		name = "??"
 	}
@@ -712,7 +732,7 @@ func (n *Nodes) LogAll() {
 		nodes = append(nodes, node)
 	}
 	sort.Slice(nodes, func(i, j int) bool {
-		return sortorder.NaturalLess(nodes[i].Name, nodes[j].Name)
+		return sortorder.NaturalLess(nodes[i].DisplayName(), nodes[j].DisplayName())
 	})
 
 	log.Printf("[sigusr1] ================ %d nodes ================", len(nodes))
@@ -722,14 +742,14 @@ func (n *Nodes) LogAll() {
 
 	links := n.getDirectLinks()
 	sort.Slice(links, func(i, j int) bool {
-		if links[i].NodeA.Name != links[j].NodeA.Name {
-			return sortorder.NaturalLess(links[i].NodeA.Name, links[j].NodeA.Name)
+		if links[i].NodeA.DisplayName() != links[j].NodeA.DisplayName() {
+			return sortorder.NaturalLess(links[i].NodeA.DisplayName(), links[j].NodeA.DisplayName())
 		}
 		if links[i].InterfaceA != links[j].InterfaceA {
 			return sortorder.NaturalLess(links[i].InterfaceA, links[j].InterfaceA)
 		}
-		if links[i].NodeB.Name != links[j].NodeB.Name {
-			return sortorder.NaturalLess(links[i].NodeB.Name, links[j].NodeB.Name)
+		if links[i].NodeB.DisplayName() != links[j].NodeB.DisplayName() {
+			return sortorder.NaturalLess(links[i].NodeB.DisplayName(), links[j].NodeB.DisplayName())
 		}
 		return sortorder.NaturalLess(links[i].InterfaceB, links[j].InterfaceB)
 	})
@@ -758,7 +778,7 @@ func (n *Nodes) LogAll() {
 			for sourceIP, membership := range gm.Members {
 				var name string
 				if membership.Node != nil {
-					name = membership.Node.Name
+					name = membership.Node.DisplayName()
 					if name == "" {
 						name = sourceIP
 					}
@@ -800,11 +820,11 @@ type Link struct {
 }
 
 func (l *Link) String() string {
-	nameA := l.NodeA.Name
+	nameA := l.NodeA.DisplayName()
 	if nameA == "" {
 		nameA = "??"
 	}
-	nameB := l.NodeB.Name
+	nameB := l.NodeB.DisplayName()
 	if nameB == "" {
 		nameB = "??"
 	}
