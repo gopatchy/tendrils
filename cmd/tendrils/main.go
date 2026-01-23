@@ -15,6 +15,7 @@ func main() {
 	noMDNS := flag.Bool("no-mdns", false, "disable mDNS discovery")
 	noArtNet := flag.Bool("no-artnet", false, "disable Art-Net discovery")
 	noDante := flag.Bool("no-dante", false, "disable Dante discovery")
+	noBMD := flag.Bool("no-bmd", false, "disable Blackmagic discovery")
 	logEvents := flag.Bool("log-events", false, "log node events")
 	logNodes := flag.Bool("log-nodes", false, "log full node details on changes")
 	debugARP := flag.Bool("debug-arp", false, "debug ARP discovery")
@@ -24,6 +25,7 @@ func main() {
 	debugMDNS := flag.Bool("debug-mdns", false, "debug mDNS discovery")
 	debugArtNet := flag.Bool("debug-artnet", false, "debug Art-Net discovery")
 	debugDante := flag.Bool("debug-dante", false, "debug Dante discovery")
+	debugBMD := flag.Bool("debug-bmd", false, "debug Blackmagic discovery")
 	flag.Parse()
 
 	t := tendrils.New()
@@ -35,6 +37,7 @@ func main() {
 	t.DisableMDNS = *noMDNS
 	t.DisableArtNet = *noArtNet
 	t.DisableDante = *noDante
+	t.DisableBMD = *noBMD
 	t.LogEvents = *logEvents
 	t.LogNodes = *logNodes
 	t.DebugARP = *debugARP
@@ -44,5 +47,6 @@ func main() {
 	t.DebugMDNS = *debugMDNS
 	t.DebugArtNet = *debugArtNet
 	t.DebugDante = *debugDante
+	t.DebugBMD = *debugBMD
 	t.Run()
 }

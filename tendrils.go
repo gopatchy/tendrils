@@ -23,6 +23,7 @@ type Tendrils struct {
 	DisableMDNS   bool
 	DisableArtNet bool
 	DisableDante  bool
+	DisableBMD    bool
 	LogEvents     bool
 	LogNodes      bool
 	DebugARP      bool
@@ -32,6 +33,7 @@ type Tendrils struct {
 	DebugMDNS     bool
 	DebugArtNet   bool
 	DebugDante    bool
+	DebugBMD      bool
 }
 
 func New() *Tendrils {
@@ -199,5 +201,8 @@ func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 	}
 	if !t.DisableDante {
 		go t.listenDante(ctx, iface)
+	}
+	if !t.DisableBMD {
+		go t.listenBMD(ctx, iface)
 	}
 }
