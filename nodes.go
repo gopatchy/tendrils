@@ -808,7 +808,10 @@ func (n *Nodes) LogAll() {
 		if links[i].NodeB.DisplayName() != links[j].NodeB.DisplayName() {
 			return sortorder.NaturalLess(links[i].NodeB.DisplayName(), links[j].NodeB.DisplayName())
 		}
-		return sortorder.NaturalLess(links[i].InterfaceB, links[j].InterfaceB)
+		if links[i].InterfaceB != links[j].InterfaceB {
+			return sortorder.NaturalLess(links[i].InterfaceB, links[j].InterfaceB)
+		}
+		return false
 	})
 
 	if len(links) > 0 {
@@ -879,13 +882,30 @@ type Link struct {
 func (l *Link) String() string {
 	nameA := l.NodeA.DisplayName()
 	if nameA == "" {
-		nameA = "??"
+		nameA = l.NodeA.FirstMAC()
 	}
 	nameB := l.NodeB.DisplayName()
 	if nameB == "" {
-		nameB = "??"
+		nameB = l.NodeB.FirstMAC()
 	}
-	return fmt.Sprintf("%s:%s <-> %s:%s", nameA, l.InterfaceA, nameB, l.InterfaceB)
+	sideA := nameA
+	if l.InterfaceA != "" {
+		sideA = nameA + ":" + l.InterfaceA
+	}
+	sideB := nameB
+	if l.InterfaceB != "" {
+		sideB = nameB + ":" + l.InterfaceB
+	}
+	return fmt.Sprintf("%s <-> %s", sideA, sideB)
+}
+
+func (n *Node) FirstMAC() string {
+	for _, iface := range n.Interfaces {
+		if iface.MAC != nil {
+			return iface.MAC.String()
+		}
+	}
+	return "??"
 }
 
 func (n *Nodes) getDirectLinks() []*Link {
@@ -940,7 +960,7 @@ func (n *Nodes) getDirectLinks() []*Link {
 			}
 
 			if lastHop != nil {
-				targetIface := mac
+				targetIface := ""
 				for lastHopMAC, targetPort := range target.MACTable {
 					if macToNode[lastHopMAC] == lastHop {
 						targetIface = targetPort
