@@ -234,6 +234,7 @@ type Nodes struct {
 	nodes           map[int]*Node
 	ipIndex         map[string]int
 	macIndex        map[string]int
+	nameIndex       map[string]int
 	nodeCancel      map[int]context.CancelFunc
 	multicastGroups map[string]*MulticastGroupMembers // group IP string -> group with members
 	nextID          int
@@ -248,6 +249,7 @@ func NewNodes(t *Tendrils) *Nodes {
 		nodes:           map[int]*Node{},
 		ipIndex:         map[string]int{},
 		macIndex:        map[string]int{},
+		nameIndex:       map[string]int{},
 		nodeCancel:      map[int]context.CancelFunc{},
 		multicastGroups: map[string]*MulticastGroupMembers{},
 		nextID:          1,
@@ -307,6 +309,20 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		}
 	}
 
+	if nodeName != "" {
+		if id, exists := n.nameIndex[nodeName]; exists {
+			if nameNode, nodeExists := n.nodes[id]; nodeExists {
+				if targetID == -1 {
+					targetID = id
+				} else if id != targetID && len(nameNode.Interfaces) == 0 {
+					n.mergeNodes(targetID, id)
+				}
+			} else {
+				delete(n.nameIndex, nodeName)
+			}
+		}
+	}
+
 	var node *Node
 	if targetID == -1 {
 		targetID = n.nextID
@@ -351,6 +367,7 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		}
 		if !node.Names[nodeName] {
 			node.Names[nodeName] = true
+			n.nameIndex[nodeName] = targetID
 			added = append(added, "name="+nodeName)
 		}
 	}
@@ -516,6 +533,7 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 			keep.Names = map[string]bool{}
 		}
 		keep.Names[name] = true
+		n.nameIndex[name] = keepID
 	}
 
 	for _, iface := range merge.Interfaces {
@@ -557,6 +575,45 @@ func (n *Nodes) GetByMAC(mac net.HardwareAddr) *Node {
 	return nil
 }
 
+func (n *Nodes) GetByName(name string) *Node {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	if id, exists := n.nameIndex[name]; exists {
+		return n.nodes[id]
+	}
+	return nil
+}
+
+func (n *Nodes) GetOrCreateByName(name string) *Node {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if id, exists := n.nameIndex[name]; exists {
+		if node, nodeExists := n.nodes[id]; nodeExists {
+			return node
+		}
+		delete(n.nameIndex, name)
+	}
+
+	targetID := n.nextID
+	n.nextID++
+	node := &Node{
+		Names:       map[string]bool{name: true},
+		Interfaces:  map[string]*Interface{},
+		MACTable:    map[string]string{},
+		pollTrigger: make(chan struct{}, 1),
+	}
+	n.nodes[targetID] = node
+	n.nameIndex[name] = targetID
+	n.startNodePoller(targetID, node)
+
+	if n.t.LogEvents {
+		log.Printf("[add] %s [name=%s] (via name-lookup)", node, name)
+	}
+
+	return node
+}
 
 func (n *Nodes) UpdateMACTable(node *Node, peerMAC net.HardwareAddr, ifaceName string) {
 	n.mu.Lock()

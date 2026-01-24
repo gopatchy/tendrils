@@ -23,13 +23,10 @@ const (
 )
 
 type ArtNetNode struct {
-	IP        net.IP
-	MAC       net.HardwareAddr
-	ShortName string
-	LongName  string
-	Inputs    []int
-	Outputs   []int
-	LastSeen  time.Time
+	Node     *Node
+	Inputs   []int
+	Outputs  []int
+	LastSeen time.Time
 }
 
 func (t *Tendrils) listenArtNet(ctx context.Context, iface net.Interface) {
@@ -139,24 +136,23 @@ func (t *Tendrils) handleArtPollReply(ifaceName string, srcIP net.IP, data []byt
 		log.Printf("[artnet] %s: %s %s short=%q long=%q numPorts=%d portTypes=%v in=%v out=%v", ifaceName, ip, mac, shortName, longName, numPorts, data[174:178], inputs, outputs)
 	}
 
-	node := &ArtNetNode{
-		IP:        ip,
-		MAC:       mac,
-		ShortName: shortName,
-		LongName:  longName,
-		Inputs:    inputs,
-		Outputs:   outputs,
-		LastSeen:  time.Now(),
-	}
-
-	t.nodes.UpdateArtNet(node)
-
 	name := longName
 	if name == "" {
 		name = shortName
 	}
 	if name != "" {
 		t.nodes.Update(nil, mac, []net.IP{ip}, "", name, "artnet")
+	}
+
+	node := t.nodes.GetByIP(ip)
+	if node == nil && mac != nil {
+		node = t.nodes.GetByMAC(mac)
+	}
+	if node == nil && name != "" {
+		node = t.nodes.GetOrCreateByName(name)
+	}
+	if node != nil {
+		t.nodes.UpdateArtNet(node, inputs, outputs)
 	}
 }
 
@@ -220,41 +216,39 @@ func (t *Tendrils) sendArtPoll(conn *net.UDPConn, broadcast net.IP, ifaceName st
 
 type ArtNetNodes struct {
 	mu    sync.RWMutex
-	nodes map[string]*ArtNetNode
+	nodes map[*Node]*ArtNetNode
 }
 
 func NewArtNetNodes() *ArtNetNodes {
 	return &ArtNetNodes{
-		nodes: map[string]*ArtNetNode{},
+		nodes: map[*Node]*ArtNetNode{},
 	}
 }
 
-func (a *ArtNetNodes) Update(node *ArtNetNode) {
+func (a *ArtNetNodes) Update(node *Node, inputs, outputs []int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	key := node.IP.String()
 
-	existing, exists := a.nodes[key]
+	existing, exists := a.nodes[node]
 	if exists {
-		for _, u := range node.Inputs {
+		for _, u := range inputs {
 			if !containsInt(existing.Inputs, u) {
 				existing.Inputs = append(existing.Inputs, u)
 			}
 		}
-		for _, u := range node.Outputs {
+		for _, u := range outputs {
 			if !containsInt(existing.Outputs, u) {
 				existing.Outputs = append(existing.Outputs, u)
 			}
 		}
-		existing.LastSeen = node.LastSeen
-		if node.ShortName != "" {
-			existing.ShortName = node.ShortName
-		}
-		if node.LongName != "" {
-			existing.LongName = node.LongName
-		}
+		existing.LastSeen = time.Now()
 	} else {
-		a.nodes[key] = node
+		a.nodes[node] = &ArtNetNode{
+			Node:     node,
+			Inputs:   inputs,
+			Outputs:  outputs,
+			LastSeen: time.Now(),
+		}
 	}
 }
 
@@ -271,9 +265,9 @@ func (a *ArtNetNodes) Expire() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	expireTime := time.Now().Add(-60 * time.Second)
-	for key, node := range a.nodes {
-		if node.LastSeen.Before(expireTime) {
-			delete(a.nodes, key)
+	for nodePtr, artNode := range a.nodes {
+		if artNode.LastSeen.Before(expireTime) {
+			delete(a.nodes, nodePtr)
 		}
 	}
 }
@@ -298,29 +292,26 @@ func (a *ArtNetNodes) LogAll() {
 		return
 	}
 
-	var nodes []*ArtNetNode
-	for _, node := range a.nodes {
-		nodes = append(nodes, node)
+	var artNodes []*ArtNetNode
+	for _, artNode := range a.nodes {
+		artNodes = append(artNodes, artNode)
 	}
-	sort.Slice(nodes, func(i, j int) bool {
-		return sortorder.NaturalLess(nodes[i].LongName, nodes[j].LongName)
+	sort.Slice(artNodes, func(i, j int) bool {
+		return sortorder.NaturalLess(artNodes[i].Node.DisplayName(), artNodes[j].Node.DisplayName())
 	})
 
 	inputUniverses := map[int][]string{}
 	outputUniverses := map[int][]string{}
 
-	for _, node := range nodes {
-		name := node.LongName
+	for _, artNode := range artNodes {
+		name := artNode.Node.DisplayName()
 		if name == "" {
-			name = node.ShortName
+			name = "??"
 		}
-		if name == "" {
-			name = node.IP.String()
-		}
-		for _, u := range node.Inputs {
+		for _, u := range artNode.Inputs {
 			inputUniverses[u] = append(inputUniverses[u], name)
 		}
-		for _, u := range node.Outputs {
+		for _, u := range artNode.Outputs {
 			outputUniverses[u] = append(outputUniverses[u], name)
 		}
 	}
@@ -361,6 +352,6 @@ func (a *ArtNetNodes) LogAll() {
 	}
 }
 
-func (n *Nodes) UpdateArtNet(artNode *ArtNetNode) {
-	n.t.artnet.Update(artNode)
+func (n *Nodes) UpdateArtNet(node *Node, inputs, outputs []int) {
+	n.t.artnet.Update(node, inputs, outputs)
 }

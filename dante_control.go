@@ -21,46 +21,46 @@ const (
 var danteSeqID uint32
 
 type DanteFlow struct {
-	SourceName  string
-	Subscribers map[string]*DanteFlowSubscriber
+	Source      *Node
+	Subscribers map[*Node]*DanteFlowSubscriber
 }
 
 type DanteFlowSubscriber struct {
-	Name        string
-	Channels    []string
-	LastSeen    time.Time
+	Node     *Node
+	Channels []string
+	LastSeen time.Time
 }
 
 type DanteFlows struct {
 	mu    sync.RWMutex
-	flows map[string]*DanteFlow
+	flows map[*Node]*DanteFlow
 }
 
 func NewDanteFlows() *DanteFlows {
 	return &DanteFlows{
-		flows: map[string]*DanteFlow{},
+		flows: map[*Node]*DanteFlow{},
 	}
 }
 
-func (d *DanteFlows) Update(sourceName, subscriberName, channelInfo string) {
+func (d *DanteFlows) Update(source, subscriber *Node, channelInfo string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	flow := d.flows[sourceName]
+	flow := d.flows[source]
 	if flow == nil {
 		flow = &DanteFlow{
-			SourceName:  sourceName,
-			Subscribers: map[string]*DanteFlowSubscriber{},
+			Source:      source,
+			Subscribers: map[*Node]*DanteFlowSubscriber{},
 		}
-		d.flows[sourceName] = flow
+		d.flows[source] = flow
 	}
 
-	sub := flow.Subscribers[subscriberName]
+	sub := flow.Subscribers[subscriber]
 	if sub == nil {
 		sub = &DanteFlowSubscriber{
-			Name: subscriberName,
+			Node: subscriber,
 		}
-		flow.Subscribers[subscriberName] = sub
+		flow.Subscribers[subscriber] = sub
 	}
 
 	if channelInfo != "" {
@@ -85,14 +85,14 @@ func (d *DanteFlows) Expire() {
 	defer d.mu.Unlock()
 
 	expireTime := time.Now().Add(-5 * time.Minute)
-	for sourceName, flow := range d.flows {
-		for subName, sub := range flow.Subscribers {
+	for source, flow := range d.flows {
+		for subNode, sub := range flow.Subscribers {
 			if sub.LastSeen.Before(expireTime) {
-				delete(flow.Subscribers, subName)
+				delete(flow.Subscribers, subNode)
 			}
 		}
 		if len(flow.Subscribers) == 0 {
-			delete(d.flows, sourceName)
+			delete(d.flows, source)
 		}
 	}
 }
@@ -112,7 +112,7 @@ func (d *DanteFlows) LogAll() {
 		flows = append(flows, flow)
 	}
 	sort.Slice(flows, func(i, j int) bool {
-		return sortorder.NaturalLess(flows[i].SourceName, flows[j].SourceName)
+		return sortorder.NaturalLess(flows[i].Source.DisplayName(), flows[j].Source.DisplayName())
 	})
 
 	type channelFlow struct {
@@ -125,14 +125,18 @@ func (d *DanteFlows) LogAll() {
 	var allNoChannelFlows []string
 
 	for _, flow := range flows {
-		sourceName := flow.SourceName
-		if strings.HasPrefix(sourceName, "dante-av:") || strings.HasPrefix(sourceName, "dante-mcast:") {
-			sourceName = "?? (" + sourceName + ")"
+		sourceName := flow.Source.DisplayName()
+		if sourceName == "" {
+			sourceName = "??"
 		}
 
 		for _, sub := range flow.Subscribers {
+			subName := sub.Node.DisplayName()
+			if subName == "" {
+				subName = "??"
+			}
 			if len(sub.Channels) == 0 {
-				allNoChannelFlows = append(allNoChannelFlows, fmt.Sprintf("%s -> %s", sourceName, sub.Name))
+				allNoChannelFlows = append(allNoChannelFlows, fmt.Sprintf("%s -> %s", sourceName, subName))
 			} else {
 				for _, ch := range sub.Channels {
 					parts := strings.Split(ch, "->")
@@ -140,11 +144,11 @@ func (d *DanteFlows) LogAll() {
 						allChannelFlows = append(allChannelFlows, channelFlow{
 							sourceName: sourceName,
 							txCh:       parts[0],
-							rxName:     sub.Name,
+							rxName:     subName,
 							rxCh:       parts[1],
 						})
 					} else {
-						allNoChannelFlows = append(allNoChannelFlows, fmt.Sprintf("%s -> %s[%s]", sourceName, sub.Name, ch))
+						allNoChannelFlows = append(allNoChannelFlows, fmt.Sprintf("%s -> %s[%s]", sourceName, subName, ch))
 					}
 				}
 			}
@@ -627,7 +631,9 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 				if sub.TxChannelName != "" {
 					channelInfo = fmt.Sprintf("%s->%02d", sub.TxChannelName, sub.RxChannel)
 				}
-				t.danteFlows.Update(txDeviceName, info.Name, channelInfo)
+				sourceNode := t.nodes.GetOrCreateByName(txDeviceName)
+				subscriberNode := t.nodes.GetOrCreateByName(info.Name)
+				t.danteFlows.Update(sourceNode, subscriberNode, channelInfo)
 				needIGMPFallback = false
 			}
 		}
@@ -642,7 +648,9 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 				if sourceName == "" {
 					sourceName = (&MulticastGroup{IP: groupIP}).Name()
 				}
-				t.danteFlows.Update(sourceName, info.Name, "")
+				sourceNode := t.nodes.GetOrCreateByName(sourceName)
+				subscriberNode := t.nodes.GetOrCreateByName(info.Name)
+				t.danteFlows.Update(sourceNode, subscriberNode, "")
 			}
 		}
 	}
