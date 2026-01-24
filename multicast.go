@@ -1,32 +1,74 @@
 package tendrils
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
+	"sort"
 	"time"
+
+	"github.com/fvbommel/sortorder"
 )
 
 type MulticastGroup struct {
-	IP net.IP
+	Name string `json:"name"`
+	IP   string `json:"ip"`
 }
 
 type MulticastMembership struct {
-	Node     *Node
-	LastSeen time.Time
+	SourceIP string    `json:"source_ip"`
+	Node     *Node     `json:"node,omitempty"`
+	LastSeen time.Time `json:"last_seen"`
+}
+
+type MulticastMembershipMap map[string]*MulticastMembership
+
+func (m MulticastMembershipMap) MarshalJSON() ([]byte, error) {
+	members := make([]*MulticastMembership, 0, len(m))
+	for _, membership := range m {
+		members = append(members, membership)
+	}
+	sort.Slice(members, func(i, j int) bool {
+		nameI := members[i].SourceIP
+		if members[i].Node != nil && members[i].Node.DisplayName() != "" {
+			nameI = members[i].Node.DisplayName()
+		}
+		nameJ := members[j].SourceIP
+		if members[j].Node != nil && members[j].Node.DisplayName() != "" {
+			nameJ = members[j].Node.DisplayName()
+		}
+		return sortorder.NaturalLess(nameI, nameJ)
+	})
+	return json.Marshal(members)
 }
 
 type MulticastGroupMembers struct {
-	Group   *MulticastGroup
-	Members map[string]*MulticastMembership // source IP -> membership
+	TypeID  string                 `json:"typeid"`
+	Group   *MulticastGroup        `json:"group"`
+	Members MulticastMembershipMap `json:"members"`
 }
 
-func (g *MulticastGroup) Name() string {
-	ip := g.IP.To4()
+func (g *MulticastGroup) IsDante() bool {
+	ip := net.ParseIP(g.IP).To4()
 	if ip == nil {
-		return g.IP.String()
+		return false
+	}
+	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
+		return true
+	}
+	if ip[0] == 239 && ip[1] == 253 {
+		return true
+	}
+	return false
+}
+
+func multicastGroupName(ip net.IP) string {
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return ip.String()
 	}
 
-	switch g.IP.String() {
+	switch ip.String() {
 	case "224.0.0.251":
 		return "mdns"
 	case "224.0.1.129":
@@ -49,41 +91,24 @@ func (g *MulticastGroup) Name() string {
 		return "admin-scoped-broadcast"
 	}
 
-	// sACN (239.255.x.x, universes 1-63999)
-	if ip[0] == 239 && ip[1] == 255 {
-		universe := int(ip[2])*256 + int(ip[3])
+	if ip4[0] == 239 && ip4[1] == 255 {
+		universe := int(ip4[2])*256 + int(ip4[3])
 		if universe >= 1 && universe <= 63999 {
 			return fmt.Sprintf("sacn:%d", universe)
 		}
 	}
 
-	// Dante audio multicast (239.69-71.x.x)
-	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
-		flowID := (int(ip[1]-69) << 16) | (int(ip[2]) << 8) | int(ip[3])
+	if ip4[0] == 239 && ip4[1] >= 69 && ip4[1] <= 71 {
+		flowID := (int(ip4[1]-69) << 16) | (int(ip4[2]) << 8) | int(ip4[3])
 		return fmt.Sprintf("dante-mcast:%d", flowID)
 	}
 
-	// Dante AV multicast (239.253.x.x)
-	if ip[0] == 239 && ip[1] == 253 {
-		flowID := (int(ip[2]) << 8) | int(ip[3])
+	if ip4[0] == 239 && ip4[1] == 253 {
+		flowID := (int(ip4[2]) << 8) | int(ip4[3])
 		return fmt.Sprintf("dante-av:%d", flowID)
 	}
 
-	return g.IP.String()
-}
-
-func (g *MulticastGroup) IsDante() bool {
-	ip := g.IP.To4()
-	if ip == nil {
-		return false
-	}
-	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
-		return true
-	}
-	if ip[0] == 239 && ip[1] == 253 {
-		return true
-	}
-	return false
+	return ip.String()
 }
 
 func (n *Nodes) UpdateMulticastMembership(sourceIP, groupIP net.IP) {
@@ -98,16 +123,25 @@ func (n *Nodes) UpdateMulticastMembership(sourceIP, groupIP net.IP) {
 	gm := n.multicastGroups[groupKey]
 	if gm == nil {
 		gm = &MulticastGroupMembers{
-			Group:   &MulticastGroup{IP: groupIP},
-			Members: map[string]*MulticastMembership{},
+			TypeID: newTypeID("mcastgroup"),
+			Group: &MulticastGroup{
+				Name: multicastGroupName(groupIP),
+				IP:   groupKey,
+			},
+			Members: MulticastMembershipMap{},
 		}
 		n.multicastGroups[groupKey] = gm
 	}
 
-	gm.Members[sourceKey] = &MulticastMembership{
-		Node:     node,
-		LastSeen: time.Now(),
+	membership := gm.Members[sourceKey]
+	if membership == nil {
+		membership = &MulticastMembership{
+			SourceIP: sourceKey,
+		}
+		gm.Members[sourceKey] = membership
 	}
+	membership.Node = node
+	membership.LastSeen = time.Now()
 }
 
 func (n *Nodes) RemoveMulticastMembership(sourceIP, groupIP net.IP) {
@@ -137,7 +171,7 @@ func (n *Nodes) GetDanteMulticastGroups(deviceIP net.IP) []net.IP {
 			continue
 		}
 		if _, exists := gm.Members[deviceKey]; exists {
-			groups = append(groups, gm.Group.IP)
+			groups = append(groups, net.ParseIP(gm.Group.IP))
 		}
 	}
 	return groups

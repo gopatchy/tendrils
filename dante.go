@@ -3,6 +3,7 @@ package tendrils
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -118,16 +119,30 @@ func (n *Nodes) GetDanteTxDeviceInGroup(groupIP net.IP) string {
 
 var danteSeqID uint32
 
+type DanteSubscriberMap map[*Node]*DanteFlowSubscriber
+
+func (m DanteSubscriberMap) MarshalJSON() ([]byte, error) {
+	subs := make([]*DanteFlowSubscriber, 0, len(m))
+	for _, sub := range m {
+		subs = append(subs, sub)
+	}
+	sort.Slice(subs, func(i, j int) bool {
+		return sortorder.NaturalLess(subs[i].Node.DisplayName(), subs[j].Node.DisplayName())
+	})
+	return json.Marshal(subs)
+}
+
 type DanteFlow struct {
-	Source      *Node
-	Subscribers map[*Node]*DanteFlowSubscriber
+	TypeID      string              `json:"typeid"`
+	Source      *Node               `json:"source"`
+	Subscribers DanteSubscriberMap  `json:"subscribers"`
 }
 
 type DanteFlowSubscriber struct {
-	Node          *Node
-	Channels      []string
-	ChannelStatus map[string]DanteFlowStatus
-	LastSeen      time.Time
+	Node          *Node                      `json:"node"`
+	Channels      []string                   `json:"channels,omitempty"`
+	ChannelStatus map[string]DanteFlowStatus `json:"channel_status,omitempty"`
+	LastSeen      time.Time                  `json:"last_seen"`
 }
 
 type DanteFlows struct {
@@ -157,8 +172,9 @@ func (d *DanteFlows) Update(source, subscriber *Node, channelInfo string, flowSt
 	flow := d.flows[source]
 	if flow == nil {
 		flow = &DanteFlow{
+			TypeID:      newTypeID("danteflow"),
 			Source:      source,
-			Subscribers: map[*Node]*DanteFlowSubscriber{},
+			Subscribers: DanteSubscriberMap{},
 		}
 		d.flows[source] = flow
 	}
@@ -435,6 +451,10 @@ func (s DanteFlowStatus) String() string {
 	default:
 		return ""
 	}
+}
+
+func (s DanteFlowStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
 }
 
 type DanteSubscription struct {
@@ -866,7 +886,7 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 					log.Printf("[dante] %s: multicast group %s -> tx device %q", ip, groupIP, sourceName)
 				}
 				if sourceName == "" {
-					sourceName = (&MulticastGroup{IP: groupIP}).Name()
+					sourceName = multicastGroupName(groupIP)
 				}
 				sourceNode := t.nodes.GetOrCreateByName(sourceName)
 				subscriberNode := t.nodes.GetOrCreateByName(info.Name)

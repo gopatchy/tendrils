@@ -152,7 +152,8 @@ func (n *Nodes) createNode() int {
 	targetID := n.nextID
 	n.nextID++
 	node := &Node{
-		Interfaces:  map[string]*Interface{},
+		TypeID:      newTypeID("node"),
+		Interfaces:  InterfaceMap{},
 		MACTable:    map[string]string{},
 		pollTrigger: make(chan struct{}, 1),
 	}
@@ -172,10 +173,10 @@ func (n *Nodes) applyNodeUpdates(node *Node, nodeID int, mac net.HardwareAddr, i
 
 	if nodeName != "" {
 		if node.Names == nil {
-			node.Names = map[string]bool{}
+			node.Names = NameSet{}
 		}
-		if !node.Names[nodeName] {
-			node.Names[nodeName] = true
+		if !node.Names.Has(nodeName) {
+			node.Names.Add(nodeName)
 			n.nameIndex[nodeName] = nodeID
 			added = append(added, "name="+nodeName)
 		}
@@ -194,10 +195,10 @@ func (n *Nodes) updateNodeIPs(node *Node, nodeID int, ips []net.IP) []string {
 		n.ipIndex[ipKey] = nodeID
 		iface, exists := node.Interfaces[ipKey]
 		if !exists {
-			iface = &Interface{IPs: map[string]net.IP{}}
+			iface = &Interface{IPs: IPSet{}}
 			node.Interfaces[ipKey] = iface
 		}
-		iface.IPs[ipKey] = ip
+		iface.IPs.Add(ip)
 		added = append(added, "ip="+ipKey)
 		go n.t.requestARP(ip)
 	}
@@ -273,8 +274,8 @@ func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr
 	if !exists {
 		iface = &Interface{
 			Name: ifaceName,
-			MAC:  mac,
-			IPs:  map[string]net.IP{},
+			MAC:  MACFrom(mac),
+			IPs:  IPSet{},
 		}
 		node.Interfaces[ifaceKey] = iface
 		added = append(added, "iface="+ifaceKey)
@@ -286,10 +287,10 @@ func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr
 
 	for _, ip := range ips {
 		ipKey := ip.String()
-		if _, exists := iface.IPs[ipKey]; !exists {
+		if !iface.IPs.Has(ipKey) {
 			added = append(added, "ip="+ipKey)
 		}
-		iface.IPs[ipKey] = ip
+		iface.IPs.Add(ip)
 		n.ipIndex[ipKey] = nodeID
 	}
 
@@ -300,7 +301,7 @@ func (n *Nodes) findOrCreateInterface(node *Node, macKey, ifaceName, ifaceKey st
 	var added []string
 
 	if ifaceName != "" {
-		if oldIface, oldExists := node.Interfaces[macKey]; oldExists && oldIface.MAC.String() == macKey {
+		if oldIface, oldExists := node.Interfaces[macKey]; oldExists && string(oldIface.MAC) == macKey {
 			oldIface.Name = ifaceName
 			delete(node.Interfaces, macKey)
 			node.Interfaces[ifaceKey] = oldIface
@@ -308,7 +309,7 @@ func (n *Nodes) findOrCreateInterface(node *Node, macKey, ifaceName, ifaceKey st
 		}
 	} else {
 		for _, existing := range node.Interfaces {
-			if existing.MAC.String() == macKey {
+			if string(existing.MAC) == macKey {
 				return existing, true, added
 			}
 		}
@@ -364,20 +365,20 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 
 	for name := range merge.Names {
 		if keep.Names == nil {
-			keep.Names = map[string]bool{}
+			keep.Names = NameSet{}
 		}
-		keep.Names[name] = true
+		keep.Names.Add(name)
 		n.nameIndex[name] = keepID
 	}
 
 	for _, iface := range merge.Interfaces {
 		var ips []net.IP
-		for _, ip := range iface.IPs {
-			ips = append(ips, ip)
+		for ipStr := range iface.IPs {
+			ips = append(ips, net.ParseIP(ipStr))
 		}
-		if iface.MAC != nil {
-			n.updateNodeInterface(keep, keepID, iface.MAC, ips, iface.Name)
-			n.macIndex[iface.MAC.String()] = keepID
+		if iface.MAC != "" {
+			n.updateNodeInterface(keep, keepID, iface.MAC.Parse(), ips, iface.Name)
+			n.macIndex[string(iface.MAC)] = keepID
 		}
 	}
 
@@ -451,8 +452,9 @@ func (n *Nodes) GetOrCreateByName(name string) *Node {
 	targetID := n.nextID
 	n.nextID++
 	node := &Node{
-		Names:       map[string]bool{name: true},
-		Interfaces:  map[string]*Interface{},
+		TypeID:      newTypeID("node"),
+		Names:       NameSet{name: true},
+		Interfaces:  InterfaceMap{},
 		MACTable:    map[string]string{},
 		pollTrigger: make(chan struct{}, 1),
 	}
@@ -593,7 +595,7 @@ func (n *Nodes) LogAll() {
 			groups = append(groups, gm)
 		}
 		sort.Slice(groups, func(i, j int) bool {
-			return sortorder.NaturalLess(groups[i].Group.Name(), groups[j].Group.Name())
+			return sortorder.NaturalLess(groups[i].Group.Name, groups[j].Group.Name)
 		})
 
 		log.Printf("[sigusr1] ================ %d multicast groups ================", len(groups))
@@ -614,7 +616,7 @@ func (n *Nodes) LogAll() {
 			sort.Slice(memberNames, func(i, j int) bool {
 				return sortorder.NaturalLess(memberNames[i], memberNames[j])
 			})
-			log.Printf("[sigusr1]   %s: %s", gm.Group.Name(), strings.Join(memberNames, ", "))
+			log.Printf("[sigusr1]   %s: %s", gm.Group.Name, strings.Join(memberNames, ", "))
 		}
 	}
 

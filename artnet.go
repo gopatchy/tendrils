@@ -23,10 +23,11 @@ const (
 )
 
 type ArtNetNode struct {
-	Node     *Node
-	Inputs   []int
-	Outputs  []int
-	LastSeen time.Time
+	TypeID   string    `json:"typeid"`
+	Node     *Node     `json:"node"`
+	Inputs   []int     `json:"inputs,omitempty"`
+	Outputs  []int     `json:"outputs,omitempty"`
+	LastSeen time.Time `json:"last_seen"`
 }
 
 func (t *Tendrils) listenArtNet(ctx context.Context, iface net.Interface) {
@@ -217,6 +218,7 @@ func (a *ArtNetNodes) Update(node *Node, inputs, outputs []int) {
 		existing.LastSeen = time.Now()
 	} else {
 		a.nodes[node] = &ArtNetNode{
+			TypeID:   newTypeID("artnetnode"),
 			Node:     node,
 			Inputs:   inputs,
 			Outputs:  outputs,

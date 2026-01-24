@@ -58,6 +58,7 @@ type Tendrils struct {
 	DebugBMD      bool
 	DebugShure    bool
 	DebugYamaha   bool
+	HTTPPort      string
 }
 
 func New() *Tendrils {
@@ -83,6 +84,7 @@ func (t *Tendrils) Run() {
 	}()
 
 	t.populateLocalAddresses()
+	t.startHTTPServer()
 
 	if !t.DisableARP {
 		t.readARPTable()
@@ -239,8 +241,9 @@ func (t *Tendrils) pollNode(node *Node) {
 	t.nodes.mu.RLock()
 	var ips []net.IP
 	for _, iface := range node.Interfaces {
-		for _, ip := range iface.IPs {
-			if ip.To4() != nil {
+		for ipStr := range iface.IPs {
+			ip := net.ParseIP(ipStr)
+			if ip != nil && ip.To4() != nil {
 				ips = append(ips, ip)
 			}
 		}

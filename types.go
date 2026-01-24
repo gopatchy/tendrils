@@ -1,62 +1,143 @@
 package tendrils
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"sort"
 	"strings"
 
 	"github.com/fvbommel/sortorder"
+	"go.jetify.com/typeid"
 )
 
+func newTypeID(prefix string) string {
+	tid, _ := typeid.WithPrefix(prefix)
+	return tid.String()
+}
+
+type MAC string
+
+func (m MAC) Parse() net.HardwareAddr {
+	mac, _ := net.ParseMAC(string(m))
+	return mac
+}
+
+func MACFrom(mac net.HardwareAddr) MAC {
+	if mac == nil {
+		return ""
+	}
+	return MAC(mac.String())
+}
+
+type IPSet map[string]bool
+
+func (s IPSet) MarshalJSON() ([]byte, error) {
+	ips := make([]string, 0, len(s))
+	for ip := range s {
+		ips = append(ips, ip)
+	}
+	sort.Strings(ips)
+	return json.Marshal(ips)
+}
+
+func (s IPSet) Add(ip net.IP) {
+	s[ip.String()] = true
+}
+
+func (s IPSet) Has(ip string) bool {
+	return s[ip]
+}
+
+func (s IPSet) Slice() []string {
+	ips := make([]string, 0, len(s))
+	for ip := range s {
+		ips = append(ips, ip)
+	}
+	sort.Strings(ips)
+	return ips
+}
+
+type NameSet map[string]bool
+
+func (s NameSet) MarshalJSON() ([]byte, error) {
+	names := make([]string, 0, len(s))
+	for name := range s {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return json.Marshal(names)
+}
+
+func (s NameSet) Add(name string) {
+	s[name] = true
+}
+
+func (s NameSet) Has(name string) bool {
+	return s[name]
+}
+
+type InterfaceMap map[string]*Interface
+
+func (m InterfaceMap) MarshalJSON() ([]byte, error) {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return sortorder.NaturalLess(keys[i], keys[j])
+	})
+	ifaces := make([]*Interface, 0, len(m))
+	for _, k := range keys {
+		ifaces = append(ifaces, m[k])
+	}
+	return json.Marshal(ifaces)
+}
+
 type Interface struct {
-	Name  string
-	MAC   net.HardwareAddr
-	IPs   map[string]net.IP
-	Stats *InterfaceStats
+	Name  string          `json:"name,omitempty"`
+	MAC   MAC             `json:"mac"`
+	IPs   IPSet           `json:"ips"`
+	Stats *InterfaceStats `json:"stats,omitempty"`
 }
 
 type InterfaceStats struct {
-	Speed     uint64 // bits per second
-	InErrors  uint64
-	OutErrors uint64
-	PoE       *PoEStats
+	Speed     uint64    `json:"speed,omitempty"`
+	InErrors  uint64    `json:"in_errors,omitempty"`
+	OutErrors uint64    `json:"out_errors,omitempty"`
+	PoE       *PoEStats `json:"poe,omitempty"`
 }
 
 type PoEStats struct {
-	Power    float64 // watts in use
-	MaxPower float64 // watts allocated/negotiated
+	Power    float64 `json:"power"`
+	MaxPower float64 `json:"max_power"`
 }
 
 type PoEBudget struct {
-	Power    float64 // watts in use
-	MaxPower float64 // watts total budget
+	Power    float64 `json:"power"`
+	MaxPower float64 `json:"max_power"`
 }
 
 type Node struct {
-	Names              map[string]bool
-	Interfaces         map[string]*Interface
-	MACTable           map[string]string // peer MAC -> local interface name
-	PoEBudget          *PoEBudget
-	IsDanteClockMaster bool
-	DanteTxChannels    string
+	TypeID             string            `json:"typeid"`
+	Names              NameSet           `json:"names"`
+	Interfaces         InterfaceMap      `json:"interfaces"`
+	MACTable           map[string]string `json:"-"`
+	MACTableSize       int               `json:"mac_table_size,omitempty"`
+	PoEBudget          *PoEBudget        `json:"poe_budget,omitempty"`
+	IsDanteClockMaster bool              `json:"is_dante_clock_master,omitempty"`
+	DanteTxChannels    string            `json:"dante_tx_channels,omitempty"`
 	pollTrigger        chan struct{}
 }
 
 func (i *Interface) String() string {
-	var ips []string
-	for _, ip := range i.IPs {
-		ips = append(ips, ip.String())
-	}
-	sort.Strings(ips)
-
 	var parts []string
-	parts = append(parts, i.MAC.String())
+	parts = append(parts, string(i.MAC))
 	if i.Name != "" {
 		parts = append(parts, fmt.Sprintf("(%s)", i.Name))
 	}
-	if len(ips) > 0 {
-		parts = append(parts, fmt.Sprintf("%v", ips))
+	if len(i.IPs) > 0 {
+		parts = append(parts, fmt.Sprintf("%v", i.IPs.Slice()))
 	}
 	if i.Stats != nil {
 		parts = append(parts, i.Stats.String())
@@ -135,8 +216,8 @@ func (n *Node) DisplayName() string {
 
 func (n *Node) FirstMAC() string {
 	for _, iface := range n.Interfaces {
-		if iface.MAC != nil {
-			return iface.MAC.String()
+		if iface.MAC != "" {
+			return string(iface.MAC)
 		}
 	}
 	return "??"

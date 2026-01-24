@@ -3,10 +3,11 @@ package tendrils
 import "fmt"
 
 type Link struct {
-	NodeA      *Node
-	InterfaceA string
-	NodeB      *Node
-	InterfaceB string
+	TypeID     string `json:"typeid"`
+	NodeA      *Node  `json:"node_a"`
+	InterfaceA string `json:"interface_a,omitempty"`
+	NodeB      *Node  `json:"node_b"`
+	InterfaceB string `json:"interface_b,omitempty"`
 }
 
 func (l *Link) String() string {
@@ -33,8 +34,8 @@ func (n *Nodes) getDirectLinks() []*Link {
 	macToNode := map[string]*Node{}
 	for _, node := range n.nodes {
 		for _, iface := range node.Interfaces {
-			if iface.MAC != nil {
-				macToNode[iface.MAC.String()] = node
+			if iface.MAC != "" {
+				macToNode[string(iface.MAC)] = node
 			}
 		}
 	}
@@ -45,10 +46,10 @@ func (n *Nodes) getDirectLinks() []*Link {
 	for _, target := range n.nodes {
 		seenMACs := map[string]bool{}
 		for _, iface := range target.Interfaces {
-			if iface.MAC == nil {
+			if iface.MAC == "" {
 				continue
 			}
-			mac := iface.MAC.String()
+			mac := string(iface.MAC)
 			if seenMACs[mac] {
 				continue
 			}
@@ -64,6 +65,7 @@ func (n *Nodes) getDirectLinks() []*Link {
 			if !seen[key] {
 				seen[key] = true
 				links = append(links, &Link{
+					TypeID:     newTypeID("link"),
 					NodeA:      lastHop,
 					InterfaceA: lastPort,
 					NodeB:      target,
