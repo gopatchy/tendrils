@@ -47,10 +47,10 @@
     <div id="cy"></div>
 
     <script src="cytoscape.min.js"></script>
-    <script src="cola.min.js"></script>
-    <script src="cytoscape-cola.min.js"></script>
+    <script src="elk.bundled.js"></script>
+    <script src="cytoscape-elk.min.js"></script>
     <script>
-        cytoscape.use(cytoscapeCola);
+        cytoscape.use(cytoscapeElk);
         let cy;
 
         function getLabel(node) {
@@ -106,15 +106,20 @@
 
         function doLayout() {
             cy.layout({
-                name: 'cola',
-                animate: false,
+                name: 'elk',
+                fit: true,
                 padding: 50,
                 nodeDimensionsIncludeLabels: true,
-                avoidOverlap: true,
-                nodeSpacing: 40,
-                edgeLength: 200,
-                fit: true,
-                randomize: true
+                elk: {
+                    algorithm: 'layered',
+                    'elk.direction': 'DOWN',
+                    'elk.spacing.nodeNode': 80,
+                    'elk.spacing.edgeNode': 40,
+                    'elk.spacing.edgeEdge': 30,
+                    'elk.layered.spacing.nodeNodeBetweenLayers': 100,
+                    'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+                    'elk.hierarchyHandling': 'INCLUDE_CHILDREN'
+                }
             }).run();
         }
 

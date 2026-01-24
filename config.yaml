@@ -1,11 +1,97 @@
 locations:
+  booth:
+    children:
+      shared:
+        nodes:
+          - satellite-1
+
+      qlab:
+        nodes:
+          - qlab
+          - TX-QLAB-1
+          - TX-QLAB-2
+          - "SK_PTZEXTREMEV2 [457081]"
+          - "SK_RACKPRO2 [452514]"
+          - "d0:11:e5:17:03:0b" # pigeon
+
+      audio:
+       nodes:
+          - SQ-7
+
+      camera-control:
+        nodes:
+          - RX-CC-PREVIEW
+          - RX-CC-M16
+
+      video-control:
+        nodes:
+          - RX-VC-M4
+          - RX-VC-M16
+
+      control:
+        nodes:
+          - "sunset.local"
+          - RX-CONTROL-1
+        
+  house-left:
+    nodes:
+      - satellite-2
+
+  house-right:
+    nodes:
+      - satellite-3
+
   stage:
     children:
+
       upstage:
-        nodes:
-          - lighting-2
+        children:
+
+          rack-lighting-2:
+            nodes:
+              - lighting-2
+              - "48:59:00:41:00:29" # Pixie Driver 8k Port 1
+              - "48:59:00:28:00:27" # Pixie Driver 8k Port 2
+              - "48:59:00:3c:00:3e" # Pixie Driver 8k Port 5
+
       downstage:
         children:
+          rack-audio:
+            nodes:
+              - audio
+              - "MICS-A"
+              - "00:0e:dd:a7:29:93" # MICS-A bridge interface
+              - "MICS-B"
+              - "00:0e:dd:a8:3e:b3" # MICS-B bridge interface
+              - "MICS-C"
+              - "00:0e:dd:a7:6f:55" # MICS-C bridge interface
+              - "MICS-D"
+              - "00:0e:dd:64:3d:51" # MICS-D bridge interface
+              - "MICS-E"
+              - "00:0e:dd:ac:fc:7d" # MICS-E bridge interface
+
           rack-lighting-1:
             nodes:
               - lighting-1
+              - "48:59:00:27:00:27" # Pixie Driver 8k Port 1
+              - "48:59:00:37:00:27" # Pixie Driver 8k Port 2
+              - "48:59:00:3e:00:27" # Pixie Driver 8k Port 3
+              - "48:59:00:3f:00:27" # Pixie Driver 8k Port 4
+              - "48:59:00:47:00:1a" # Pixie Driver 8k Port 5
+              - "48:59:00:44:00:1a" # Pixie Driver 8k Port 6
+              - "48:59:00:42:00:19" # Pixie Driver 8k Port 7
+              - "48:59:00:44:00:19" # Pixie Driver 8k Port 8
+
+          rack-video:
+            nodes:
+              - video
+              - "ATEM 2 M/E Constellation 4K"
+              - "HyperDeck Studio 4K Pro"
+              - RX-QLAB-1
+              - RX-QLAB-2
+              - TX-PROJ-1
+              - TX-PROJ-2
+              - TX-M4
+              - TX-M16
+              - TX-MISC
+              - TX-PREVIEW
