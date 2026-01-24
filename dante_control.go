@@ -115,56 +115,61 @@ func (d *DanteFlows) LogAll() {
 		return sortorder.NaturalLess(flows[i].SourceName, flows[j].SourceName)
 	})
 
-	log.Printf("[sigusr1] ================ %d dante flows ================", len(flows))
+	type channelFlow struct {
+		sourceName string
+		txCh       string
+		rxName     string
+		rxCh       string
+	}
+	var allChannelFlows []channelFlow
+	var allNoChannelFlows []string
+
 	for _, flow := range flows {
-		type channelFlow struct {
-			txCh   string
-			rxName string
-			rxCh   string
-		}
-		var channelFlows []channelFlow
-		var noChannelSubs []string
-
-		for _, sub := range flow.Subscribers {
-			if len(sub.Channels) == 0 {
-				noChannelSubs = append(noChannelSubs, sub.Name)
-			} else {
-				for _, ch := range sub.Channels {
-					parts := strings.Split(ch, "->")
-					if len(parts) == 2 {
-						channelFlows = append(channelFlows, channelFlow{
-							txCh:   parts[0],
-							rxName: sub.Name,
-							rxCh:   parts[1],
-						})
-					} else {
-						noChannelSubs = append(noChannelSubs, fmt.Sprintf("%s[%s]", sub.Name, ch))
-					}
-				}
-			}
-		}
-
-		sort.Slice(channelFlows, func(i, j int) bool {
-			if channelFlows[i].txCh != channelFlows[j].txCh {
-				return sortorder.NaturalLess(channelFlows[i].txCh, channelFlows[j].txCh)
-			}
-			return sortorder.NaturalLess(channelFlows[i].rxName, channelFlows[j].rxName)
-		})
-		sort.Slice(noChannelSubs, func(i, j int) bool {
-			return sortorder.NaturalLess(noChannelSubs[i], noChannelSubs[j])
-		})
-
 		sourceName := flow.SourceName
 		if strings.HasPrefix(sourceName, "dante-av:") || strings.HasPrefix(sourceName, "dante-mcast:") {
 			sourceName = "?? (" + sourceName + ")"
 		}
 
-		for _, cf := range channelFlows {
-			log.Printf("[sigusr1]   %s[%s] -> %s[%s]", sourceName, cf.txCh, cf.rxName, cf.rxCh)
+		for _, sub := range flow.Subscribers {
+			if len(sub.Channels) == 0 {
+				allNoChannelFlows = append(allNoChannelFlows, fmt.Sprintf("%s -> %s", sourceName, sub.Name))
+			} else {
+				for _, ch := range sub.Channels {
+					parts := strings.Split(ch, "->")
+					if len(parts) == 2 {
+						allChannelFlows = append(allChannelFlows, channelFlow{
+							sourceName: sourceName,
+							txCh:       parts[0],
+							rxName:     sub.Name,
+							rxCh:       parts[1],
+						})
+					} else {
+						allNoChannelFlows = append(allNoChannelFlows, fmt.Sprintf("%s -> %s[%s]", sourceName, sub.Name, ch))
+					}
+				}
+			}
 		}
-		if len(noChannelSubs) > 0 {
-			log.Printf("[sigusr1]   %s -> %s", sourceName, strings.Join(noChannelSubs, ", "))
+	}
+
+	totalFlows := len(allChannelFlows) + len(allNoChannelFlows)
+	log.Printf("[sigusr1] ================ %d dante flows ================", totalFlows)
+
+	sort.Slice(allChannelFlows, func(i, j int) bool {
+		if allChannelFlows[i].sourceName != allChannelFlows[j].sourceName {
+			return sortorder.NaturalLess(allChannelFlows[i].sourceName, allChannelFlows[j].sourceName)
 		}
+		if allChannelFlows[i].txCh != allChannelFlows[j].txCh {
+			return sortorder.NaturalLess(allChannelFlows[i].txCh, allChannelFlows[j].txCh)
+		}
+		return sortorder.NaturalLess(allChannelFlows[i].rxName, allChannelFlows[j].rxName)
+	})
+	sort.Strings(allNoChannelFlows)
+
+	for _, cf := range allChannelFlows {
+		log.Printf("[sigusr1]   %s[%s] -> %s[%s]", cf.sourceName, cf.txCh, cf.rxName, cf.rxCh)
+	}
+	for _, flow := range allNoChannelFlows {
+		log.Printf("[sigusr1]   %s", flow)
 	}
 }
 
@@ -477,7 +482,7 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 			if sub.TxDeviceName != "" && info.Name != "" {
 				channelInfo := ""
 				if sub.TxChannelName != "" {
-					channelInfo = fmt.Sprintf("%s->%d", sub.TxChannelName, sub.RxChannel)
+					channelInfo = fmt.Sprintf("%s->%02d", sub.TxChannelName, sub.RxChannel)
 				}
 				t.danteFlows.Update(sub.TxDeviceName, info.Name, channelInfo)
 				needIGMPFallback = false
