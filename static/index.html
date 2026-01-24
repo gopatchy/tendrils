@@ -3,116 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tendrils Network Diagram</title>
+    <title>Tendrils Network</title>
     <style>
+        * { box-sizing: border-box; }
         body {
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: system-ui, sans-serif;
             margin: 0;
-            padding: 20px;
-            background: #1a1a2e;
+            padding: 10px;
+            background: #111;
             color: #eee;
+            height: 100vh;
         }
-        h1 {
-            margin: 0 0 20px 0;
-            font-size: 1.5em;
+        #controls {
+            margin-bottom: 10px;
         }
-        #diagram {
-            background: #16213e;
-            border-radius: 8px;
-            padding: 20px;
-            overflow: auto;
+        #controls button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 6px 12px;
+            margin-right: 5px;
+            border-radius: 4px;
+            cursor: pointer;
         }
-        #error {
-            color: #ff6b6b;
-            padding: 20px;
-            display: none;
+        #controls button:hover { background: #444; }
+        #cy {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            height: calc(100vh - 50px);
+            width: 100%;
         }
-        .mermaid {
-            display: flex;
-            justify-content: center;
-        }
+        #error { color: #f66; padding: 20px; }
     </style>
 </head>
 <body>
-    <h1>Tendrils Network</h1>
-    <div id="error"></div>
-    <div id="diagram">
-        <pre class="mermaid" id="mermaid-content"></pre>
+    <div id="controls">
+        <strong>Tendrils</strong>
+        <button onclick="doLayout()">Layout</button>
+        <button onclick="cy.fit(50)">Fit</button>
+        <span id="stats"></span>
     </div>
+    <div id="error"></div>
+    <div id="cy"></div>
 
-    <script src="mermaid.min.js"></script>
+    <script src="cytoscape.min.js"></script>
     <script>
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'dark',
-            flowchart: {
-                useMaxWidth: true,
-                htmlLabels: true,
-                curve: 'basis'
-            }
-        });
+        let cy;
 
-        function sanitizeId(str) {
-            return str.replace(/[^a-zA-Z0-9]/g, '_');
+        function getLabel(node) {
+            if (node.names && node.names.length > 0) return node.names[0];
+            return '??';
         }
 
-        function getNodeLabel(node) {
-            if (node.names && node.names.length > 0) {
-                return node.names[0];
-            }
-            return node.typeid.substring(0, 12);
+        function isSwitch(node) {
+            return !!(node.poe_budget);
         }
 
-        async function fetchAndRender() {
-            try {
-                const response = await fetch('/api/status');
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                const data = await response.json();
+        function doLayout() {
+            cy.layout({
+                name: 'cose',
+                animate: false,
+                padding: 50,
+                nodeRepulsion: 10000,
+                idealEdgeLength: 120,
+                gravity: 0.2,
+                numIter: 1000,
+                fit: true
+            }).run();
+        }
 
-                const nodes = data.nodes || [];
-                const links = data.links || [];
+        async function init() {
+            const resp = await fetch('/api/status');
+            const data = await resp.json();
 
-                if (nodes.length === 0) {
-                    document.getElementById('mermaid-content').textContent = 'No nodes found';
-                    return;
-                }
+            const nodes = data.nodes || [];
+            const links = data.links || [];
 
-                let diagram = 'graph TD\n';
+            document.getElementById('stats').textContent =
+                `${nodes.length} nodes, ${links.length} links`;
 
-                const nodeIds = new Map();
-                nodes.forEach((node, i) => {
-                    const id = 'N' + i;
-                    nodeIds.set(node.typeid, id);
-                    const label = getNodeLabel(node);
-                    diagram += `    ${id}["${label}"]\n`;
-                });
+            const elements = [];
+            const idMap = new Map();
+            const switchIds = new Set();
 
-                links.forEach(link => {
-                    const idA = nodeIds.get(link.node_a?.typeid);
-                    const idB = nodeIds.get(link.node_b?.typeid);
-                    if (idA && idB) {
-                        if (link.interface_a && link.interface_b) {
-                            diagram += `    ${idA} ---|${link.interface_a} - ${link.interface_b}| ${idB}\n`;
-                        } else {
-                            diagram += `    ${idA} --- ${idB}\n`;
-                        }
+            nodes.forEach((n, i) => {
+                const id = 'n' + i;
+                idMap.set(n.typeid, id);
+                if (isSwitch(n)) switchIds.add(id);
+            });
+
+            nodes.forEach((n, i) => {
+                const id = 'n' + i;
+                const sw = switchIds.has(id);
+                elements.push({
+                    data: {
+                        id: id,
+                        label: getLabel(n),
+                        isSwitch: sw
                     }
                 });
+            });
 
-                document.getElementById('mermaid-content').textContent = diagram;
-                await mermaid.run({
-                    nodes: [document.getElementById('mermaid-content')]
+            links.forEach((link, i) => {
+                const idA = idMap.get(link.node_a?.typeid);
+                const idB = idMap.get(link.node_b?.typeid);
+                if (!idA || !idB) return;
+
+                let label = '';
+                if (link.interface_a) label = link.interface_a;
+                if (link.interface_b) label += (label ? ' ↔ ' : '') + link.interface_b;
+
+                elements.push({
+                    data: {
+                        id: 'e' + i,
+                        source: idA,
+                        target: idB,
+                        label: label
+                    }
                 });
+            });
 
-            } catch (err) {
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('error').textContent = 'Error loading network data: ' + err.message;
-            }
+            cy = cytoscape({
+                container: document.getElementById('cy'),
+                elements: elements,
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'label': 'data(label)',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'background-color': '#a6d',
+                            'color': '#fff',
+                            'font-size': 12,
+                            'width': 120,
+                            'height': 40,
+                            'padding': 8,
+                            'shape': 'round-rectangle',
+                            'text-wrap': 'wrap',
+                            'text-max-width': 110
+                        }
+                    },
+                    {
+                        selector: 'node[?isSwitch]',
+                        style: {
+                            'background-color': '#2a2',
+                            'border-width': 3,
+                            'border-color': '#4f4',
+                            'font-size': 14,
+                            'font-weight': 'bold',
+                            'width': 100,
+                            'height': 50
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 2,
+                            'line-color': '#666',
+                            'curve-style': 'bezier',
+                            'label': 'data(label)',
+                            'font-size': 9,
+                            'color': '#aaa',
+                            'text-background-color': '#1a1a1a',
+                            'text-background-opacity': 1,
+                            'text-background-padding': 2,
+                            'text-rotation': 'autorotate'
+                        }
+                    }
+                ],
+                layout: { name: 'preset' }
+            });
+
+            doLayout();
         }
 
-        fetchAndRender();
+        init().catch(e => {
+            document.getElementById('error').textContent = e.message;
+        });
     </script>
 </body>
 </html>
