@@ -14,30 +14,6 @@ const (
 	mdnsAddr = "224.0.0.251:5353"
 )
 
-func extractDanteName(s string) string {
-	var name string
-	for _, prefix := range []string{"._netaudio-", "._dante"} {
-		if idx := strings.Index(s, prefix); idx > 0 {
-			name = s[:idx]
-			break
-		}
-	}
-	if name == "" {
-		return ""
-	}
-	if at := strings.LastIndex(name, "@"); at >= 0 {
-		name = name[at+1:]
-	}
-	if strings.Contains(name, ".in-addr") {
-		return ""
-	}
-	return name
-}
-
-func isDanteService(s string) bool {
-	return strings.Contains(s, "_netaudio-") || strings.Contains(s, "._dante")
-}
-
 func isSkaarhojService(s string) bool {
 	return strings.Contains(s, "_skaarhoj._tcp")
 }
@@ -109,8 +85,6 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 
 	aRecords := map[string]net.IP{}
 	srvTargets := map[string]string{}
-	danteNames := map[string]bool{}
-	danteARCPorts := map[string]uint16{}
 	skaarhojNames := map[string]bool{}
 
 	for _, rr := range allRecords {
@@ -121,12 +95,6 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 		case *dns.AAAA:
 			continue
 		case *dns.PTR:
-			if isDanteService(r.Hdr.Name) {
-				name := extractDanteName(r.Ptr)
-				if name != "" {
-					danteNames[name] = true
-				}
-			}
 			if isSkaarhojService(r.Ptr) {
 				name := extractSkaarhojName(r.Ptr)
 				if name != "" {
@@ -135,18 +103,6 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 			}
 		case *dns.SRV:
 			target := strings.TrimSuffix(r.Target, ".")
-			if isDanteService(r.Hdr.Name) {
-				name := extractDanteName(r.Hdr.Name)
-				if name != "" {
-					danteNames[name] = true
-					if target != "" {
-						srvTargets[name] = target
-					}
-					if strings.Contains(r.Hdr.Name, "_netaudio-arc.") && r.Port > 0 {
-						danteARCPorts[name] = r.Port
-					}
-				}
-			}
 			if isSkaarhojService(r.Hdr.Name) {
 				name := extractSkaarhojName(r.Hdr.Name)
 				if name != "" {
@@ -157,21 +113,6 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 				}
 			}
 		}
-	}
-
-	for name := range danteNames {
-		var ip net.IP
-		if target, ok := srvTargets[name]; ok {
-			ip = aRecords[target]
-		}
-		if ip == nil {
-			ip = aRecords[name+".local"]
-		}
-		if ip == nil {
-			ip = srcIP
-		}
-		arcPort := int(danteARCPorts[name])
-		t.nodes.UpdateDante(name, ip, arcPort)
 	}
 
 	for name := range skaarhojNames {
@@ -188,7 +129,7 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 		t.nodes.Update(nil, nil, []net.IP{ip}, "", name, "skaarhoj")
 	}
 
-	if len(danteNames) == 0 && len(skaarhojNames) == 0 {
+	if len(skaarhojNames) == 0 {
 		for aName, ip := range aRecords {
 			hostname := strings.TrimSuffix(aName, ".local")
 			if hostname != "" && hostname != aName {
@@ -203,12 +144,7 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 
 var mdnsServices = []string{
 	"_services._dns-sd._udp.local.",
-	"_netaudio-arc._udp.local.",
-	"_netaudio-cmc._udp.local.",
-	"_netaudio-dbc._udp.local.",
-	"_netaudio-chan._udp.local.",
-	"_dantevideo._udp.local.",
-	"_danteancil._udp.local.",
+	"_skaarhoj._tcp.local.",
 }
 
 func (t *Tendrils) runMDNSQuerier(ctx context.Context, iface net.Interface, conn *net.UDPConn) {

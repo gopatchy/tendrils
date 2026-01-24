@@ -75,17 +75,6 @@ func (t *Tendrils) handlePTPPacket(ifaceName string, srcIP net.IP, data []byte) 
 	t.nodes.SetDanteClockMaster(srcIP)
 }
 
-func (n *Nodes) UpdateDante(name string, ip net.IP, arcPort int) {
-	if n.t.DebugDante {
-		log.Printf("[dante] mdns response: %s -> %s (arc port %d)", name, ip, arcPort)
-	}
-	n.Update(nil, nil, []net.IP{ip}, "", name, "dante")
-
-	if arcPort > 0 {
-		go n.t.probeDanteDeviceWithPort(ip, arcPort)
-	}
-}
-
 func (n *Nodes) UpdateDanteTxChannels(name string, ip net.IP, channels string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
