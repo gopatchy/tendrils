@@ -619,11 +619,15 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 					ip, sub.RxChannel, sub.TxChannelName, sub.TxDeviceName)
 			}
 			if sub.TxDeviceName != "" && info.Name != "" {
+				txDeviceName := sub.TxDeviceName
+				if txDeviceName == "." {
+					txDeviceName = info.Name
+				}
 				channelInfo := ""
 				if sub.TxChannelName != "" {
 					channelInfo = fmt.Sprintf("%s->%02d", sub.TxChannelName, sub.RxChannel)
 				}
-				t.danteFlows.Update(sub.TxDeviceName, info.Name, channelInfo)
+				t.danteFlows.Update(txDeviceName, info.Name, channelInfo)
 				needIGMPFallback = false
 			}
 		}
