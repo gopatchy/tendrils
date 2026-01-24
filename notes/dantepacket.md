@@ -72,18 +72,43 @@ Zero offset = no more records.
 
 ### Subscription Record
 
-Each record is 56+ bytes. The offset table points to record start.
+Two record formats exist, distinguished by marker position.
+
+#### Format 1: 0x141c records (numbered audio/video channels)
 
 ```
-record+0x00: [40] record_header
-record+0x28: u16  0x0608          # marker
-record+0x2a: u16  0x0000
+record+0x00: u16  0x141c          # record marker
+record+0x02: u16  channel_num     # RX channel number
+record+0x04: u16  0x0000
+record+0x06: u16  0x0003
+record+0x08: u16  channel_num     # repeated
+record+0x0a: u16  0x0000
+record+0x0c: u16  0x0000
+record+0x0e: u16  channel_type    # 0x000f=audio, 0x000e=video
+...
 record+0x2c: u16  tx_ch_offset    # absolute offset to TX channel name string
 record+0x2e: u16  tx_dev_offset   # absolute offset to TX device name string
-record+0x30: [4]  flags
-record+0x34: u32  0x02020000      # string marker
-record+0x38: ...  inline_strings  # (unreliable, use offsets above)
 ```
+
+**Channel type (at record+0x0e):**
+- `0x000f` = audio channel
+- `0x000e` = video channel
+
+#### Format 2: 0x141a records (special channels: Video, Serial, USB)
+
+```
+record+0x00: u16  0x141a          # record marker
+record+0x02: u16  channel_num     # e.g., 0x0009 = channel 9
+record+0x04: u16  ??
+record+0x06: u16  ??
+...
+record+0x2c: u16  tx_ch_offset    # same position as 0x141c
+record+0x2e: u16  tx_dev_offset   # same position as 0x141c
+```
+
+These are video channels (Dante AV "Video" aggregate channel).
+
+Both 0x141c and 0x141a records use the same offsets for tx_ch and tx_dev (+44 and +46).
 
 **Subscription status:**
 - Both offsets non-zero = subscribed
@@ -126,9 +151,85 @@ Record at 0x0258 (RX ch 25):
 
 1. Check magic=0x28, command=0x3400, status=0x8112
 2. Read 16 offsets from 0x12-0x31
-3. For each non-zero offset:
-   - Read u16 at offset+0x2c (tx_ch_offset)
-   - Read u16 at offset+0x2e (tx_dev_offset)
-   - If both zero: skip (unsubscribed)
-   - Else: read null-terminated strings at those offsets
-   - RX channel = page_start + record_index
+3. For each non-zero offset, detect record format:
+   - If offset+0x00 == 0x141c: Format 1 (numbered channel)
+     - channel_type at offset+0x0e (0x000f=audio, 0x000e=video)
+     - tx_ch_offset at offset+0x2c
+     - tx_dev_offset at offset+0x2e
+   - If offset+0x00 == 0x141a: Format 2 (special channel)
+     - Assume video type
+     - tx_ch_offset at offset+0x2c (same as 0x141c)
+     - tx_dev_offset at offset+0x2e (same as 0x141c)
+4. If tx_ch_offset and tx_dev_offset are both zero: skip (unsubscribed)
+5. Read null-terminated strings at those offsets
+6. RX channel = page_start + record_index
+
+---
+
+## Additional Commands
+
+### 0x2000 - TX Channel Info
+
+Request args (6 bytes):
+```
+0x00: u16  0x0001
+0x02: u16  page_num
+0x04: u16  0x0000
+```
+
+Response contains TX channel entries:
+```
+0x00: u16  channel_num
+0x02: u16  channel_type    # see below
+0x04: u16  name_offset
+0x06: u16  unknown
+```
+
+Observed channel_type values:
+- `0x0107` = audio channel (seen on MICS, SQ-7, speaker devices)
+- `0x0007` = possibly video or different encoding?
+
+Sample rate `0xbb80` (48000) appears in responses.
+
+### 0x3600 - TX Flow Info
+
+Uses magic=0x28. Returns info about outgoing flows.
+
+Response includes IP addresses of flow destinations.
+
+---
+
+## Multicast Group Ranges
+
+Audio and video use different multicast IP ranges:
+- `239.69.x.x` - `239.71.x.x` = Dante audio multicast
+- `239.253.x.x` = Dante AV (video) multicast
+
+---
+
+## Channel Type Detection
+
+**SOLVED**: Audio vs video channels are distinguished by the channel_type field at record+0x0e in 0x3400 responses:
+- `0x000f` = audio channel
+- `0x000e` = video channel
+
+Dante AV devices (TX-*, RX-* naming convention) have both audio and video channels. The type must be checked per-channel, not per-device.
+
+---
+
+## Open Questions
+
+### Other Channel Types
+
+Video devices have additional channel types with marker 0x141a instead of 0x141c:
+- "Video" channels (the actual video stream)
+- "Serial" channels
+- "USB" channels
+
+These use a different record structure. Need to decode the 0x141a record format.
+
+### 0x2000 Channel Type Field
+
+The 0x2000 response has a channel_type field at entry+0x02. Observed values:
+- `0x0007` seen on Ultimo X (audio devices)
+- Need to compare with video device 0x2000 responses

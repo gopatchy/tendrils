@@ -171,10 +171,11 @@ func (d *DanteFlows) LogAll() {
 	})
 
 	type channelFlow struct {
-		sourceName string
-		txCh       string
-		rxName     string
-		rxCh       string
+		sourceName  string
+		txCh        string
+		rxName      string
+		rxCh        string
+		channelType string
 	}
 	var allChannelFlows []channelFlow
 	var allNoChannelFlows []string
@@ -196,11 +197,18 @@ func (d *DanteFlows) LogAll() {
 				for _, ch := range sub.Channels {
 					parts := strings.Split(ch, "->")
 					if len(parts) == 2 {
+						rxPart := parts[1]
+						chType := ""
+						if idx := strings.LastIndex(rxPart, ":"); idx != -1 {
+							chType = rxPart[idx+1:]
+							rxPart = rxPart[:idx]
+						}
 						allChannelFlows = append(allChannelFlows, channelFlow{
-							sourceName: sourceName,
-							txCh:       parts[0],
-							rxName:     subName,
-							rxCh:       parts[1],
+							sourceName:  sourceName,
+							txCh:        parts[0],
+							rxName:      subName,
+							rxCh:        rxPart,
+							channelType: chType,
 						})
 					} else {
 						allNoChannelFlows = append(allNoChannelFlows, fmt.Sprintf("%s -> %s[%s]", sourceName, subName, ch))
@@ -225,7 +233,11 @@ func (d *DanteFlows) LogAll() {
 	sort.Strings(allNoChannelFlows)
 
 	for _, cf := range allChannelFlows {
-		log.Printf("[sigusr1]   %s[%s] -> %s[%s]", cf.sourceName, cf.txCh, cf.rxName, cf.rxCh)
+		if cf.channelType != "" {
+			log.Printf("[sigusr1]   %s[%s] -> %s[%s] (%s)", cf.sourceName, cf.txCh, cf.rxName, cf.rxCh, cf.channelType)
+		} else {
+			log.Printf("[sigusr1]   %s[%s] -> %s[%s]", cf.sourceName, cf.txCh, cf.rxName, cf.rxCh)
+		}
 	}
 	for _, flow := range allNoChannelFlows {
 		log.Printf("[sigusr1]   %s", flow)
@@ -266,8 +278,11 @@ func (t *Tendrils) queryDanteDeviceWithPort(ip net.IP, port int) *DanteDeviceInf
 		if t.DebugDante {
 			log.Printf("[dante] %s: 0x3000 returned %d subscriptions, hasMulticast=%v", ip, len(info.Subscriptions), info.HasMulticast)
 		}
-		if len(info.Subscriptions) == 0 && info.RxChannelCount > 0 {
-			info.Subscriptions = t.queryDanteSubscriptions3400(conn, ip, info.RxChannelCount)
+		if info.RxChannelCount > 0 && (len(info.Subscriptions) == 0 || info.HasMulticast) {
+			subs3400 := t.queryDanteSubscriptions3400(conn, ip, info.RxChannelCount)
+			if len(subs3400) > 0 {
+				info.Subscriptions = subs3400
+			}
 		}
 	}
 
@@ -288,10 +303,30 @@ type DanteDeviceInfo struct {
 	HasMulticast   bool
 }
 
+type DanteChannelType uint16
+
+const (
+	DanteChannelUnknown DanteChannelType = 0
+	DanteChannelAudio   DanteChannelType = 0x000f
+	DanteChannelVideo   DanteChannelType = 0x000e
+)
+
+func (t DanteChannelType) String() string {
+	switch t {
+	case DanteChannelAudio:
+		return "audio"
+	case DanteChannelVideo:
+		return "video"
+	default:
+		return ""
+	}
+}
+
 type DanteSubscription struct {
 	RxChannel     int
 	TxDeviceName  string
 	TxChannelName string
+	ChannelType   DanteChannelType
 }
 
 func buildDantePacket(cmd uint16, args []byte) []byte {
@@ -610,12 +645,34 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 				break
 			}
 			rawOffset := int(binary.BigEndian.Uint16(resp[offsetPos : offsetPos+2]))
-			if rawOffset+48 > len(resp) {
+			if rawOffset+28 > len(resp) {
 				continue
 			}
 
-			txChOffset := int(binary.BigEndian.Uint16(resp[rawOffset+44 : rawOffset+46]))
-			txDevOffset := int(binary.BigEndian.Uint16(resp[rawOffset+46 : rawOffset+48]))
+			var channelType DanteChannelType
+			var txChOffset, txDevOffset int
+
+			marker := binary.BigEndian.Uint16(resp[rawOffset : rawOffset+2])
+			if marker == 0x141c {
+				if rawOffset+48 > len(resp) {
+					log.Printf("[ERROR] [dante] %s: 0x3400 record %d at 0x%04x: 0x141c record truncated (need %d, have %d)", ip, i, rawOffset, rawOffset+48, len(resp))
+					continue
+				}
+				channelType = DanteChannelType(binary.BigEndian.Uint16(resp[rawOffset+14 : rawOffset+16]))
+				txChOffset = int(binary.BigEndian.Uint16(resp[rawOffset+44 : rawOffset+46]))
+				txDevOffset = int(binary.BigEndian.Uint16(resp[rawOffset+46 : rawOffset+48]))
+			} else if marker == 0x141a {
+				if rawOffset+48 > len(resp) {
+					log.Printf("[ERROR] [dante] %s: 0x3400 record %d at 0x%04x: 0x141a record truncated", ip, i, rawOffset)
+					continue
+				}
+				channelType = DanteChannelVideo
+				txChOffset = int(binary.BigEndian.Uint16(resp[rawOffset+44 : rawOffset+46]))
+				txDevOffset = int(binary.BigEndian.Uint16(resp[rawOffset+46 : rawOffset+48]))
+			} else {
+				log.Printf("[ERROR] [dante] %s: 0x3400 record %d at 0x%04x: unknown marker 0x%04x (bytes: %x)", ip, i, rawOffset, marker, resp[rawOffset:rawOffset+8])
+				continue
+			}
 
 			if txChOffset == 0 && txDevOffset == 0 {
 				continue
@@ -635,13 +692,14 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 
 			rxChannel := startChannel + i
 			if t.DebugDante {
-				log.Printf("[dante] %s: 0x3400 sub: rx=%d txDev=%q txCh=%q", ip, rxChannel, txDeviceName, txChannelName)
+				log.Printf("[dante] %s: 0x3400 sub: rx=%d txDev=%q txCh=%q type=%s", ip, rxChannel, txDeviceName, txChannelName, channelType)
 			}
 
 			subscriptions = append(subscriptions, DanteSubscription{
 				RxChannel:     rxChannel,
 				TxDeviceName:  txDeviceName,
 				TxChannelName: txChannelName,
+				ChannelType:   channelType,
 			})
 		}
 
@@ -674,8 +732,8 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 		needIGMPFallback := info.HasMulticast && info.Name != ""
 		for _, sub := range info.Subscriptions {
 			if t.DebugDante {
-				log.Printf("[dante] %s: subscription rx=%d -> %s@%s",
-					ip, sub.RxChannel, sub.TxChannelName, sub.TxDeviceName)
+				log.Printf("[dante] %s: subscription rx=%d -> %s@%s type=%s",
+					ip, sub.RxChannel, sub.TxChannelName, sub.TxDeviceName, sub.ChannelType)
 			}
 			if sub.TxDeviceName != "" && info.Name != "" {
 				txDeviceName := sub.TxDeviceName
@@ -684,7 +742,12 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 				}
 				channelInfo := ""
 				if sub.TxChannelName != "" {
-					channelInfo = fmt.Sprintf("%s->%02d", sub.TxChannelName, sub.RxChannel)
+					typeStr := sub.ChannelType.String()
+					if typeStr != "" {
+						channelInfo = fmt.Sprintf("%s->%02d:%s", sub.TxChannelName, sub.RxChannel, typeStr)
+					} else {
+						channelInfo = fmt.Sprintf("%s->%02d", sub.TxChannelName, sub.RxChannel)
+					}
 				}
 				sourceNode := t.nodes.GetOrCreateByName(txDeviceName)
 				subscriberNode := t.nodes.GetOrCreateByName(info.Name)
