@@ -1,0 +1,21 @@
+locations:
+  stage:
+    children:
+      upstage:
+        nodes:
+          - lighting-1
+      downstage:
+        nodes:
+          - lighting-2
+  house:
+    children:
+      house_left:
+        nodes:
+          - audio
+      house_right:
+        nodes:
+          - video
+      booth:
+        nodes:
+          - qlab
+          - satellite-1

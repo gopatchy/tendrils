@@ -47,7 +47,10 @@
     <div id="cy"></div>
 
     <script src="cytoscape.min.js"></script>
+    <script src="cola.min.js"></script>
+    <script src="cytoscape-cola.min.js"></script>
     <script>
+        cytoscape.use(cytoscapeCola);
         let cy;
 
         function getLabel(node) {
@@ -55,31 +58,73 @@
             return '??';
         }
 
+        function getNodeIdentifiers(node) {
+            const ids = [];
+            if (node.names) {
+                node.names.forEach(n => ids.push(n.toLowerCase()));
+            }
+            if (node.interfaces) {
+                node.interfaces.forEach(iface => {
+                    if (iface.mac) ids.push(iface.mac.toLowerCase());
+                });
+            }
+            return ids;
+        }
+
         function isSwitch(node) {
             return !!(node.poe_budget);
         }
 
+        function buildLocationIndex(locations, parentId, nodeToLocation, locationMeta) {
+            if (!locations) return;
+            for (const [name, loc] of Object.entries(locations)) {
+                const locId = 'loc_' + name.replace(/[^a-zA-Z0-9]/g, '_');
+                locationMeta.set(locId, { name, parentId });
+
+                if (loc.nodes) {
+                    loc.nodes.forEach(nodeRef => {
+                        nodeToLocation.set(nodeRef.toLowerCase(), locId);
+                    });
+                }
+
+                if (loc.children) {
+                    buildLocationIndex(loc.children, locId, nodeToLocation, locationMeta);
+                }
+            }
+        }
+
+        function getLocationChain(locId, locationMeta) {
+            const chain = [];
+            let current = locId;
+            while (current) {
+                chain.push(current);
+                const meta = locationMeta.get(current);
+                current = meta ? meta.parentId : null;
+            }
+            return chain;
+        }
+
         function doLayout() {
             cy.layout({
-                name: 'cose',
+                name: 'cola',
                 animate: false,
                 padding: 50,
                 nodeDimensionsIncludeLabels: true,
                 avoidOverlap: true,
-                avoidOverlapPadding: 20,
-                nodeRepulsion: 100000,
-                idealEdgeLength: 200,
-                edgeElasticity: 100,
-                gravity: 0.1,
-                numIter: 2000,
+                nodeSpacing: 40,
+                edgeLength: 200,
                 fit: true,
                 randomize: true
             }).run();
         }
 
         async function init() {
-            const resp = await fetch('/api/status');
-            const data = await resp.json();
+            const [statusResp, configResp] = await Promise.all([
+                fetch('/api/status'),
+                fetch('/api/config')
+            ]);
+            const data = await statusResp.json();
+            const config = await configResp.json();
 
             const nodes = data.nodes || [];
             const links = data.links || [];
@@ -91,20 +136,61 @@
             const idMap = new Map();
             const switchIds = new Set();
 
+            const nodeToLocation = new Map();
+            const locationMeta = new Map();
+            buildLocationIndex(config.locations, null, nodeToLocation, locationMeta);
+
             nodes.forEach((n, i) => {
                 const id = 'n' + i;
                 idMap.set(n.typeid, id);
                 if (isSwitch(n)) switchIds.add(id);
             });
 
+            const usedLocations = new Set();
+            const nodeParents = new Map();
+
+            nodes.forEach((n, i) => {
+                const id = 'n' + i;
+                const identifiers = getNodeIdentifiers(n);
+                for (const ident of identifiers) {
+                    if (nodeToLocation.has(ident)) {
+                        const locId = nodeToLocation.get(ident);
+                        nodeParents.set(id, locId);
+                        getLocationChain(locId, locationMeta).forEach(l => usedLocations.add(l));
+                        break;
+                    }
+                }
+            });
+
+            const sortedLocations = Array.from(usedLocations).sort((a, b) => {
+                const chainA = getLocationChain(a, locationMeta).length;
+                const chainB = getLocationChain(b, locationMeta).length;
+                return chainA - chainB;
+            });
+
+            sortedLocations.forEach(locId => {
+                const meta = locationMeta.get(locId);
+                elements.push({
+                    data: {
+                        id: locId,
+                        label: meta.name,
+                        parent: meta.parentId && usedLocations.has(meta.parentId) ? meta.parentId : null,
+                        isLocation: true
+                    }
+                });
+            });
+
             nodes.forEach((n, i) => {
                 const id = 'n' + i;
                 const sw = switchIds.has(id);
+                const parent = nodeParents.get(id) || null;
+
                 elements.push({
                     data: {
                         id: id,
                         label: getLabel(n),
-                        isSwitch: sw
+                        isSwitch: sw,
+                        parent: parent
                     }
                 });
             });
@@ -156,6 +242,35 @@
                             'font-weight': 'bold',
                             'width': 100,
                             'height': 50
+                        }
+                    },
+                    {
+                        selector: 'node[?isLocation]',
+                        style: {
+                            'background-color': '#333',
+                            'background-opacity': 0.8,
+                            'border-width': 2,
+                            'border-color': '#666',
+                            'text-valign': 'top',
+                            'text-halign': 'center',
+                            'text-margin-y': 10,
+                            'font-size': 16,
+                            'font-weight': 'bold',
+                            'color': '#fff',
+                            'padding': 30,
+                            'shape': 'round-rectangle'
+                        }
+                    },
+                    {
+                        selector: ':parent',
+                        style: {
+                            'background-opacity': 0.5,
+                            'border-width': 2,
+                            'border-color': '#666',
+                            'text-valign': 'top',
+                            'text-halign': 'center',
+                            'text-margin-y': 10,
+                            'padding': 30
                         }
                     },
                     {

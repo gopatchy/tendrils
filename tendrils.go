@@ -34,8 +34,10 @@ type Tendrils struct {
 	nodes            *Nodes
 	artnet           *ArtNetNodes
 	danteFlows       *DanteFlows
+	config           *Config
 
 	Interface     string
+	ConfigFile    string
 	DisableARP    bool
 	DisableLLDP   bool
 	DisableSNMP   bool
@@ -82,6 +84,13 @@ func (t *Tendrils) Run() {
 			t.nodes.LogAll()
 		}
 	}()
+
+	cfg, err := LoadConfig(t.ConfigFile)
+	if err != nil {
+		log.Printf("[ERROR] failed to load config: %v", err)
+	} else {
+		t.config = cfg
+	}
 
 	t.populateLocalAddresses()
 	t.startHTTPServer()

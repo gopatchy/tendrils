@@ -24,6 +24,7 @@ func (t *Tendrils) startHTTPServer() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", t.handleAPIStatus)
+	mux.HandleFunc("/api/config", t.handleAPIConfig)
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
 	log.Printf("[http] listening on %s", t.HTTPPort)
@@ -38,6 +39,15 @@ func (t *Tendrils) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 	status := t.GetStatus()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
+}
+
+func (t *Tendrils) handleAPIConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if t.config == nil {
+		json.NewEncoder(w).Encode(&Config{})
+		return
+	}
+	json.NewEncoder(w).Encode(t.config)
 }
 
 func (t *Tendrils) GetStatus() *StatusResponse {

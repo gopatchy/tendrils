@@ -1,0 +1,11 @@
+locations:
+  stage:
+    children:
+      upstage:
+        nodes:
+          - lighting-2
+      downstage:
+        children:
+          rack-lighting-1:
+            nodes:
+              - lighting-1

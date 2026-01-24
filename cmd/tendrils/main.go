@@ -8,6 +8,7 @@ import (
 
 func main() {
 	iface := flag.String("i", "", "interface to use")
+	configFile := flag.String("config", "", "path to YAML config file")
 	noARP := flag.Bool("no-arp", false, "disable ARP discovery")
 	noLLDP := flag.Bool("no-lldp", false, "disable LLDP discovery")
 	noSNMP := flag.Bool("no-snmp", false, "disable SNMP discovery")
@@ -35,6 +36,7 @@ func main() {
 
 	t := tendrils.New()
 	t.Interface = *iface
+	t.ConfigFile = *configFile
 	t.DisableARP = *noARP
 	t.DisableLLDP = *noLLDP
 	t.DisableSNMP = *noSNMP
