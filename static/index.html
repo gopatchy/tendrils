@@ -114,16 +114,13 @@
                 const idB = idMap.get(link.node_b?.typeid);
                 if (!idA || !idB) return;
 
-                let label = '';
-                if (link.interface_a) label = link.interface_a;
-                if (link.interface_b) label += (label ? ' ↔ ' : '') + link.interface_b;
-
                 elements.push({
                     data: {
                         id: 'e' + i,
                         source: idA,
                         target: idB,
-                        label: label
+                        sourceLabel: link.interface_a || '',
+                        targetLabel: link.interface_b || ''
                     }
                 });
             });
@@ -167,13 +164,17 @@
                             'width': 2,
                             'line-color': '#666',
                             'curve-style': 'bezier',
-                            'label': 'data(label)',
+                            'source-label': 'data(sourceLabel)',
+                            'target-label': 'data(targetLabel)',
+                            'source-text-offset': 40,
+                            'target-text-offset': 40,
+                            'source-text-rotation': 'autorotate',
+                            'target-text-rotation': 'autorotate',
                             'font-size': 9,
                             'color': '#aaa',
                             'text-background-color': '#1a1a1a',
                             'text-background-opacity': 1,
-                            'text-background-padding': 2,
-                            'text-rotation': 'autorotate'
+                            'text-background-padding': 2
                         }
                     }
                 ],
