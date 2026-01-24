@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tendrils Network Diagram</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 {
+            margin: 0 0 20px 0;
+            font-size: 1.5em;
+        }
+        #diagram {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 20px;
+            overflow: auto;
+        }
+        #error {
+            color: #ff6b6b;
+            padding: 20px;
+            display: none;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tendrils Network</h1>
+    <div id="error"></div>
+    <div id="diagram">
+        <pre class="mermaid" id="mermaid-content"></pre>
+    </div>
+
+    <script src="mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'dark',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        function sanitizeId(str) {
+            return str.replace(/[^a-zA-Z0-9]/g, '_');
+        }
+
+        function getNodeLabel(node) {
+            if (node.names && node.names.length > 0) {
+                return node.names[0];
+            }
+            return node.typeid.substring(0, 12);
+        }
+
+        async function fetchAndRender() {
+            try {
+                const response = await fetch('/api/status');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+
+                const nodes = data.nodes || [];
+                const links = data.links || [];
+
+                if (nodes.length === 0) {
+                    document.getElementById('mermaid-content').textContent = 'No nodes found';
+                    return;
+                }
+
+                let diagram = 'graph TD\n';
+
+                const nodeIds = new Map();
+                nodes.forEach((node, i) => {
+                    const id = 'N' + i;
+                    nodeIds.set(node.typeid, id);
+                    const label = getNodeLabel(node);
+                    diagram += `    ${id}["${label}"]\n`;
+                });
+
+                links.forEach(link => {
+                    const idA = nodeIds.get(link.node_a?.typeid);
+                    const idB = nodeIds.get(link.node_b?.typeid);
+                    if (idA && idB) {
+                        if (link.interface_a && link.interface_b) {
+                            diagram += `    ${idA} ---|${link.interface_a} - ${link.interface_b}| ${idB}\n`;
+                        } else {
+                            diagram += `    ${idA} --- ${idB}\n`;
+                        }
+                    }
+                });
+
+                document.getElementById('mermaid-content').textContent = diagram;
+                await mermaid.run({
+                    nodes: [document.getElementById('mermaid-content')]
+                });
+
+            } catch (err) {
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Error loading network data: ' + err.message;
+            }
+        }
+
+        fetchAndRender();
+        setInterval(fetchAndRender, 30000);
+    </script>
+</body>
+</html>
