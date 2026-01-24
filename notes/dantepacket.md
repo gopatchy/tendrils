@@ -88,11 +88,17 @@ record+0x0e: u16  channel_type    # 0x000f=audio, 0x000e=video
 ...
 record+0x2c: u16  tx_ch_offset    # absolute offset to TX channel name string
 record+0x2e: u16  tx_dev_offset   # absolute offset to TX device name string
+record+0x31: u8   flow_status     # 0x00=unsubscribed, 0x01=no active source, 0x09=active
 ```
 
 **Channel type (at record+0x0e):**
 - `0x000f` = audio channel
 - `0x000e` = video channel
+
+**Flow status (at record+0x31):**
+- `0x00` = unsubscribed
+- `0x01` = subscribed but source not available (no active source)
+- `0x09` = subscribed and receiving (active flow)
 
 #### Format 2: 0x141a records (special channels: Video, Serial, USB)
 
@@ -110,9 +116,14 @@ These are video channels (Dante AV "Video" aggregate channel).
 
 Both 0x141c and 0x141a records use the same offsets for tx_ch and tx_dev (+44 and +46).
 
-**Subscription status:**
-- Both offsets non-zero = subscribed
+**Subscription presence:**
+- Both offsets non-zero = subscribed to a source
 - Both offsets zero = unsubscribed
+
+**Flow status (record+0x31):**
+- `0x00` = unsubscribed (no subscription configured)
+- `0x01` = subscribed but not receiving (source device offline or unavailable)
+- `0x09` = subscribed and actively receiving audio/video
 
 ### String Table
 

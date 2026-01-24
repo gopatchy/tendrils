@@ -124,9 +124,10 @@ type DanteFlow struct {
 }
 
 type DanteFlowSubscriber struct {
-	Node     *Node
-	Channels []string
-	LastSeen time.Time
+	Node          *Node
+	Channels      []string
+	ChannelStatus map[string]DanteFlowStatus
+	LastSeen      time.Time
 }
 
 type DanteFlows struct {
@@ -149,7 +150,7 @@ func containsString(slice []string, val string) bool {
 	return false
 }
 
-func (d *DanteFlows) Update(source, subscriber *Node, channelInfo string) {
+func (d *DanteFlows) Update(source, subscriber *Node, channelInfo string, flowStatus DanteFlowStatus) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -165,7 +166,8 @@ func (d *DanteFlows) Update(source, subscriber *Node, channelInfo string) {
 	sub := flow.Subscribers[subscriber]
 	if sub == nil {
 		sub = &DanteFlowSubscriber{
-			Node: subscriber,
+			Node:          subscriber,
+			ChannelStatus: map[string]DanteFlowStatus{},
 		}
 		flow.Subscribers[subscriber] = sub
 	}
@@ -173,6 +175,9 @@ func (d *DanteFlows) Update(source, subscriber *Node, channelInfo string) {
 	if channelInfo != "" && !containsString(sub.Channels, channelInfo) {
 		sub.Channels = append(sub.Channels, channelInfo)
 		sort.Strings(sub.Channels)
+	}
+	if channelInfo != "" {
+		sub.ChannelStatus[channelInfo] = flowStatus
 	}
 
 	sub.LastSeen = time.Now()
@@ -260,6 +265,7 @@ func (d *DanteFlows) LogAll() {
 		rxName      string
 		rxCh        string
 		channelType string
+		down        bool
 	}
 	var allChannelFlows []channelFlow
 	var allNoChannelFlows []string
@@ -293,6 +299,7 @@ func (d *DanteFlows) LogAll() {
 							rxName:      subName,
 							rxCh:        rxPart,
 							channelType: chType,
+							down:        sub.ChannelStatus[ch] == DanteFlowNoSource,
 						})
 					} else {
 						allNoChannelFlows = append(allNoChannelFlows, fmt.Sprintf("%s -> %s[%s]", sourceName, subName, ch))
@@ -317,10 +324,14 @@ func (d *DanteFlows) LogAll() {
 	sort.Strings(allNoChannelFlows)
 
 	for _, cf := range allChannelFlows {
+		suffix := ""
+		if cf.down {
+			suffix = " DOWN"
+		}
 		if cf.channelType != "" {
-			log.Printf("[sigusr1]   %s[%s] -> %s[%s] (%s)", cf.sourceName, cf.txCh, cf.rxName, cf.rxCh, cf.channelType)
+			log.Printf("[sigusr1]   %s[%s] -> %s[%s] (%s)%s", cf.sourceName, cf.txCh, cf.rxName, cf.rxCh, cf.channelType, suffix)
 		} else {
-			log.Printf("[sigusr1]   %s[%s] -> %s[%s]", cf.sourceName, cf.txCh, cf.rxName, cf.rxCh)
+			log.Printf("[sigusr1]   %s[%s] -> %s[%s]%s", cf.sourceName, cf.txCh, cf.rxName, cf.rxCh, suffix)
 		}
 	}
 	for _, flow := range allNoChannelFlows {
@@ -407,11 +418,31 @@ func (t DanteChannelType) String() string {
 	}
 }
 
+type DanteFlowStatus uint8
+
+const (
+	DanteFlowUnsubscribed DanteFlowStatus = 0x00
+	DanteFlowNoSource     DanteFlowStatus = 0x01
+	DanteFlowActive       DanteFlowStatus = 0x09
+)
+
+func (s DanteFlowStatus) String() string {
+	switch s {
+	case DanteFlowActive:
+		return "active"
+	case DanteFlowNoSource:
+		return "no-source"
+	default:
+		return ""
+	}
+}
+
 type DanteSubscription struct {
 	RxChannel     int
 	TxDeviceName  string
 	TxChannelName string
 	ChannelType   DanteChannelType
+	FlowStatus    DanteFlowStatus
 }
 
 func buildDantePacket(packetType byte, cmd uint16, args []byte) []byte {
@@ -714,12 +745,13 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 			}
 
 			var channelType DanteChannelType
+			var flowStatus DanteFlowStatus
 			var txChOffset, txDevOffset int
 
 			marker := binary.BigEndian.Uint16(resp[rawOffset : rawOffset+2])
 			if marker == 0x141c {
-				if rawOffset+48 > len(resp) {
-					log.Printf("[ERROR] [dante] %s: 0x3400 record %d at 0x%04x: 0x141c record truncated (need %d, have %d)", ip, i, rawOffset, rawOffset+48, len(resp))
+				if rawOffset+50 > len(resp) {
+					log.Printf("[ERROR] [dante] %s: 0x3400 record %d at 0x%04x: 0x141c record truncated (need %d, have %d)", ip, i, rawOffset, rawOffset+50, len(resp))
 					continue
 				}
 				channelType = DanteChannelType(binary.BigEndian.Uint16(resp[rawOffset+14 : rawOffset+16]))
@@ -728,14 +760,16 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 				}
 				txChOffset = int(binary.BigEndian.Uint16(resp[rawOffset+44 : rawOffset+46]))
 				txDevOffset = int(binary.BigEndian.Uint16(resp[rawOffset+46 : rawOffset+48]))
+				flowStatus = DanteFlowStatus(resp[rawOffset+49])
 			} else if marker == 0x141a {
-				if rawOffset+48 > len(resp) {
+				if rawOffset+50 > len(resp) {
 					log.Printf("[ERROR] [dante] %s: 0x3400 record %d at 0x%04x: 0x141a record truncated", ip, i, rawOffset)
 					continue
 				}
 				channelType = DanteChannelVideo
 				txChOffset = int(binary.BigEndian.Uint16(resp[rawOffset+44 : rawOffset+46]))
 				txDevOffset = int(binary.BigEndian.Uint16(resp[rawOffset+46 : rawOffset+48]))
+				flowStatus = DanteFlowStatus(resp[rawOffset+49])
 			} else {
 				log.Printf("[ERROR] [dante] %s: 0x3400 record %d at 0x%04x: unknown marker 0x%04x (bytes: %x)", ip, i, rawOffset, marker, resp[rawOffset:rawOffset+8])
 				continue
@@ -759,7 +793,7 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 
 			rxChannel := startChannel + i
 			if t.DebugDante {
-				log.Printf("[dante] %s: 0x3400 sub: rx=%d txDev=%q txCh=%q type=%s", ip, rxChannel, txDeviceName, txChannelName, channelType)
+				log.Printf("[dante] %s: 0x3400 sub: rx=%d txDev=%q txCh=%q type=%s status=%s", ip, rxChannel, txDeviceName, txChannelName, channelType, flowStatus)
 			}
 
 			subscriptions = append(subscriptions, DanteSubscription{
@@ -767,6 +801,7 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 				TxDeviceName:  txDeviceName,
 				TxChannelName: txChannelName,
 				ChannelType:   channelType,
+				FlowStatus:    flowStatus,
 			})
 		}
 
@@ -818,7 +853,7 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 				}
 				sourceNode := t.nodes.GetOrCreateByName(txDeviceName)
 				subscriberNode := t.nodes.GetOrCreateByName(info.Name)
-				t.danteFlows.Update(sourceNode, subscriberNode, channelInfo)
+				t.danteFlows.Update(sourceNode, subscriberNode, channelInfo, sub.FlowStatus)
 				needIGMPFallback = false
 			}
 		}
@@ -835,7 +870,7 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 				}
 				sourceNode := t.nodes.GetOrCreateByName(sourceName)
 				subscriberNode := t.nodes.GetOrCreateByName(info.Name)
-				t.danteFlows.Update(sourceNode, subscriberNode, "")
+				t.danteFlows.Update(sourceNode, subscriberNode, "", DanteFlowActive)
 			}
 		}
 	}
