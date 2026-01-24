@@ -203,6 +203,7 @@ func (t *Tendrils) queryDanteDeviceWithPort(ip net.IP, port int) *DanteDeviceInf
 
 	if info.TxChannelCount > 0 {
 		t.queryDanteTxChannels(conn, ip, info.TxChannelCount)
+		t.nodes.UpdateDanteTxChannels(info.Name, ip, fmt.Sprintf("%d", info.TxChannelCount))
 	}
 
 	return info
@@ -333,6 +334,7 @@ func (t *Tendrils) queryDanteTxChannels(conn *net.UDPConn, ip net.IP, txCount in
 		}
 	}
 }
+
 
 func (t *Tendrils) queryDanteSubscriptions(conn *net.UDPConn, ip net.IP, rxCount, txCount int) ([]DanteSubscription, bool) {
 	if rxCount == 0 {
