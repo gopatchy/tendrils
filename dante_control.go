@@ -410,7 +410,7 @@ func (t *Tendrils) queryDanteSubscriptions(conn *net.UDPConn, ip net.IP, rxCount
 					break
 				}
 
-				rxChannelNum := int(binary.BigEndian.Uint16(resp[recordOffset : recordOffset+2]))
+				rxChannelNum := idx + 1
 				txChannelOffset := int(binary.BigEndian.Uint16(resp[recordOffset+4 : recordOffset+6]))
 				txDeviceOffset := int(binary.BigEndian.Uint16(resp[recordOffset+6 : recordOffset+8]))
 
@@ -468,6 +468,7 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 			t.nodes.Update(nil, nil, []net.IP{ip}, "", info.Name, "dante-control")
 		}
 
+		needIGMPFallback := info.HasMulticast && info.Name != ""
 		for _, sub := range info.Subscriptions {
 			if t.DebugDante {
 				log.Printf("[dante] %s: subscription rx=%d -> %s@%s",
@@ -479,10 +480,11 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 					channelInfo = fmt.Sprintf("%s->%d", sub.TxChannelName, sub.RxChannel)
 				}
 				t.danteFlows.Update(sub.TxDeviceName, info.Name, channelInfo)
+				needIGMPFallback = false
 			}
 		}
 
-		if info.HasMulticast && info.Name != "" {
+		if needIGMPFallback {
 			groups := t.nodes.GetDanteMulticastGroups(ip)
 			for _, groupIP := range groups {
 				sourceName := t.nodes.GetDanteTxDeviceInGroup(groupIP)

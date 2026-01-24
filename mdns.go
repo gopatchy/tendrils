@@ -28,6 +28,9 @@ func extractDanteName(s string) string {
 	if at := strings.LastIndex(name, "@"); at >= 0 {
 		name = name[at+1:]
 	}
+	if strings.Contains(name, ".in-addr") {
+		return ""
+	}
 	return name
 }
 
