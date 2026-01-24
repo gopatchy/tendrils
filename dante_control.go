@@ -204,6 +204,9 @@ func (t *Tendrils) queryDanteDeviceWithPort(ip net.IP, port int) *DanteDeviceInf
 
 	if info.RxChannelCount > 0 || info.TxChannelCount > 0 {
 		info.Subscriptions, info.HasMulticast = t.queryDanteSubscriptions(conn, ip, info.RxChannelCount, info.TxChannelCount)
+		if t.DebugDante {
+			log.Printf("[dante] %s: 0x3000 returned %d subscriptions, hasMulticast=%v", ip, len(info.Subscriptions), info.HasMulticast)
+		}
 		if len(info.Subscriptions) == 0 && info.RxChannelCount > 0 {
 			info.Subscriptions = t.queryDanteSubscriptions3400(conn, ip, info.RxChannelCount)
 		}
@@ -252,6 +255,26 @@ func buildDantePacket(cmd uint16, args []byte) []byte {
 	return pkt
 }
 
+func buildDantePacket28(cmd uint16, args []byte) []byte {
+	seq := nextDanteSeq()
+	argLen := len(args)
+	totalLen := 10 + argLen
+
+	pkt := make([]byte, totalLen)
+	pkt[0] = 0x28
+	pkt[1] = byte(seq & 0xff)
+	binary.BigEndian.PutUint16(pkt[2:4], uint16(totalLen))
+	binary.BigEndian.PutUint16(pkt[4:6], seq)
+	binary.BigEndian.PutUint16(pkt[6:8], cmd)
+	pkt[8] = 0x00
+	pkt[9] = 0x00
+	if argLen > 0 {
+		copy(pkt[10:], args)
+	}
+
+	return pkt
+}
+
 func (t *Tendrils) sendDanteCommand(conn *net.UDPConn, ip net.IP, cmd uint16, args []byte) []byte {
 	pkt := buildDantePacket(cmd, args)
 
@@ -273,6 +296,25 @@ func (t *Tendrils) sendDanteCommand(conn *net.UDPConn, ip net.IP, cmd uint16, ar
 
 	if t.DebugDante {
 		log.Printf("[dante] %s: cmd 0x%04x response (%d bytes): %x", ip, cmd, n, buf[:n])
+	}
+
+	return buf[:n]
+}
+
+func (t *Tendrils) sendDanteCommand28(conn *net.UDPConn, ip net.IP, cmd uint16, args []byte) []byte {
+	pkt := buildDantePacket28(cmd, args)
+
+	conn.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
+	_, err := conn.Write(pkt)
+	if err != nil {
+		return nil
+	}
+
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return nil
 	}
 
 	return buf[:n]
@@ -457,6 +499,9 @@ func extractNullTerminatedString(data []byte, offset int) string {
 }
 
 func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxCount int) []DanteSubscription {
+	if t.DebugDante {
+		log.Printf("[dante] %s: trying 0x3400 fallback, rxCount=%d", ip, rxCount)
+	}
 	var subscriptions []DanteSubscription
 
 	pagesNeeded := (rxCount + 15) / 16
@@ -465,70 +510,112 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 		pageNum := page + 1
 		args := make([]byte, 24)
 		args[7] = 0x01
-		binary.BigEndian.PutUint16(args[8:10], uint16(pageNum))
+		if startChannel == 1 {
+			binary.BigEndian.PutUint16(args[8:10], 0x0001)
+		} else {
+			binary.BigEndian.PutUint16(args[8:10], 0x0003)
+		}
 		binary.BigEndian.PutUint16(args[10:12], uint16(startChannel))
-
-		resp := t.sendDanteCommand(conn, ip, 0x3400, args)
-		if resp == nil || len(resp) < 44 {
-			if t.DebugDante {
-				log.Printf("[dante] %s: 0x3400 page %d: no response or too short", ip, pageNum)
-			}
+		resp := t.sendDanteCommand28(conn, ip, 0x3400, args)
+		if resp == nil {
 			continue
+		}
+		if len(resp) < 48 {
+			continue
+		}
+
+		if t.DebugDante {
+			log.Printf("[dante] %s: 0x3400 page %d: got %d bytes", ip, pageNum, len(resp))
 		}
 
 		status := binary.BigEndian.Uint16(resp[8:10])
 		if status != 0x8112 && status != 0x0001 {
-			if t.DebugDante {
-				log.Printf("[dante] %s: 0x3400 status=0x%04x", ip, status)
-			}
 			continue
 		}
 
 		recordCount := 0
-		for i := 12; i < 44 && i+1 < len(resp); i += 2 {
+		for i := 18; i < 50 && i+1 < len(resp); i += 2 {
 			offset := int(binary.BigEndian.Uint16(resp[i : i+2]))
 			if offset == 0 {
 				break
 			}
 			recordCount++
 		}
+		if t.DebugDante {
+			log.Printf("[dante] %s: 0x3400 page %d: found %d records", ip, pageNum, recordCount)
+		}
 
+		lastDeviceName := ""
 		for i := 0; i < recordCount; i++ {
-			offsetPos := 12 + i*2
+			offsetPos := 18 + i*2
 			if offsetPos+2 > len(resp) {
 				break
 			}
-			recordOffset := int(binary.BigEndian.Uint16(resp[offsetPos : offsetPos+2]))
-			if recordOffset == 0 || recordOffset >= len(resp) {
+			rawOffset := int(binary.BigEndian.Uint16(resp[offsetPos : offsetPos+2]))
+			recordOffset := rawOffset - 30
+			if recordOffset < 0 || recordOffset+24 >= len(resp) {
 				continue
 			}
 
-			rxChannelName := extractNullTerminatedString(resp, recordOffset)
-			if rxChannelName == "" {
-				continue
-			}
-
-			txDeviceStart := recordOffset + len(rxChannelName) + 1
-			txDeviceName := extractNullTerminatedString(resp, txDeviceStart)
-			if txDeviceName == "" {
-				continue
-			}
-
-			txChannelName := ""
-			searchStart := txDeviceStart + len(txDeviceName) + 1
-			for j := searchStart; j < recordOffset+64 && j < len(resp)-1; j++ {
-				if resp[j] >= '0' && resp[j] <= '9' {
-					candidate := extractNullTerminatedString(resp, j)
-					if len(candidate) >= 1 && len(candidate) <= 4 {
-						txChannelName = candidate
+			var txDeviceName, txChannelName string
+			firstByte := resp[recordOffset]
+			if firstByte >= 0x20 && firstByte < 0x7f {
+				txChannelName = extractNullTerminatedString(resp, recordOffset)
+				txDeviceName = extractNullTerminatedString(resp, recordOffset+len(txChannelName)+1)
+			} else {
+				stringStart := -1
+				for j := recordOffset + 10; j < recordOffset+24 && j+3 < len(resp); j++ {
+					if resp[j] == 0x02 && resp[j+1] == 0x02 && resp[j+2] == 0x00 && resp[j+3] == 0x00 {
+						stringStart = j + 4
 						break
+					}
+				}
+				if stringStart >= 0 && stringStart < len(resp) {
+					str1 := extractNullTerminatedString(resp, stringStart)
+					str2 := extractNullTerminatedString(resp, stringStart+len(str1)+1)
+					hasLetter := func(s string) bool {
+						for _, c := range s {
+							if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
+								return true
+							}
+						}
+						return false
+					}
+					if !hasLetter(str1) && !hasLetter(str2) {
+						continue
+					}
+					noDeviceIndicator := stringStart >= 6 && resp[stringStart-6] == 0x00 && resp[stringStart-5] == 0x00
+					str2IsNumeric := len(str2) > 0
+					for _, c := range str2 {
+						if c < '0' || c > '9' {
+							str2IsNumeric = false
+							break
+						}
+					}
+					if noDeviceIndicator && str2IsNumeric && lastDeviceName != "" {
+						txChannelName = str1
+						txDeviceName = lastDeviceName
+					} else if str2IsNumeric {
+						txDeviceName = str1
+						txChannelName = str2
+					} else if hasLetter(str2) {
+						txDeviceName = str2
+						txChannelName = str1
+					} else {
+						txChannelName = str1
+						txDeviceName = lastDeviceName
 					}
 				}
 			}
 
+			if txDeviceName == "" {
+				continue
+			}
+			lastDeviceName = txDeviceName
+
 			rxChannel := startChannel + i
 			if t.DebugDante {
-				log.Printf("[dante] %s: 0x3400 sub: rx=%d rxName=%q txDev=%q txCh=%q", ip, rxChannel, rxChannelName, txDeviceName, txChannelName)
+				log.Printf("[dante] %s: 0x3400 sub: rx=%d txDev=%q txCh=%q", ip, rxChannel, txDeviceName, txChannelName)
 			}
 
 			subscriptions = append(subscriptions, DanteSubscription{
