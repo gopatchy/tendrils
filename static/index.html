@@ -64,11 +64,16 @@
                 name: 'cose',
                 animate: false,
                 padding: 50,
-                nodeRepulsion: 10000,
-                idealEdgeLength: 120,
-                gravity: 0.2,
-                numIter: 1000,
-                fit: true
+                nodeDimensionsIncludeLabels: true,
+                avoidOverlap: true,
+                avoidOverlapPadding: 20,
+                nodeRepulsion: 100000,
+                idealEdgeLength: 200,
+                edgeElasticity: 100,
+                gravity: 0.1,
+                numIter: 2000,
+                fit: true,
+                randomize: true
             }).run();
         }
 
