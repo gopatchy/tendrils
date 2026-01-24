@@ -266,5 +266,3 @@ func (t *Tendrils) probeVideoHub(ip net.IP) string {
 	}
 	return ""
 }
-
-

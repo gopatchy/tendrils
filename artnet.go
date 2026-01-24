@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	artNetPort     = 6454
-	artNetID       = "Art-Net\x00"
-	opPoll         = 0x2000
-	opPollReply    = 0x2100
+	artNetPort      = 6454
+	artNetID        = "Art-Net\x00"
+	opPoll          = 0x2000
+	opPollReply     = 0x2100
 	protocolVersion = 14
 )
 

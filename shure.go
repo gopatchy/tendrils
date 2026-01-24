@@ -86,26 +86,26 @@ func (t *Tendrils) sendShureQuery(ifaceName string, conn *net.UDPConn, dest *net
 	totalLen := headerLen + bodyLen
 
 	pkt := make([]byte, totalLen)
-	pkt[0] = 0x02                                           // SLP version 2
-	pkt[1] = 0x09                                           // Function: SrvTypeRqst (9)
-	pkt[2] = byte(totalLen >> 16)                           // Length (3 bytes)
+	pkt[0] = 0x02                 // SLP version 2
+	pkt[1] = 0x09                 // Function: SrvTypeRqst (9)
+	pkt[2] = byte(totalLen >> 16) // Length (3 bytes)
 	pkt[3] = byte(totalLen >> 8)
 	pkt[4] = byte(totalLen)
-	pkt[5] = 0x00                                           // Flags (2 bytes) - multicast
+	pkt[5] = 0x00 // Flags (2 bytes) - multicast
 	pkt[6] = 0x20
-	pkt[7] = 0x00                                           // Next ext offset (3 bytes)
+	pkt[7] = 0x00 // Next ext offset (3 bytes)
 	pkt[8] = 0x00
 	pkt[9] = 0x00
-	binary.BigEndian.PutUint16(pkt[10:12], 0x0001)          // XID
+	binary.BigEndian.PutUint16(pkt[10:12], 0x0001) // XID
 	binary.BigEndian.PutUint16(pkt[12:14], uint16(len(langTag)))
 	copy(pkt[14:], langTag)
 
 	offset := 14 + len(langTag)
-	binary.BigEndian.PutUint16(pkt[offset:], 0)             // PR list length (0)
+	binary.BigEndian.PutUint16(pkt[offset:], 0) // PR list length (0)
 	offset += 2
-	binary.BigEndian.PutUint16(pkt[offset:], 0)             // Naming authority length (0 = IANA)
+	binary.BigEndian.PutUint16(pkt[offset:], 0) // Naming authority length (0 = IANA)
 	offset += 2
-	binary.BigEndian.PutUint16(pkt[offset:], 7)             // Scope list length
+	binary.BigEndian.PutUint16(pkt[offset:], 7) // Scope list length
 	offset += 2
 	copy(pkt[offset:], "default")
 

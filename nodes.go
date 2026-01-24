@@ -637,19 +637,7 @@ func (n *Nodes) UpdateMACTable(node *Node, peerMAC net.HardwareAddr, ifaceName s
 }
 
 func (n *Nodes) SetDanteClockMaster(ip net.IP) {
-	n.mu.RLock()
-	currentMaster := ""
-	for _, node := range n.nodes {
-		if node.IsDanteClockMaster {
-			currentMaster = ip.String()
-			break
-		}
-	}
-	n.mu.RUnlock()
-
-	if currentMaster != ip.String() {
-		n.Update(nil, nil, []net.IP{ip}, "", "", "ptp")
-	}
+	n.Update(nil, nil, []net.IP{ip}, "", "", "ptp")
 
 	n.mu.Lock()
 	defer n.mu.Unlock()

@@ -496,4 +496,3 @@ func (t *Tendrils) getInterfaceNames(snmp *gosnmp.GoSNMP) map[int]string {
 
 	return names
 }
-
