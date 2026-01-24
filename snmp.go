@@ -51,6 +51,21 @@ func defaultSNMPConfig() *snmpConfig {
 	}
 }
 
+func snmpToInt(val interface{}) (int, bool) {
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case uint:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case uint64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
 func (t *Tendrils) connectSNMP(ip net.IP) (*gosnmp.GoSNMP, error) {
 	cfg := defaultSNMPConfig()
 
@@ -89,11 +104,13 @@ func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {
 	}
 	defer snmp.Conn.Close()
 
+	ifNames := t.getInterfaceNames(snmp)
+
 	t.querySysName(snmp, node)
-	t.queryInterfaceMACs(snmp, node)
-	t.queryInterfaceStats(snmp, node)
+	t.queryInterfaceMACs(snmp, node, ifNames)
+	t.queryInterfaceStats(snmp, node, ifNames)
 	t.queryPoEBudget(snmp, node)
-	t.queryBridgeMIB(snmp, node)
+	t.queryBridgeMIB(snmp, node, ifNames)
 }
 
 func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, node *Node) {
@@ -121,15 +138,13 @@ func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, node *Node) {
 	t.nodes.Update(node, nil, nil, "", sysName, "snmp-sysname")
 }
 
-func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, node *Node) {
+func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, node *Node, ifNames map[int]string) {
 	oid := "1.3.6.1.2.1.2.2.1.6"
 
 	results, err := snmp.BulkWalkAll(oid)
 	if err != nil {
 		return
 	}
-
-	ifNames := t.getInterfaceNames(snmp)
 
 	for _, result := range results {
 		if result.Type != gosnmp.OctetString {
@@ -161,9 +176,7 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, node *Node) {
 	}
 }
 
-func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node) {
-	ifNames := t.getInterfaceNames(snmp)
-
+func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames map[int]string) {
 	ifOperStatus := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.8")
 	ifHighSpeed := t.getInterfaceTable(snmp, "1.3.6.1.2.1.31.1.1.1.15")
 	ifInErrors := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.14")
@@ -221,20 +234,10 @@ func (t *Tendrils) queryPoEBudget(snmp *gosnmp.GoSNMP, node *Node) {
 
 	var power, maxPower float64
 	for _, v := range result.Variables {
-		var val int
-		switch x := v.Value.(type) {
-		case int:
-			val = x
-		case uint:
-			val = int(x)
-		case int64:
-			val = int(x)
-		case uint64:
-			val = int(x)
-		default:
+		val, ok := snmpToInt(v.Value)
+		if !ok {
 			continue
 		}
-
 		if v.Name == "."+powerOID {
 			power = float64(val)
 		} else if v.Name == "."+maxPowerOID {
@@ -263,20 +266,10 @@ func (t *Tendrils) getInterfaceTable(snmp *gosnmp.GoSNMP, oid string) map[int]in
 			continue
 		}
 
-		var value int
-		switch v := result.Value.(type) {
-		case int:
-			value = v
-		case uint:
-			value = int(v)
-		case int64:
-			value = int(v)
-		case uint64:
-			value = int(v)
-		default:
+		value, ok := snmpToInt(result.Value)
+		if !ok {
 			continue
 		}
-
 		table[ifIndex] = value
 	}
 	return table
@@ -306,17 +299,8 @@ func (t *Tendrils) getPoEStats(snmp *gosnmp.GoSNMP, ifNames map[int]string) map[
 			continue
 		}
 
-		var status int
-		switch v := result.Value.(type) {
-		case int:
-			status = v
-		case uint:
-			status = int(v)
-		case int64:
-			status = int(v)
-		case uint64:
-			status = int(v)
-		default:
+		status, ok := snmpToInt(result.Value)
+		if !ok {
 			continue
 		}
 
@@ -367,26 +351,16 @@ func (t *Tendrils) getPoETable(snmp *gosnmp.GoSNMP, oid string) map[int]int {
 			continue
 		}
 
-		var value int
-		switch v := result.Value.(type) {
-		case int:
-			value = v
-		case uint:
-			value = int(v)
-		case int64:
-			value = int(v)
-		case uint64:
-			value = int(v)
-		default:
+		value, ok := snmpToInt(result.Value)
+		if !ok {
 			continue
 		}
-
 		table[portIndex] = value
 	}
 	return table
 }
 
-func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, node *Node) {
+func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, node *Node, ifNames map[int]string) {
 	portOID := "1.3.6.1.2.1.17.7.1.2.2.1.2"
 
 	portResults, err := snmp.BulkWalkAll(portOID)
@@ -423,7 +397,6 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, node *Node) {
 	}
 
 	bridgePortToIfIndex := t.getBridgePortMapping(snmp)
-	ifNames := t.getInterfaceNames(snmp)
 
 	for _, entry := range macPorts {
 		mac := entry.mac

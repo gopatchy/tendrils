@@ -30,18 +30,7 @@ type ArtNetNode struct {
 }
 
 func (t *Tendrils) listenArtNet(ctx context.Context, iface net.Interface) {
-	addrs, err := iface.Addrs()
-	if err != nil {
-		return
-	}
-
-	var srcIP net.IP
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
-			srcIP = ipnet.IP.To4()
-			break
-		}
-	}
+	srcIP, _ := getInterfaceIPv4(iface)
 	if srcIP == nil {
 		return
 	}
@@ -157,23 +146,7 @@ func (t *Tendrils) handleArtPollReply(ifaceName string, srcIP net.IP, data []byt
 }
 
 func (t *Tendrils) runArtNetPoller(ctx context.Context, iface net.Interface, conn *net.UDPConn) {
-	addrs, err := iface.Addrs()
-	if err != nil {
-		return
-	}
-
-	var broadcast net.IP
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
-			ip := ipnet.IP.To4()
-			mask := ipnet.Mask
-			broadcast = make(net.IP, 4)
-			for i := 0; i < 4; i++ {
-				broadcast[i] = ip[i] | ^mask[i]
-			}
-			break
-		}
-	}
+	_, broadcast := getInterfaceIPv4(iface)
 	if broadcast == nil {
 		return
 	}

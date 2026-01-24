@@ -111,18 +111,7 @@ func (t *Tendrils) handleIGMPv3(ifaceName string, sourceIP net.IP, igmp *layers.
 }
 
 func (t *Tendrils) runIGMPQuerier(ctx context.Context, iface net.Interface) {
-	addrs, err := iface.Addrs()
-	if err != nil {
-		return
-	}
-
-	var srcIP net.IP
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
-			srcIP = ipnet.IP.To4()
-			break
-		}
-	}
+	srcIP, _ := getInterfaceIPv4(iface)
 	if srcIP == nil {
 		return
 	}

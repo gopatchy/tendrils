@@ -14,24 +14,7 @@ func (t *Tendrils) listenBMD(ctx context.Context, iface net.Interface) {
 }
 
 func (t *Tendrils) discoverATEMs(ctx context.Context, iface net.Interface) {
-	addrs, err := iface.Addrs()
-	if err != nil {
-		return
-	}
-
-	var srcIP net.IP
-	var broadcast net.IP
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
-			srcIP = ipnet.IP.To4()
-			mask := ipnet.Mask
-			broadcast = make(net.IP, 4)
-			for i := 0; i < 4; i++ {
-				broadcast[i] = srcIP[i] | ^mask[i]
-			}
-			break
-		}
-	}
+	srcIP, broadcast := getInterfaceIPv4(iface)
 	if srcIP == nil {
 		return
 	}

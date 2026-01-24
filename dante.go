@@ -140,6 +140,15 @@ func NewDanteFlows() *DanteFlows {
 	}
 }
 
+func containsString(slice []string, val string) bool {
+	for _, s := range slice {
+		if s == val {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *DanteFlows) Update(source, subscriber *Node, channelInfo string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -161,18 +170,9 @@ func (d *DanteFlows) Update(source, subscriber *Node, channelInfo string) {
 		flow.Subscribers[subscriber] = sub
 	}
 
-	if channelInfo != "" {
-		hasChannel := false
-		for _, ch := range sub.Channels {
-			if ch == channelInfo {
-				hasChannel = true
-				break
-			}
-		}
-		if !hasChannel {
-			sub.Channels = append(sub.Channels, channelInfo)
-			sort.Strings(sub.Channels)
-		}
+	if channelInfo != "" && !containsString(sub.Channels, channelInfo) {
+		sub.Channels = append(sub.Channels, channelInfo)
+		sort.Strings(sub.Channels)
 	}
 
 	sub.LastSeen = time.Now()
@@ -188,14 +188,7 @@ func (d *DanteFlows) ReplaceNode(oldNode, newNode *Node) {
 			for subNode, sub := range flow.Subscribers {
 				if existingSub, hasSub := existingFlow.Subscribers[subNode]; hasSub {
 					for _, ch := range sub.Channels {
-						hasChannel := false
-						for _, existingCh := range existingSub.Channels {
-							if existingCh == ch {
-								hasChannel = true
-								break
-							}
-						}
-						if !hasChannel {
+						if !containsString(existingSub.Channels, ch) {
 							existingSub.Channels = append(existingSub.Channels, ch)
 						}
 					}
@@ -214,14 +207,7 @@ func (d *DanteFlows) ReplaceNode(oldNode, newNode *Node) {
 			delete(flow.Subscribers, oldNode)
 			if existingSub, hasNew := flow.Subscribers[newNode]; hasNew {
 				for _, ch := range sub.Channels {
-					hasChannel := false
-					for _, existingCh := range existingSub.Channels {
-						if existingCh == ch {
-							hasChannel = true
-							break
-						}
-					}
-					if !hasChannel {
+					if !containsString(existingSub.Channels, ch) {
 						existingSub.Channels = append(existingSub.Channels, ch)
 					}
 				}

@@ -10,6 +10,25 @@ import (
 	"time"
 )
 
+func getInterfaceIPv4(iface net.Interface) (srcIP, broadcast net.IP) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return nil, nil
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
+			srcIP = ipnet.IP.To4()
+			mask := ipnet.Mask
+			broadcast = make(net.IP, 4)
+			for i := 0; i < 4; i++ {
+				broadcast[i] = srcIP[i] | ^mask[i]
+			}
+			return srcIP, broadcast
+		}
+	}
+	return nil, nil
+}
+
 type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
 	nodes            *Nodes

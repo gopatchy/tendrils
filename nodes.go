@@ -83,18 +83,7 @@ func (s *InterfaceStats) String() string {
 		}
 	}
 
-	return "[" + fmt.Sprintf("%s", joinParts(parts)) + "]"
-}
-
-func joinParts(parts []string) string {
-	result := ""
-	for i, p := range parts {
-		if i > 0 {
-			result += " "
-		}
-		result += p
-	}
-	return result
+	return "[" + strings.Join(parts, " ") + "]"
 }
 
 type PoEBudget struct {
@@ -133,7 +122,7 @@ func (n *Node) String() string {
 
 	parts = append(parts, fmt.Sprintf("{%v}", ifaces))
 
-	return joinParts(parts)
+	return strings.Join(parts, " ")
 }
 
 func (n *Node) DisplayName() string {
@@ -541,8 +530,10 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 		for _, ip := range iface.IPs {
 			ips = append(ips, ip)
 		}
-		n.updateNodeInterface(keep, keepID, iface.MAC, ips, iface.Name)
-		n.macIndex[iface.MAC.String()] = keepID
+		if iface.MAC != nil {
+			n.updateNodeInterface(keep, keepID, iface.MAC, ips, iface.Name)
+			n.macIndex[iface.MAC.String()] = keepID
+		}
 	}
 
 	for peerMAC, ifaceName := range merge.MACTable {
@@ -561,6 +552,11 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 				membership.Node = keep
 			}
 		}
+	}
+
+	if cancel, exists := n.nodeCancel[mergeID]; exists {
+		cancel()
+		delete(n.nodeCancel, mergeID)
 	}
 
 	delete(n.nodes, mergeID)
@@ -747,7 +743,7 @@ func (n *Nodes) logNode(node *Node) {
 		tags = append(tags, "dante-clock-master")
 	}
 	if len(tags) > 0 {
-		log.Printf("[node] %s [%s]", name, joinParts(tags))
+		log.Printf("[node] %s [%s]", name, strings.Join(tags, " "))
 	} else {
 		log.Printf("[node] %s", name)
 	}
@@ -911,7 +907,9 @@ func (n *Nodes) getDirectLinks() []*Link {
 	macToNode := map[string]*Node{}
 	for _, node := range n.nodes {
 		for _, iface := range node.Interfaces {
-			macToNode[iface.MAC.String()] = node
+			if iface.MAC != nil {
+				macToNode[iface.MAC.String()] = node
+			}
 		}
 	}
 
@@ -921,6 +919,9 @@ func (n *Nodes) getDirectLinks() []*Link {
 	for _, target := range n.nodes {
 		seenMACs := map[string]bool{}
 		for _, iface := range target.Interfaces {
+			if iface.MAC == nil {
+				continue
+			}
 			mac := iface.MAC.String()
 			if seenMACs[mac] {
 				continue

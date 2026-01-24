@@ -45,7 +45,7 @@ func (t *Tendrils) parseARPTable() []arpEntry {
 		macStr = normalizeMACAddress(macStr)
 		mac, err := net.ParseMAC(macStr)
 		if err != nil {
-			log.Printf("[arp] failed to parse MAC %q for IP %s: %v", macStr, ipStr, err)
+			log.Printf("[ERROR] [arp] failed to parse MAC %q for IP %s: %v", macStr, ipStr, err)
 			continue
 		}
 
