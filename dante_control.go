@@ -278,7 +278,7 @@ func (t *Tendrils) queryDanteDeviceWithPort(ip net.IP, port int) *DanteDeviceInf
 		if t.DebugDante {
 			log.Printf("[dante] %s: 0x3000 returned %d subscriptions, hasMulticast=%v", ip, len(info.Subscriptions), info.HasMulticast)
 		}
-		if info.RxChannelCount > 0 && (len(info.Subscriptions) == 0 || info.HasMulticast) {
+		if info.RxChannelCount > 0 {
 			subs3400 := t.queryDanteSubscriptions3400(conn, ip, info.RxChannelCount)
 			if len(subs3400) > 0 {
 				info.Subscriptions = subs3400
@@ -308,12 +308,13 @@ type DanteChannelType uint16
 const (
 	DanteChannelUnknown DanteChannelType = 0
 	DanteChannelAudio   DanteChannelType = 0x000f
+	DanteChannelAudio2  DanteChannelType = 0x0006
 	DanteChannelVideo   DanteChannelType = 0x000e
 )
 
 func (t DanteChannelType) String() string {
 	switch t {
-	case DanteChannelAudio:
+	case DanteChannelAudio, DanteChannelAudio2:
 		return "audio"
 	case DanteChannelVideo:
 		return "video"
@@ -543,6 +544,7 @@ func (t *Tendrils) queryDanteSubscriptions(conn *net.UDPConn, ip net.IP, rxCount
 					RxChannel:     rxChannelNum,
 					TxDeviceName:  txDeviceName,
 					TxChannelName: txChannelName,
+					ChannelType:   DanteChannelAudio,
 				})
 
 				recordOffset += 20
@@ -561,12 +563,12 @@ func (t *Tendrils) queryDanteSubscriptions(conn *net.UDPConn, ip net.IP, rxCount
 				txChannelName := extractNullTerminatedString(resp, txChannelOffset)
 				txDeviceName := extractNullTerminatedString(resp, txDeviceOffset)
 
-
 				if txDeviceName != "" {
 					subscriptions = append(subscriptions, DanteSubscription{
 						RxChannel:     rxChannelNum,
 						TxDeviceName:  txDeviceName,
 						TxChannelName: txChannelName,
+						ChannelType:   DanteChannelAudio,
 					})
 				}
 
@@ -659,6 +661,9 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 					continue
 				}
 				channelType = DanteChannelType(binary.BigEndian.Uint16(resp[rawOffset+14 : rawOffset+16]))
+				if channelType == DanteChannelUnknown {
+					channelType = DanteChannelAudio
+				}
 				txChOffset = int(binary.BigEndian.Uint16(resp[rawOffset+44 : rawOffset+46]))
 				txDevOffset = int(binary.BigEndian.Uint16(resp[rawOffset+46 : rawOffset+48]))
 			} else if marker == 0x141a {
