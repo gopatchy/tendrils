@@ -545,73 +545,34 @@ func (t *Tendrils) queryDanteSubscriptions3400(conn *net.UDPConn, ip net.IP, rxC
 			log.Printf("[dante] %s: 0x3400 page %d: found %d records", ip, pageNum, recordCount)
 		}
 
-		lastDeviceName := ""
 		for i := 0; i < recordCount; i++ {
 			offsetPos := 18 + i*2
 			if offsetPos+2 > len(resp) {
 				break
 			}
 			rawOffset := int(binary.BigEndian.Uint16(resp[offsetPos : offsetPos+2]))
-			recordOffset := rawOffset - 30
-			if recordOffset < 0 || recordOffset+24 >= len(resp) {
+			if rawOffset+48 > len(resp) {
+				continue
+			}
+
+			txChOffset := int(binary.BigEndian.Uint16(resp[rawOffset+44 : rawOffset+46]))
+			txDevOffset := int(binary.BigEndian.Uint16(resp[rawOffset+46 : rawOffset+48]))
+
+			if txChOffset == 0 && txDevOffset == 0 {
 				continue
 			}
 
 			var txDeviceName, txChannelName string
-			firstByte := resp[recordOffset]
-			if firstByte >= 0x20 && firstByte < 0x7f {
-				txChannelName = extractNullTerminatedString(resp, recordOffset)
-				txDeviceName = extractNullTerminatedString(resp, recordOffset+len(txChannelName)+1)
-			} else {
-				stringStart := -1
-				for j := recordOffset + 10; j < recordOffset+24 && j+3 < len(resp); j++ {
-					if resp[j] == 0x02 && resp[j+1] == 0x02 && resp[j+2] == 0x00 && resp[j+3] == 0x00 {
-						stringStart = j + 4
-						break
-					}
-				}
-				if stringStart >= 0 && stringStart < len(resp) {
-					str1 := extractNullTerminatedString(resp, stringStart)
-					str2 := extractNullTerminatedString(resp, stringStart+len(str1)+1)
-					hasLetter := func(s string) bool {
-						for _, c := range s {
-							if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
-								return true
-							}
-						}
-						return false
-					}
-					if !hasLetter(str1) && !hasLetter(str2) {
-						continue
-					}
-					noDeviceIndicator := stringStart >= 6 && resp[stringStart-6] == 0x00 && resp[stringStart-5] == 0x00
-					str2IsNumeric := len(str2) > 0
-					for _, c := range str2 {
-						if c < '0' || c > '9' {
-							str2IsNumeric = false
-							break
-						}
-					}
-					if noDeviceIndicator && str2IsNumeric && lastDeviceName != "" {
-						txChannelName = str1
-						txDeviceName = lastDeviceName
-					} else if str2IsNumeric {
-						txDeviceName = str1
-						txChannelName = str2
-					} else if hasLetter(str2) {
-						txDeviceName = str2
-						txChannelName = str1
-					} else {
-						txChannelName = str1
-						txDeviceName = lastDeviceName
-					}
-				}
+			if txChOffset > 0 && txChOffset < len(resp) {
+				txChannelName = extractNullTerminatedString(resp, txChOffset)
+			}
+			if txDevOffset > 0 && txDevOffset < len(resp) {
+				txDeviceName = extractNullTerminatedString(resp, txDevOffset)
 			}
 
 			if txDeviceName == "" {
 				continue
 			}
-			lastDeviceName = txDeviceName
 
 			rxChannel := startChannel + i
 			if t.DebugDante {
