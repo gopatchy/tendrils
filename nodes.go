@@ -13,211 +13,6 @@ import (
 	"github.com/fvbommel/sortorder"
 )
 
-type Interface struct {
-	Name  string
-	MAC   net.HardwareAddr
-	IPs   map[string]net.IP
-	Stats *InterfaceStats
-}
-
-type InterfaceStats struct {
-	Speed     uint64 // bits per second
-	InErrors  uint64
-	OutErrors uint64
-	PoE       *PoEStats
-}
-
-type PoEStats struct {
-	Power    float64 // watts in use
-	MaxPower float64 // watts allocated/negotiated
-}
-
-func (i *Interface) String() string {
-	var ips []string
-	for _, ip := range i.IPs {
-		ips = append(ips, ip.String())
-	}
-	sort.Strings(ips)
-
-	var parts []string
-	parts = append(parts, i.MAC.String())
-	if i.Name != "" {
-		parts = append(parts, fmt.Sprintf("(%s)", i.Name))
-	}
-	if len(ips) > 0 {
-		parts = append(parts, fmt.Sprintf("%v", ips))
-	}
-	if i.Stats != nil {
-		parts = append(parts, i.Stats.String())
-	}
-
-	result := parts[0]
-	for _, p := range parts[1:] {
-		result += " " + p
-	}
-	return result
-}
-
-func (s *InterfaceStats) String() string {
-	var parts []string
-
-	if s.Speed > 0 {
-		if s.Speed >= 1000000000 {
-			parts = append(parts, fmt.Sprintf("%dG", s.Speed/1000000000))
-		} else if s.Speed >= 1000000 {
-			parts = append(parts, fmt.Sprintf("%dM", s.Speed/1000000))
-		} else {
-			parts = append(parts, fmt.Sprintf("%d", s.Speed))
-		}
-	}
-
-	if s.InErrors > 0 || s.OutErrors > 0 {
-		parts = append(parts, fmt.Sprintf("err:%d/%d", s.InErrors, s.OutErrors))
-	}
-
-	if s.PoE != nil {
-		if s.PoE.MaxPower > 0 {
-			parts = append(parts, fmt.Sprintf("poe:%.1f/%.1fW", s.PoE.Power, s.PoE.MaxPower))
-		} else {
-			parts = append(parts, fmt.Sprintf("poe:%.1fW", s.PoE.Power))
-		}
-	}
-
-	return "[" + strings.Join(parts, " ") + "]"
-}
-
-type PoEBudget struct {
-	Power    float64 // watts in use
-	MaxPower float64 // watts total budget
-}
-
-type Node struct {
-	Names              map[string]bool
-	Interfaces         map[string]*Interface
-	MACTable           map[string]string // peer MAC -> local interface name
-	PoEBudget          *PoEBudget
-	IsDanteClockMaster bool
-	DanteTxChannels    string
-	pollTrigger        chan struct{}
-}
-
-func (n *Node) String() string {
-	name := n.DisplayName()
-	if name == "" {
-		name = "??"
-	}
-
-	var parts []string
-	parts = append(parts, name)
-
-	if n.PoEBudget != nil {
-		parts = append(parts, fmt.Sprintf("[poe:%.0f/%.0fW]", n.PoEBudget.Power, n.PoEBudget.MaxPower))
-	}
-
-	var ifaces []string
-	for _, iface := range n.Interfaces {
-		ifaces = append(ifaces, iface.String())
-	}
-	sort.Slice(ifaces, func(i, j int) bool { return sortorder.NaturalLess(ifaces[i], ifaces[j]) })
-
-	parts = append(parts, fmt.Sprintf("{%v}", ifaces))
-
-	return strings.Join(parts, " ")
-}
-
-func (n *Node) DisplayName() string {
-	if len(n.Names) == 0 {
-		return ""
-	}
-	var names []string
-	for name := range n.Names {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return strings.Join(names, "/")
-}
-
-type MulticastGroup struct {
-	IP net.IP
-}
-
-func (g *MulticastGroup) Name() string {
-	ip := g.IP.To4()
-	if ip == nil {
-		return g.IP.String()
-	}
-
-	// Well-known multicast addresses
-	switch g.IP.String() {
-	case "224.0.0.251":
-		return "mdns"
-	case "224.0.1.129":
-		return "ptp"
-	case "224.0.1.130":
-		return "ptp-announce"
-	case "224.0.1.131":
-		return "ptp-sync"
-	case "224.0.1.132":
-		return "ptp-delay"
-	case "224.2.127.254":
-		return "sap"
-	case "239.255.254.253":
-		return "shure-slp"
-	case "239.255.255.250":
-		return "ssdp"
-	case "239.255.255.253":
-		return "slp"
-	case "239.255.255.255":
-		return "admin-scoped-broadcast"
-	}
-
-	// sACN (239.255.x.x, universes 1-63999)
-	if ip[0] == 239 && ip[1] == 255 {
-		universe := int(ip[2])*256 + int(ip[3])
-		if universe >= 1 && universe <= 63999 {
-			return fmt.Sprintf("sacn:%d", universe)
-		}
-	}
-
-	// Dante audio multicast (239.69-71.x.x)
-	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
-		flowID := (int(ip[1]-69) << 16) | (int(ip[2]) << 8) | int(ip[3])
-		return fmt.Sprintf("dante-mcast:%d", flowID)
-	}
-
-	// Dante AV multicast (239.253.x.x)
-	if ip[0] == 239 && ip[1] == 253 {
-		flowID := (int(ip[2]) << 8) | int(ip[3])
-		return fmt.Sprintf("dante-av:%d", flowID)
-	}
-
-	return g.IP.String()
-}
-
-func (g *MulticastGroup) IsDante() bool {
-	ip := g.IP.To4()
-	if ip == nil {
-		return false
-	}
-	if ip[0] == 239 && ip[1] >= 69 && ip[1] <= 71 {
-		return true
-	}
-	if ip[0] == 239 && ip[1] == 253 {
-		return true
-	}
-	return false
-}
-
-type MulticastMembership struct {
-	Node     *Node
-	LastSeen time.Time
-}
-
-type MulticastGroupMembers struct {
-	Group   *MulticastGroup
-	Members map[string]*MulticastMembership // source IP -> membership
-}
-
 type Nodes struct {
 	mu              sync.RWMutex
 	nodes           map[int]*Node
@@ -225,7 +20,7 @@ type Nodes struct {
 	macIndex        map[string]int
 	nameIndex       map[string]int
 	nodeCancel      map[int]context.CancelFunc
-	multicastGroups map[string]*MulticastGroupMembers // group IP string -> group with members
+	multicastGroups map[string]*MulticastGroupMembers
 	nextID          int
 	t               *Tendrils
 	ctx             context.Context
@@ -260,94 +55,119 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		return
 	}
 
-	targetID := -1
-	isNew := false
+	targetID, isNew := n.resolveTargetNode(target, mac, ips, nodeName)
+	node := n.nodes[targetID]
 
-	if target != nil {
-		for id, node := range n.nodes {
-			if node == target {
-				targetID = id
-				break
-			}
+	added := n.applyNodeUpdates(node, targetID, mac, ips, ifaceName, nodeName)
+
+	n.logUpdates(node, added, isNew, source)
+
+	if hasNewIP(added) {
+		n.triggerPoll(node)
+	}
+}
+
+func (n *Nodes) resolveTargetNode(target *Node, mac net.HardwareAddr, ips []net.IP, nodeName string) (int, bool) {
+	targetID := n.findByTarget(target)
+	targetID = n.findOrMergeByMAC(targetID, mac)
+	if targetID == -1 {
+		targetID = n.findByIPs(ips)
+	}
+	targetID = n.findOrMergeByName(targetID, nodeName)
+
+	if targetID == -1 {
+		return n.createNode(), true
+	}
+	return targetID, false
+}
+
+func (n *Nodes) findByTarget(target *Node) int {
+	if target == nil {
+		return -1
+	}
+	for id, node := range n.nodes {
+		if node == target {
+			return id
 		}
 	}
+	return -1
+}
 
-	if mac != nil {
-		macKey := mac.String()
-		if id, exists := n.macIndex[macKey]; exists {
+func (n *Nodes) findOrMergeByMAC(targetID int, mac net.HardwareAddr) int {
+	if mac == nil {
+		return targetID
+	}
+	macKey := mac.String()
+	id, exists := n.macIndex[macKey]
+	if !exists {
+		return targetID
+	}
+	if _, nodeExists := n.nodes[id]; !nodeExists {
+		delete(n.macIndex, macKey)
+		return targetID
+	}
+	if targetID == -1 {
+		return id
+	}
+	if id != targetID {
+		n.mergeNodes(targetID, id)
+	}
+	return targetID
+}
+
+func (n *Nodes) findByIPs(ips []net.IP) int {
+	for _, ip := range ips {
+		if id, exists := n.ipIndex[ip.String()]; exists {
 			if _, nodeExists := n.nodes[id]; nodeExists {
-				if targetID == -1 {
-					targetID = id
-				} else if id != targetID {
-					n.mergeNodes(targetID, id)
-				}
-			} else {
-				delete(n.macIndex, macKey)
+				return id
 			}
 		}
 	}
+	return -1
+}
 
+func (n *Nodes) findOrMergeByName(targetID int, nodeName string) int {
+	if nodeName == "" {
+		return targetID
+	}
+	id, exists := n.nameIndex[nodeName]
+	if !exists {
+		return targetID
+	}
+	nameNode, nodeExists := n.nodes[id]
+	if !nodeExists {
+		delete(n.nameIndex, nodeName)
+		return targetID
+	}
 	if targetID == -1 {
-		for _, ip := range ips {
-			if id, exists := n.ipIndex[ip.String()]; exists {
-				if _, nodeExists := n.nodes[id]; nodeExists {
-					targetID = id
-					break
-				}
-			}
-		}
+		return id
 	}
-
-	if nodeName != "" {
-		if id, exists := n.nameIndex[nodeName]; exists {
-			if nameNode, nodeExists := n.nodes[id]; nodeExists {
-				if targetID == -1 {
-					targetID = id
-				} else if id != targetID && len(nameNode.Interfaces) == 0 {
-					n.mergeNodes(targetID, id)
-				}
-			} else {
-				delete(n.nameIndex, nodeName)
-			}
-		}
+	if id != targetID && len(nameNode.Interfaces) == 0 {
+		n.mergeNodes(targetID, id)
 	}
+	return targetID
+}
 
-	var node *Node
-	if targetID == -1 {
-		targetID = n.nextID
-		n.nextID++
-		node = &Node{
-			Interfaces:  map[string]*Interface{},
-			MACTable:    map[string]string{},
-			pollTrigger: make(chan struct{}, 1),
-		}
-		n.nodes[targetID] = node
-		isNew = true
-		n.startNodePoller(targetID, node)
-	} else {
-		node = n.nodes[targetID]
+func (n *Nodes) createNode() int {
+	targetID := n.nextID
+	n.nextID++
+	node := &Node{
+		Interfaces:  map[string]*Interface{},
+		MACTable:    map[string]string{},
+		pollTrigger: make(chan struct{}, 1),
 	}
+	n.nodes[targetID] = node
+	n.startNodePoller(targetID, node)
+	return targetID
+}
 
+func (n *Nodes) applyNodeUpdates(node *Node, nodeID int, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName string) []string {
 	var added []string
+
 	if mac != nil {
-		added = n.updateNodeInterface(node, targetID, mac, ips, ifaceName)
+		added = n.updateNodeInterface(node, nodeID, mac, ips, ifaceName)
 	} else {
-		for _, ip := range ips {
-			ipKey := ip.String()
-			if _, exists := n.ipIndex[ipKey]; !exists {
-				n.ipIndex[ipKey] = targetID
-				iface, exists := node.Interfaces[ipKey]
-				if !exists {
-					iface = &Interface{
-						IPs: map[string]net.IP{},
-					}
-					node.Interfaces[ipKey] = iface
-				}
-				iface.IPs[ipKey] = ip
-				added = append(added, "ip="+ipKey)
-				go n.t.requestARP(ip)
-			}
-		}
+		added = n.updateNodeIPs(node, nodeID, ips)
 	}
 
 	if nodeName != "" {
@@ -356,34 +176,56 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 		}
 		if !node.Names[nodeName] {
 			node.Names[nodeName] = true
-			n.nameIndex[nodeName] = targetID
+			n.nameIndex[nodeName] = nodeID
 			added = append(added, "name="+nodeName)
 		}
 	}
 
-	hasNewIP := false
+	return added
+}
+
+func (n *Nodes) updateNodeIPs(node *Node, nodeID int, ips []net.IP) []string {
+	var added []string
+	for _, ip := range ips {
+		ipKey := ip.String()
+		if _, exists := n.ipIndex[ipKey]; exists {
+			continue
+		}
+		n.ipIndex[ipKey] = nodeID
+		iface, exists := node.Interfaces[ipKey]
+		if !exists {
+			iface = &Interface{IPs: map[string]net.IP{}}
+			node.Interfaces[ipKey] = iface
+		}
+		iface.IPs[ipKey] = ip
+		added = append(added, "ip="+ipKey)
+		go n.t.requestARP(ip)
+	}
+	return added
+}
+
+func hasNewIP(added []string) bool {
 	for _, a := range added {
 		if len(a) > 3 && a[:3] == "ip=" {
-			hasNewIP = true
-			break
+			return true
 		}
 	}
+	return false
+}
 
-	if len(added) > 0 {
-		if n.t.LogEvents {
-			if isNew {
-				log.Printf("[add] %s %v (via %s)", node, added, source)
-			} else {
-				log.Printf("[update] %s +%v (via %s)", node, added, source)
-			}
-		}
-		if n.t.LogNodes {
-			n.logNode(node)
+func (n *Nodes) logUpdates(node *Node, added []string, isNew bool, source string) {
+	if len(added) == 0 {
+		return
+	}
+	if n.t.LogEvents {
+		if isNew {
+			log.Printf("[add] %s %v (via %s)", node, added, source)
+		} else {
+			log.Printf("[update] %s +%v (via %s)", node, added, source)
 		}
 	}
-
-	if hasNewIP {
-		n.triggerPoll(node)
+	if n.t.LogNodes {
+		n.logNode(node)
 	}
 }
 
@@ -426,24 +268,7 @@ func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr
 
 	iface, exists := node.Interfaces[ifaceKey]
 	if !exists {
-		if ifaceName != "" {
-			if oldIface, oldExists := node.Interfaces[macKey]; oldExists && oldIface.MAC.String() == macKey {
-				iface = oldIface
-				iface.Name = ifaceName
-				delete(node.Interfaces, macKey)
-				node.Interfaces[ifaceKey] = iface
-				added = append(added, "iface="+ifaceKey)
-				exists = true
-			}
-		} else {
-			for _, existing := range node.Interfaces {
-				if existing.MAC.String() == macKey {
-					iface = existing
-					exists = true
-					break
-				}
-			}
-		}
+		iface, exists, added = n.findOrCreateInterface(node, macKey, ifaceName, ifaceKey)
 	}
 	if !exists {
 		iface = &Interface{
@@ -469,6 +294,26 @@ func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr
 	}
 
 	return added
+}
+
+func (n *Nodes) findOrCreateInterface(node *Node, macKey, ifaceName, ifaceKey string) (*Interface, bool, []string) {
+	var added []string
+
+	if ifaceName != "" {
+		if oldIface, oldExists := node.Interfaces[macKey]; oldExists && oldIface.MAC.String() == macKey {
+			oldIface.Name = ifaceName
+			delete(node.Interfaces, macKey)
+			node.Interfaces[ifaceKey] = oldIface
+			return oldIface, true, append(added, "iface="+ifaceKey)
+		}
+	} else {
+		for _, existing := range node.Interfaces {
+			if existing.MAC.String() == macKey {
+				return existing, true, added
+			}
+		}
+	}
+	return nil, false, added
 }
 
 func (n *Nodes) Merge(macs []net.HardwareAddr, source string) {
@@ -647,87 +492,11 @@ func (n *Nodes) SetDanteClockMaster(ip net.IP) {
 	}
 }
 
-func (n *Nodes) UpdateMulticastMembership(sourceIP, groupIP net.IP) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	node := n.getNodeByIPLocked(sourceIP)
-
-	groupKey := groupIP.String()
-	sourceKey := sourceIP.String()
-
-	gm := n.multicastGroups[groupKey]
-	if gm == nil {
-		gm = &MulticastGroupMembers{
-			Group:   &MulticastGroup{IP: groupIP},
-			Members: map[string]*MulticastMembership{},
-		}
-		n.multicastGroups[groupKey] = gm
-	}
-
-	gm.Members[sourceKey] = &MulticastMembership{
-		Node:     node,
-		LastSeen: time.Now(),
-	}
-}
-
-func (n *Nodes) RemoveMulticastMembership(sourceIP, groupIP net.IP) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	groupKey := groupIP.String()
-	sourceKey := sourceIP.String()
-
-	if gm := n.multicastGroups[groupKey]; gm != nil {
-		delete(gm.Members, sourceKey)
-		if len(gm.Members) == 0 {
-			delete(n.multicastGroups, groupKey)
-		}
-	}
-}
-
 func (n *Nodes) getNodeByIPLocked(ip net.IP) *Node {
 	if id, exists := n.ipIndex[ip.String()]; exists {
 		return n.nodes[id]
 	}
 	return nil
-}
-
-func (n *Nodes) GetDanteMulticastGroups(deviceIP net.IP) []net.IP {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-
-	deviceKey := deviceIP.String()
-	var groups []net.IP
-
-	for _, gm := range n.multicastGroups {
-		if !gm.Group.IsDante() {
-			continue
-		}
-		if _, exists := gm.Members[deviceKey]; exists {
-			groups = append(groups, gm.Group.IP)
-		}
-	}
-	return groups
-}
-
-func (n *Nodes) GetMulticastGroupMembers(groupIP net.IP) []*Node {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-
-	groupKey := groupIP.String()
-	gm := n.multicastGroups[groupKey]
-	if gm == nil {
-		return nil
-	}
-
-	var members []*Node
-	for _, membership := range gm.Members {
-		if membership.Node != nil {
-			members = append(members, membership.Node)
-		}
-	}
-	return members
 }
 
 func (n *Nodes) logNode(node *Node) {
@@ -851,145 +620,4 @@ func (n *Nodes) LogAll() {
 
 	n.t.artnet.LogAll()
 	n.t.danteFlows.LogAll()
-}
-
-func (n *Nodes) expireMulticastMemberships() {
-	expireTime := time.Now().Add(-5 * time.Minute)
-	for groupKey, gm := range n.multicastGroups {
-		for sourceKey, membership := range gm.Members {
-			if membership.LastSeen.Before(expireTime) {
-				delete(gm.Members, sourceKey)
-			}
-		}
-		if len(gm.Members) == 0 {
-			delete(n.multicastGroups, groupKey)
-		}
-	}
-}
-
-type Link struct {
-	NodeA      *Node
-	InterfaceA string
-	NodeB      *Node
-	InterfaceB string
-}
-
-func (l *Link) String() string {
-	nameA := l.NodeA.DisplayName()
-	if nameA == "" {
-		nameA = l.NodeA.FirstMAC()
-	}
-	nameB := l.NodeB.DisplayName()
-	if nameB == "" {
-		nameB = l.NodeB.FirstMAC()
-	}
-	sideA := nameA
-	if l.InterfaceA != "" {
-		sideA = nameA + ":" + l.InterfaceA
-	}
-	sideB := nameB
-	if l.InterfaceB != "" {
-		sideB = nameB + ":" + l.InterfaceB
-	}
-	return fmt.Sprintf("%s <-> %s", sideA, sideB)
-}
-
-func (n *Node) FirstMAC() string {
-	for _, iface := range n.Interfaces {
-		if iface.MAC != nil {
-			return iface.MAC.String()
-		}
-	}
-	return "??"
-}
-
-func (n *Nodes) getDirectLinks() []*Link {
-	macToNode := map[string]*Node{}
-	for _, node := range n.nodes {
-		for _, iface := range node.Interfaces {
-			if iface.MAC != nil {
-				macToNode[iface.MAC.String()] = node
-			}
-		}
-	}
-
-	seen := map[string]bool{}
-	var links []*Link
-
-	for _, target := range n.nodes {
-		seenMACs := map[string]bool{}
-		for _, iface := range target.Interfaces {
-			if iface.MAC == nil {
-				continue
-			}
-			mac := iface.MAC.String()
-			if seenMACs[mac] {
-				continue
-			}
-			seenMACs[mac] = true
-
-			var lastHop *Node
-			var lastPort string
-
-			for _, node := range n.nodes {
-				port, sees := node.MACTable[mac]
-				if !sees || node == target {
-					continue
-				}
-
-				hasCloserNode := false
-				for otherMAC, otherPort := range node.MACTable {
-					if otherPort != port {
-						continue
-					}
-					otherNode := macToNode[otherMAC]
-					if otherNode == nil || otherNode == node || otherNode == target {
-						continue
-					}
-					if _, alsoSees := otherNode.MACTable[mac]; alsoSees {
-						hasCloserNode = true
-						break
-					}
-				}
-
-				if !hasCloserNode {
-					lastHop = node
-					lastPort = port
-					break
-				}
-			}
-
-			if lastHop != nil {
-				targetIface := ""
-				for lastHopMAC, targetPort := range target.MACTable {
-					if macToNode[lastHopMAC] == lastHop {
-						targetIface = targetPort
-						break
-					}
-				}
-
-				key := makeLinkKey(lastHop, lastPort, target, targetIface)
-				if !seen[key] {
-					seen[key] = true
-					links = append(links, &Link{
-						NodeA:      lastHop,
-						InterfaceA: lastPort,
-						NodeB:      target,
-						InterfaceB: targetIface,
-					})
-				}
-			}
-		}
-	}
-
-	return links
-}
-
-func makeLinkKey(nodeA *Node, ifaceA string, nodeB *Node, ifaceB string) string {
-	ptrA := fmt.Sprintf("%p", nodeA)
-	ptrB := fmt.Sprintf("%p", nodeB)
-	if ptrA < ptrB {
-		return ptrA + ":" + ifaceA + "-" + ptrB + ":" + ifaceB
-	}
-	return ptrB + ":" + ifaceB + "-" + ptrA + ":" + ifaceA
 }
