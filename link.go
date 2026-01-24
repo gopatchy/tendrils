@@ -93,6 +93,13 @@ func (n *Nodes) findLastHop(target *Node, mac string, macToNode map[string]*Node
 }
 
 func (n *Nodes) hasCloserNode(node, target *Node, mac, port string, macToNode map[string]*Node) bool {
+	nodeMACs := map[string]bool{}
+	for _, iface := range node.Interfaces {
+		if iface.MAC != "" {
+			nodeMACs[string(iface.MAC)] = true
+		}
+	}
+
 	for otherMAC, otherPort := range node.MACTable {
 		if otherPort != port {
 			continue
@@ -101,7 +108,21 @@ func (n *Nodes) hasCloserNode(node, target *Node, mac, port string, macToNode ma
 		if otherNode == nil || otherNode == node || otherNode == target {
 			continue
 		}
-		if _, alsoSees := otherNode.MACTable[mac]; alsoSees {
+
+		targetPort, alsoSees := otherNode.MACTable[mac]
+		if !alsoSees {
+			continue
+		}
+
+		seesNodeOnSamePort := false
+		for nodeMAC := range nodeMACs {
+			if nodePort, seesNode := otherNode.MACTable[nodeMAC]; seesNode && nodePort == targetPort {
+				seesNodeOnSamePort = true
+				break
+			}
+		}
+
+		if !seesNodeOnSamePort {
 			return true
 		}
 	}
