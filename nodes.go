@@ -552,6 +552,17 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 		keep.MACTable[peerMAC] = ifaceName
 	}
 
+	n.t.danteFlows.ReplaceNode(merge, keep)
+	n.t.artnet.ReplaceNode(merge, keep)
+
+	for _, gm := range n.multicastGroups {
+		for _, membership := range gm.Members {
+			if membership.Node == merge {
+				membership.Node = keep
+			}
+		}
+	}
+
 	delete(n.nodes, mergeID)
 }
 

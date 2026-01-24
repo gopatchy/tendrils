@@ -261,6 +261,30 @@ func containsInt(slice []int, val int) bool {
 	return false
 }
 
+func (a *ArtNetNodes) ReplaceNode(oldNode, newNode *Node) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if artNode, exists := a.nodes[oldNode]; exists {
+		delete(a.nodes, oldNode)
+		if existing, hasNew := a.nodes[newNode]; hasNew {
+			for _, u := range artNode.Inputs {
+				if !containsInt(existing.Inputs, u) {
+					existing.Inputs = append(existing.Inputs, u)
+				}
+			}
+			for _, u := range artNode.Outputs {
+				if !containsInt(existing.Outputs, u) {
+					existing.Outputs = append(existing.Outputs, u)
+				}
+			}
+		} else {
+			artNode.Node = newNode
+			a.nodes[newNode] = artNode
+		}
+	}
+}
+
 func (a *ArtNetNodes) Expire() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
