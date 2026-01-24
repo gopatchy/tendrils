@@ -99,22 +99,22 @@ func (n *Nodes) UpdateDanteTxChannels(name string, ip net.IP, channels string) {
 	node.DanteTxChannels = channels
 }
 
-func (n *Nodes) GetDanteTxDeviceInGroup(groupIP net.IP) string {
+func (n *Nodes) GetDanteTxDeviceInGroup(groupIP net.IP) *Node {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
 	groupKey := groupIP.String()
 	gm := n.multicastGroups[groupKey]
 	if gm == nil {
-		return ""
+		return nil
 	}
 
 	for _, membership := range gm.Members {
 		if membership.Node != nil && membership.Node.DanteTxChannels != "" {
-			return membership.Node.DisplayName()
+			return membership.Node
 		}
 	}
-	return ""
+	return nil
 }
 
 var danteSeqID uint32
@@ -881,14 +881,17 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 		if needIGMPFallback {
 			groups := t.nodes.GetDanteMulticastGroups(ip)
 			for _, groupIP := range groups {
-				sourceName := t.nodes.GetDanteTxDeviceInGroup(groupIP)
+				sourceNode := t.nodes.GetDanteTxDeviceInGroup(groupIP)
 				if t.DebugDante {
+					sourceName := ""
+					if sourceNode != nil {
+						sourceName = sourceNode.DisplayName()
+					}
 					log.Printf("[dante] %s: multicast group %s -> tx device %q", ip, groupIP, sourceName)
 				}
-				if sourceName == "" {
-					sourceName = multicastGroupName(groupIP)
+				if sourceNode == nil {
+					sourceNode = t.nodes.GetOrCreateByName(multicastGroupName(groupIP))
 				}
-				sourceNode := t.nodes.GetOrCreateByName(sourceName)
 				subscriberNode := t.nodes.GetOrCreateByName(info.Name)
 				t.danteFlows.Update(sourceNode, subscriberNode, "", DanteFlowActive)
 			}
