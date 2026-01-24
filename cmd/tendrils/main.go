@@ -17,6 +17,7 @@ func main() {
 	noDante := flag.Bool("no-dante", false, "disable Dante discovery")
 	noBMD := flag.Bool("no-bmd", false, "disable Blackmagic discovery")
 	noShure := flag.Bool("no-shure", false, "disable Shure discovery")
+	noYamaha := flag.Bool("no-yamaha", false, "disable Yamaha discovery")
 	logEvents := flag.Bool("log-events", false, "log node events")
 	logNodes := flag.Bool("log-nodes", false, "log full node details on changes")
 	debugARP := flag.Bool("debug-arp", false, "debug ARP discovery")
@@ -28,6 +29,7 @@ func main() {
 	debugDante := flag.Bool("debug-dante", false, "debug Dante discovery")
 	debugBMD := flag.Bool("debug-bmd", false, "debug Blackmagic discovery")
 	debugShure := flag.Bool("debug-shure", false, "debug Shure discovery")
+	debugYamaha := flag.Bool("debug-yamaha", false, "debug Yamaha discovery")
 	flag.Parse()
 
 	t := tendrils.New()
@@ -41,6 +43,7 @@ func main() {
 	t.DisableDante = *noDante
 	t.DisableBMD = *noBMD
 	t.DisableShure = *noShure
+	t.DisableYamaha = *noYamaha
 	t.LogEvents = *logEvents
 	t.LogNodes = *logNodes
 	t.DebugARP = *debugARP
@@ -52,5 +55,6 @@ func main() {
 	t.DebugDante = *debugDante
 	t.DebugBMD = *debugBMD
 	t.DebugShure = *debugShure
+	t.DebugYamaha = *debugYamaha
 	t.Run()
 }

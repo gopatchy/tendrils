@@ -26,6 +26,7 @@ type Tendrils struct {
 	DisableDante  bool
 	DisableBMD    bool
 	DisableShure  bool
+	DisableYamaha bool
 	LogEvents     bool
 	LogNodes      bool
 	DebugARP      bool
@@ -37,6 +38,7 @@ type Tendrils struct {
 	DebugDante    bool
 	DebugBMD      bool
 	DebugShure    bool
+	DebugYamaha   bool
 }
 
 func New() *Tendrils {
@@ -211,5 +213,43 @@ func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 	}
 	if !t.DisableShure {
 		go t.listenShure(ctx, iface)
+	}
+}
+
+func (t *Tendrils) pollNode(node *Node) {
+	t.nodes.mu.RLock()
+	var ips []net.IP
+	for _, iface := range node.Interfaces {
+		for _, ip := range iface.IPs {
+			if ip.To4() != nil {
+				ips = append(ips, ip)
+			}
+		}
+	}
+	nodeName := node.DisplayName()
+	t.nodes.mu.RUnlock()
+
+	if !t.DisableSNMP {
+		for _, ip := range ips {
+			t.querySNMPDevice(node, ip)
+		}
+	}
+
+	if !t.DisableBMD && nodeName == "" {
+		for _, ip := range ips {
+			t.probeBMDDevice(ip)
+		}
+	}
+
+	if !t.DisableYamaha && nodeName == "" {
+		for _, ip := range ips {
+			t.probeYamahaDevice(ip)
+		}
+	}
+
+	if !t.DisableDante {
+		for _, ip := range ips {
+			t.probeDanteDevice(ip)
+		}
 	}
 }
