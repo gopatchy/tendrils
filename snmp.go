@@ -111,6 +111,7 @@ func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {
 	t.queryInterfaceStats(snmp, node, ifNames)
 	t.queryPoEBudget(snmp, node)
 	t.queryBridgeMIB(snmp, node, ifNames)
+	t.queryDHCPBindings(snmp)
 }
 
 func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, node *Node) {
@@ -468,4 +469,64 @@ func (t *Tendrils) getInterfaceNames(snmp *gosnmp.GoSNMP) map[int]string {
 	}
 
 	return names
+}
+
+func (t *Tendrils) queryDHCPBindings(snmp *gosnmp.GoSNMP) {
+	baseOID := "1.3.6.1.4.1.4526.10.12.3.2.1"
+	ipOID := baseOID + ".1"
+	macOID := baseOID + ".3"
+
+	ipResults, err := snmp.BulkWalkAll(ipOID)
+	if err != nil {
+		return
+	}
+
+	macResults, err := snmp.BulkWalkAll(macOID)
+	if err != nil {
+		return
+	}
+
+	ips := map[int]net.IP{}
+	for _, result := range ipResults {
+		if result.Type != gosnmp.IPAddress {
+			continue
+		}
+		oidSuffix := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+ipOID), ".")
+		var idx int
+		if _, err := fmt.Sscanf(oidSuffix, "%d", &idx); err != nil {
+			continue
+		}
+		ips[idx] = net.ParseIP(result.Value.(string))
+	}
+
+	macs := map[int]net.HardwareAddr{}
+	for _, result := range macResults {
+		if result.Type != gosnmp.OctetString {
+			continue
+		}
+		macBytes := result.Value.([]byte)
+		if len(macBytes) != 6 {
+			continue
+		}
+		oidSuffix := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+macOID), ".")
+		var idx int
+		if _, err := fmt.Sscanf(oidSuffix, "%d", &idx); err != nil {
+			continue
+		}
+		macs[idx] = net.HardwareAddr(macBytes)
+	}
+
+	for idx, ip := range ips {
+		mac, ok := macs[idx]
+		if !ok {
+			continue
+		}
+		if isBroadcastOrZero(mac) {
+			continue
+		}
+		if t.DebugSNMP {
+			log.Printf("[snmp] %s: dhcp binding mac=%s ip=%s", snmp.Target, mac, ip)
+		}
+		t.nodes.Update(nil, mac, []net.IP{ip}, "", "", "dhcp")
+	}
 }
