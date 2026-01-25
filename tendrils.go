@@ -223,6 +223,8 @@ func (t *Tendrils) updateInterfaces(interfaces []net.Interface) {
 }
 
 func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
+	go t.pingBroadcast(ctx, iface)
+
 	if !t.DisableLLDP {
 		go t.listenLLDP(ctx, iface)
 	}

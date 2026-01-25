@@ -189,8 +189,16 @@ func (n *Nodes) updateNodeIPs(node *Node, nodeID int, ips []net.IP) []string {
 	var added []string
 	for _, ip := range ips {
 		ipKey := ip.String()
-		if _, exists := n.ipIndex[ipKey]; exists {
-			continue
+		if existingID, exists := n.ipIndex[ipKey]; exists {
+			if existingID == nodeID {
+				continue
+			}
+			if existingNode, nodeExists := n.nodes[existingID]; nodeExists {
+				n.mergeNodes(nodeID, existingID)
+				if n.t.LogEvents {
+					log.Printf("[merge] %s into %s (shared ip %s)", existingNode, node, ipKey)
+				}
+			}
 		}
 		n.ipIndex[ipKey] = nodeID
 		iface, exists := node.Interfaces[ipKey]
@@ -287,6 +295,14 @@ func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr
 
 	for _, ip := range ips {
 		ipKey := ip.String()
+		if existingID, exists := n.ipIndex[ipKey]; exists && existingID != nodeID {
+			if existingNode, nodeExists := n.nodes[existingID]; nodeExists {
+				n.mergeNodes(nodeID, existingID)
+				if n.t.LogEvents {
+					log.Printf("[merge] %s into %s (shared ip %s)", existingNode, node, ipKey)
+				}
+			}
+		}
 		if !iface.IPs.Has(ipKey) {
 			added = append(added, "ip="+ipKey)
 		}
