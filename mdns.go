@@ -132,7 +132,7 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 	if len(skaarhojNames) == 0 {
 		for aName, ip := range aRecords {
 			hostname := strings.TrimSuffix(aName, ".local")
-			if hostname != "" && hostname != aName {
+			if hostname != "" && hostname != aName && !strings.Contains(hostname, "in-addr") && !strings.Contains(hostname, "ip6.arpa") {
 				if t.DebugMDNS {
 					log.Printf("[mdns] %s: %s -> %s", ifaceName, ip, hostname)
 				}

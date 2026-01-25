@@ -9,9 +9,20 @@ locations:
         - "48:59:00:41:00:29" # Pixie Driver 8k Port 1
         - "48:59:00:28:00:27" # Pixie Driver 8k Port 2
         - "48:59:00:3c:00:3e" # Pixie Driver 8k Port 5
-        - ART12
-        - ART13
-        - ART14
+        - ART9 # Cyc
+        - ART10 # Cyc
+        - ART11 # Cyc
+        - ART12 # Cyc
+        - ART13 # Cyc
+        - ART14 # Cyc
+
+    - children:
+      - children:
+        - nodes:
+          - ART16 # R2X1
+
+        - nodes:
+          - ART20 # R2X2
 
     - children:
       - nodes:
@@ -89,11 +100,23 @@ locations:
     - satellite-2
     - "Y001-MAIN2-L-d1e298"
     - "ac:44:f2:4e:87:2a" # MAIN2-L bridge interface
+    - ART3 # Wash
+    - ART4 # Wash
+    - ART5 # Wash
+    - ART17 # Focus
+
+  - nodes:
+    - ART15 # R3X
+    - ART18 # Focus
 
   - nodes:
     - satellite-3
     - "Y001-MAIN2-R-f0dd93"
     - "ac:44:f2:4e:87:27" # MAIN2-R bridge interface
+    - ART6 # Wash
+    - ART7 # Wash
+    - ART8 # Wash
+    - ART19 # Focus
 
 - name: Booth
   children:
