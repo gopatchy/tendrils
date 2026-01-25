@@ -130,6 +130,25 @@ type Node struct {
 	pollTrigger        chan struct{}
 }
 
+func (n *Node) WithInterface(ifaceKey string) *Node {
+	if ifaceKey == "" {
+		return n
+	}
+	iface, exists := n.Interfaces[ifaceKey]
+	if !exists {
+		return n
+	}
+	return &Node{
+		TypeID:             n.TypeID,
+		Names:              n.Names,
+		Interfaces:         InterfaceMap{ifaceKey: iface},
+		MACTableSize:       n.MACTableSize,
+		PoEBudget:          n.PoEBudget,
+		IsDanteClockMaster: n.IsDanteClockMaster,
+		DanteTxChannels:    n.DanteTxChannels,
+	}
+}
+
 func (i *Interface) String() string {
 	var parts []string
 	parts = append(parts, string(i.MAC))

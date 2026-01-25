@@ -308,6 +308,10 @@ func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr
 		}
 		iface.IPs.Add(ip)
 		n.ipIndex[ipKey] = nodeID
+
+		if ipOnlyIface, exists := node.Interfaces[ipKey]; exists && ipOnlyIface != iface {
+			delete(node.Interfaces, ipKey)
+		}
 	}
 
 	return added

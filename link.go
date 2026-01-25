@@ -1,6 +1,9 @@
 package tendrils
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type Link struct {
 	TypeID     string `json:"typeid"`
@@ -8,6 +11,24 @@ type Link struct {
 	InterfaceA string `json:"interface_a,omitempty"`
 	NodeB      *Node  `json:"node_b"`
 	InterfaceB string `json:"interface_b,omitempty"`
+}
+
+func (l *Link) MarshalJSON() ([]byte, error) {
+	type linkJSON struct {
+		TypeID     string      `json:"typeid"`
+		NodeA      interface{} `json:"node_a"`
+		InterfaceA string      `json:"interface_a,omitempty"`
+		NodeB      interface{} `json:"node_b"`
+		InterfaceB string      `json:"interface_b,omitempty"`
+	}
+
+	return json.Marshal(linkJSON{
+		TypeID:     l.TypeID,
+		NodeA:      l.NodeA.WithInterface(l.InterfaceA),
+		InterfaceA: l.InterfaceA,
+		NodeB:      l.NodeB.WithInterface(l.InterfaceB),
+		InterfaceB: l.InterfaceB,
+	})
 }
 
 func (l *Link) String() string {
