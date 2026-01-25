@@ -137,7 +137,12 @@
                 const node = cy.getElementById(locId);
                 if (node.empty()) return null;
                 const bb = node.boundingBox();
-                return { id: locId, bb: bb, height: bb.y2 - bb.y1 };
+                return {
+                    id: locId,
+                    bb: bb,
+                    height: bb.y2 - bb.y1,
+                    centerX: (bb.x1 + bb.x2) / 2
+                };
             }).filter(b => b !== null);
 
             if (boxes.length < 2) return;
@@ -145,9 +150,17 @@
             const minY = Math.min(...boxes.map(b => b.bb.y1));
             const gap = 50;
 
+            // Find the widest box and use its center as the target
+            const widest = boxes.reduce((a, b) => (b.bb.x2 - b.bb.x1) > (a.bb.x2 - a.bb.x1) ? b : a);
+            const targetCenterX = widest.centerX;
+
             let targetY = minY;
             const targets = boxes.map(box => {
-                const result = { id: box.id, deltaY: targetY - box.bb.y1 };
+                const result = {
+                    id: box.id,
+                    deltaX: targetCenterX - box.centerX,
+                    deltaY: targetY - box.bb.y1
+                };
                 targetY += box.height + gap;
                 return result;
             });
@@ -156,7 +169,7 @@
                 const node = cy.getElementById(target.id);
                 node.descendants().filter(n => !n.isParent()).forEach(n => {
                     const pos = n.position();
-                    n.position({ x: pos.x, y: pos.y + target.deltaY });
+                    n.position({ x: pos.x + target.deltaX, y: pos.y + target.deltaY });
                 });
             });
         }
