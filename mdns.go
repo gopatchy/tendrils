@@ -145,6 +145,11 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 var mdnsServices = []string{
 	"_services._dns-sd._udp.local.",
 	"_skaarhoj._tcp.local.",
+	"_smb._tcp.local.",
+	"_airplay._tcp.local.",
+	"_qlab._tcp.local.",
+	"_blackmagic._tcp.local.",
+	"_hyperdeck_ctrl._tcp.local.",
 }
 
 func (t *Tendrils) runMDNSQuerier(ctx context.Context, iface net.Interface, conn *net.UDPConn) {
