@@ -8,12 +8,13 @@ import (
 )
 
 type Config struct {
-	Locations map[string]*Location `yaml:"locations" json:"locations"`
+	Locations []*Location `yaml:"locations" json:"locations"`
 }
 
 type Location struct {
-	Nodes    []string             `yaml:"nodes,omitempty" json:"nodes,omitempty"`
-	Children map[string]*Location `yaml:"children,omitempty" json:"children,omitempty"`
+	Name     string      `yaml:"name" json:"name"`
+	Nodes    []string    `yaml:"nodes,omitempty" json:"nodes,omitempty"`
+	Children []*Location `yaml:"children,omitempty" json:"children,omitempty"`
 }
 
 func LoadConfig(path string) (*Config, error) {

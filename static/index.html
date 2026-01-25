@@ -54,7 +54,7 @@
         let cy;
 
         function getLabel(node) {
-            if (node.names && node.names.length > 0) return node.names[0];
+            if (node.names && node.names.length > 0) return node.names.join('\n');
             return '??';
         }
 
@@ -75,11 +75,11 @@
             return !!(node.poe_budget);
         }
 
-        function buildLocationIndex(locations, parentId, nodeToLocation, locationMeta) {
+        function buildLocationIndex(locations, parentId, nodeToLocation, locationMeta, depth, orderBase) {
             if (!locations) return;
-            for (const [name, loc] of Object.entries(locations)) {
-                const locId = 'loc_' + name.replace(/[^a-zA-Z0-9]/g, '_');
-                locationMeta.set(locId, { name, parentId });
+            locations.forEach((loc, idx) => {
+                const locId = 'loc_' + loc.name.replace(/[^a-zA-Z0-9]/g, '_');
+                locationMeta.set(locId, { name: loc.name, parentId, depth, order: orderBase + idx });
 
                 if (loc.nodes) {
                     loc.nodes.forEach(nodeRef => {
@@ -88,9 +88,9 @@
                 }
 
                 if (loc.children) {
-                    buildLocationIndex(loc.children, locId, nodeToLocation, locationMeta);
+                    buildLocationIndex(loc.children, locId, nodeToLocation, locationMeta, depth + 1, 0);
                 }
-            }
+            });
         }
 
         function getLocationChain(locId, locationMeta) {
@@ -143,7 +143,7 @@
 
             const nodeToLocation = new Map();
             const locationMeta = new Map();
-            buildLocationIndex(config.locations, null, nodeToLocation, locationMeta);
+            buildLocationIndex(config.locations || [], null, nodeToLocation, locationMeta, 0, 0);
 
             nodes.forEach((n, i) => {
                 const id = 'n' + i;
@@ -219,6 +219,8 @@
             cy = cytoscape({
                 container: document.getElementById('cy'),
                 elements: elements,
+                autoungrabify: true,
+                autounselectify: true,
                 style: [
                     {
                         selector: 'node',

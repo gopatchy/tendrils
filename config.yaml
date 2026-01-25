@@ -1,62 +1,18 @@
 locations:
-  booth:
+  - name: stage
     children:
-      shared:
-        nodes:
-          - satellite-1
-
-      qlab:
-        nodes:
-          - qlab
-          - TX-QLAB-1
-          - TX-QLAB-2
-          - "SK_PTZEXTREMEV2 [457081]"
-          - "SK_RACKPRO2 [452514]"
-          - "d0:11:e5:17:03:0b" # pigeon
-
-      audio:
-       nodes:
-          - SQ-7
-
-      camera-control:
-        nodes:
-          - RX-CC-PREVIEW
-          - RX-CC-M16
-
-      video-control:
-        nodes:
-          - RX-VC-M4
-          - RX-VC-M16
-
-      control:
-        nodes:
-          - "sunset.local"
-          - RX-CONTROL-1
-        
-  house-left:
-    nodes:
-      - satellite-2
-
-  house-right:
-    nodes:
-      - satellite-3
-
-  stage:
-    children:
-
-      upstage:
+      - name: upstage
         children:
-
-          rack-lighting-2:
+          - name: rack-lighting-2
             nodes:
               - lighting-2
               - "48:59:00:41:00:29" # Pixie Driver 8k Port 1
               - "48:59:00:28:00:27" # Pixie Driver 8k Port 2
               - "48:59:00:3c:00:3e" # Pixie Driver 8k Port 5
 
-      downstage:
+      - name: downstage
         children:
-          rack-audio:
+          - name: rack-audio
             nodes:
               - audio
               - "MICS-A"
@@ -70,7 +26,7 @@ locations:
               - "MICS-E"
               - "00:0e:dd:ac:fc:7d" # MICS-E bridge interface
 
-          rack-lighting-1:
+          - name: rack-lighting-1
             nodes:
               - lighting-1
               - "48:59:00:27:00:27" # Pixie Driver 8k Port 1
@@ -82,7 +38,7 @@ locations:
               - "48:59:00:42:00:19" # Pixie Driver 8k Port 7
               - "48:59:00:44:00:19" # Pixie Driver 8k Port 8
 
-          rack-video:
+          - name: rack-video
             nodes:
               - video
               - "ATEM 2 M/E Constellation 4K"
@@ -95,3 +51,47 @@ locations:
               - TX-M16
               - TX-MISC
               - TX-PREVIEW
+
+  - name: house
+    children:
+      - name: house-left
+        nodes:
+          - satellite-2
+
+      - name: house-right
+        nodes:
+          - satellite-3
+
+  - name: booth
+    children:
+      - name: shared
+        nodes:
+          - satellite-1
+
+      - name: qlab
+        nodes:
+          - qlab
+          - TX-QLAB-1
+          - TX-QLAB-2
+          - "SK_PTZEXTREMEV2 [457081]"
+          - "SK_RACKPRO2 [452514]"
+          - "d0:11:e5:17:03:0b" # pigeon
+
+      - name: audio
+        nodes:
+          - SQ-7
+
+      - name: camera-control
+        nodes:
+          - RX-CC-PREVIEW
+          - RX-CC-M16
+
+      - name: video-control
+        nodes:
+          - RX-VC-M4
+          - RX-VC-M16
+
+      - name: control
+        nodes:
+          - "sunset.local"
+          - RX-CONTROL-1
