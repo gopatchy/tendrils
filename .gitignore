@@ -1,2 +1,5 @@
 .claude/*
 log
+*.swp
+*.swo
+*~
