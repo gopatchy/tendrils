@@ -77,11 +77,25 @@ func (t *Tendrils) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGUSR1)
+	sigUsr1Ch := make(chan os.Signal, 1)
+	signal.Notify(sigUsr1Ch, syscall.SIGUSR1)
 	go func() {
-		for range sigCh {
+		for range sigUsr1Ch {
 			t.nodes.LogAll()
+		}
+	}()
+
+	sigHupCh := make(chan os.Signal, 1)
+	signal.Notify(sigHupCh, syscall.SIGHUP)
+	go func() {
+		for range sigHupCh {
+			cfg, err := LoadConfig(t.ConfigFile)
+			if err != nil {
+				log.Printf("[ERROR] failed to reload config: %v", err)
+				continue
+			}
+			t.config = cfg
+			log.Printf("reloaded config from %s", t.ConfigFile)
 		}
 	}()
 
