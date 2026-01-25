@@ -27,7 +27,7 @@ func extractSkaarhojName(s string) string {
 }
 
 func isNetaudioService(s string) bool {
-	return strings.Contains(s, "_netaudio-cmc._udp") || strings.Contains(s, "_netaudio-arc._udp")
+	return strings.Contains(s, "_netaudio-cmc._udp") || strings.Contains(s, "_netaudio-arc._udp") || strings.Contains(s, "_netaudio-chan._udp")
 }
 
 func extractNetaudioName(s string) string {
@@ -36,6 +36,18 @@ func extractNetaudioName(s string) string {
 		if idx > 0 {
 			return strings.ReplaceAll(s[:idx], "\\", "")
 		}
+	}
+	return ""
+}
+
+func extractNetaudioChanDevice(s string) string {
+	idx := strings.Index(s, "._netaudio-chan._udp")
+	if idx <= 0 {
+		return ""
+	}
+	name := strings.ReplaceAll(s[:idx], "\\", "")
+	if atIdx := strings.Index(name, "@"); atIdx >= 0 {
+		return name[atIdx+1:]
 	}
 	return ""
 }
@@ -129,6 +141,9 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 			}
 			if isNetaudioService(r.Hdr.Name) {
 				name := extractNetaudioName(r.Hdr.Name)
+				if name == "" {
+					name = extractNetaudioChanDevice(r.Hdr.Name)
+				}
 				if name != "" {
 					netaudioNames[name] = true
 					if target != "" {
@@ -195,6 +210,7 @@ var mdnsServices = []string{
 	"_hyperdeck_ctrl._tcp.local.",
 	"_netaudio-cmc._udp.local.",
 	"_netaudio-arc._udp.local.",
+	"_netaudio-chan._udp.local.",
 }
 
 func (t *Tendrils) runMDNSQuerier(ctx context.Context, iface net.Interface, conn *net.UDPConn) {
