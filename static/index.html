@@ -75,11 +75,19 @@
             return !!(node.poe_budget);
         }
 
+        let anonCounter = 0;
+
         function buildLocationIndex(locations, parentId, nodeToLocation, locationMeta, depth, orderBase) {
             if (!locations) return;
             locations.forEach((loc, idx) => {
-                const locId = 'loc_' + loc.name.replace(/[^a-zA-Z0-9]/g, '_');
-                locationMeta.set(locId, { name: loc.name, parentId, depth, order: orderBase + idx });
+                let locId;
+                if (loc.name) {
+                    locId = 'loc_' + loc.name.replace(/[^a-zA-Z0-9]/g, '_');
+                    locationMeta.set(locId, { name: loc.name, parentId, depth, order: orderBase + idx, anonymous: false });
+                } else {
+                    locId = 'loc_anon_' + (anonCounter++);
+                    locationMeta.set(locId, { name: '', parentId, depth, order: orderBase + idx, anonymous: true });
+                }
 
                 if (loc.nodes) {
                     loc.nodes.forEach(nodeRef => {
@@ -104,7 +112,8 @@
             return chain;
         }
 
-        let topLevelOrder = [];
+        let locationMeta = new Map();
+        let usedLocations = new Set();
 
         function doLayout() {
             const layout = cy.layout({
@@ -123,58 +132,100 @@
                     'elk.hierarchyHandling': 'INCLUDE_CHILDREN'
                 },
                 stop: function() {
-                    reorderTopLevel();
+                    reorderLocations();
                     cy.fit(50);
                 }
             });
             layout.run();
         }
 
-        function reorderTopLevel() {
-            if (topLevelOrder.length < 2) return;
+        function reorderLocations() {
+            const locationsByParent = new Map();
+            locationMeta.forEach((meta, locId) => {
+                if (!usedLocations.has(locId)) return;
+                const parentKey = meta.parentId || '__root__';
+                if (!locationsByParent.has(parentKey)) {
+                    locationsByParent.set(parentKey, []);
+                }
+                locationsByParent.get(parentKey).push({ id: locId, order: meta.order, depth: meta.depth });
+            });
 
-            const boxes = topLevelOrder.map(locId => {
+            const depths = new Set();
+            locationMeta.forEach((meta, locId) => {
+                if (usedLocations.has(locId)) depths.add(meta.depth);
+            });
+            const sortedDepths = Array.from(depths).sort((a, b) => b - a);
+
+            sortedDepths.forEach(depth => {
+                const isVertical = depth % 2 === 0;
+
+                locationsByParent.forEach((siblings, parentKey) => {
+                    const locationsAtDepth = siblings.filter(s => s.depth === depth);
+                    if (locationsAtDepth.length < 2) return;
+
+                    locationsAtDepth.sort((a, b) => a.order - b.order);
+                    reorderSiblings(locationsAtDepth.map(l => l.id), isVertical);
+                });
+            });
+        }
+
+        function reorderSiblings(locIds, isVertical) {
+            const boxes = locIds.map(locId => {
                 const node = cy.getElementById(locId);
                 if (node.empty()) return null;
                 const bb = node.boundingBox();
                 return {
                     id: locId,
                     bb: bb,
+                    width: bb.x2 - bb.x1,
                     height: bb.y2 - bb.y1,
-                    centerX: (bb.x1 + bb.x2) / 2
+                    centerX: (bb.x1 + bb.x2) / 2,
+                    centerY: (bb.y1 + bb.y2) / 2
                 };
             }).filter(b => b !== null);
 
             if (boxes.length < 2) return;
 
-            const minY = Math.min(...boxes.map(b => b.bb.y1));
             const gap = 50;
 
-            // Find the widest box and use its center as the target
-            const widest = boxes.reduce((a, b) => (b.bb.x2 - b.bb.x1) > (a.bb.x2 - a.bb.x1) ? b : a);
-            const targetCenterX = widest.centerX;
+            if (isVertical) {
+                const widest = boxes.reduce((a, b) => b.width > a.width ? b : a);
+                const targetCenterX = widest.centerX;
+                const minY = Math.min(...boxes.map(b => b.bb.y1));
 
-            let targetY = minY;
-            const targets = boxes.map(box => {
-                const result = {
-                    id: box.id,
-                    deltaX: targetCenterX - box.centerX,
-                    deltaY: targetY - box.bb.y1
-                };
-                targetY += box.height + gap;
-                return result;
-            });
-
-            targets.forEach(target => {
-                const node = cy.getElementById(target.id);
-                node.descendants().filter(n => !n.isParent()).forEach(n => {
-                    const pos = n.position();
-                    n.position({ x: pos.x + target.deltaX, y: pos.y + target.deltaY });
+                let targetY = minY;
+                boxes.forEach(box => {
+                    const deltaX = targetCenterX - box.centerX;
+                    const deltaY = targetY - box.bb.y1;
+                    moveLocationAndDescendants(box.id, deltaX, deltaY);
+                    targetY += box.height + gap;
                 });
+            } else {
+                const tallest = boxes.reduce((a, b) => b.height > a.height ? b : a);
+                const targetCenterY = tallest.centerY;
+                const minX = Math.min(...boxes.map(b => b.bb.x1));
+
+                let targetX = minX;
+                boxes.forEach(box => {
+                    const deltaX = targetX - box.bb.x1;
+                    const deltaY = targetCenterY - box.centerY;
+                    moveLocationAndDescendants(box.id, deltaX, deltaY);
+                    targetX += box.width + gap;
+                });
+            }
+        }
+
+        function moveLocationAndDescendants(locId, deltaX, deltaY) {
+            if (deltaX === 0 && deltaY === 0) return;
+            const node = cy.getElementById(locId);
+            node.descendants().filter(n => !n.isParent()).forEach(n => {
+                const pos = n.position();
+                n.position({ x: pos.x + deltaX, y: pos.y + deltaY });
             });
         }
 
         async function init() {
+            anonCounter = 0;
             const [statusResp, configResp] = await Promise.all([
                 fetch('/api/status'),
                 fetch('/api/config')
@@ -193,7 +244,7 @@
             const switchIds = new Set();
 
             const nodeToLocation = new Map();
-            const locationMeta = new Map();
+            locationMeta = new Map();
             buildLocationIndex(config.locations || [], null, nodeToLocation, locationMeta, 0, 0);
 
             nodes.forEach((n, i) => {
@@ -202,7 +253,7 @@
                 if (isSwitch(n)) switchIds.add(id);
             });
 
-            const usedLocations = new Set();
+            usedLocations = new Set();
             const nodeParents = new Map();
 
             nodes.forEach((n, i) => {
@@ -231,7 +282,8 @@
                         id: locId,
                         label: meta.name,
                         parent: meta.parentId && usedLocations.has(meta.parentId) ? meta.parentId : null,
-                        isLocation: true
+                        isLocation: true,
+                        isAnonymous: meta.anonymous
                     }
                 });
             });
@@ -266,18 +318,6 @@
                     }
                 });
             });
-
-            // Find top-level locations and sort by config order
-            topLevelOrder = sortedLocations
-                .filter(locId => {
-                    const meta = locationMeta.get(locId);
-                    return !meta.parentId;
-                })
-                .sort((a, b) => {
-                    const metaA = locationMeta.get(a);
-                    const metaB = locationMeta.get(b);
-                    return metaA.order - metaB.order;
-                });
 
             cy = cytoscape({
                 container: document.getElementById('cy'),
@@ -341,6 +381,14 @@
                             'text-halign': 'center',
                             'text-margin-y': 10,
                             'padding': 30
+                        }
+                    },
+                    {
+                        selector: 'node[?isAnonymous]',
+                        style: {
+                            'background-opacity': 0,
+                            'border-width': 0,
+                            'padding': 10
                         }
                     },
                     {
