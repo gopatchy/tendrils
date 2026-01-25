@@ -55,6 +55,18 @@
 
         function getLabel(node) {
             if (node.names && node.names.length > 0) return node.names.join('\n');
+            if (node.interfaces && node.interfaces.length > 0) {
+                const ips = [];
+                node.interfaces.forEach(iface => {
+                    if (iface.ips) iface.ips.forEach(ip => ips.push(ip));
+                });
+                if (ips.length > 0) return ips.join('\n');
+                const macs = [];
+                node.interfaces.forEach(iface => {
+                    if (iface.mac) macs.push(iface.mac);
+                });
+                if (macs.length > 0) return macs.join('\n');
+            }
             return '??';
         }
 
@@ -298,7 +310,8 @@
                         id: id,
                         label: getLabel(n),
                         isSwitch: sw,
-                        parent: parent
+                        parent: parent,
+                        rawData: n
                     }
                 });
             });
@@ -314,7 +327,8 @@
                         source: idA,
                         target: idB,
                         sourceLabel: link.interface_a || '',
-                        targetLabel: link.interface_b || ''
+                        targetLabel: link.interface_b || '',
+                        rawData: link
                     }
                 });
             });
@@ -412,6 +426,32 @@
                     }
                 ],
                 layout: { name: 'preset' }
+            });
+
+            cy.on('click', 'node', function(evt) {
+                const node = evt.target;
+                const rawData = node.data('rawData');
+                if (rawData && !node.data('isLocation')) {
+                    const json = JSON.stringify(rawData, null, 2);
+                    navigator.clipboard.writeText(json).then(() => {
+                        console.log('Copied node data');
+                    }).catch(err => {
+                        console.error('Copy failed:', err);
+                    });
+                }
+            });
+
+            cy.on('click', 'edge', function(evt) {
+                const edge = evt.target;
+                const rawData = edge.data('rawData');
+                if (rawData) {
+                    const json = JSON.stringify(rawData, null, 2);
+                    navigator.clipboard.writeText(json).then(() => {
+                        console.log('Copied link data');
+                    }).catch(err => {
+                        console.error('Copy failed:', err);
+                    });
+                }
             });
 
             doLayout();

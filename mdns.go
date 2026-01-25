@@ -26,6 +26,20 @@ func extractSkaarhojName(s string) string {
 	return strings.ReplaceAll(s[:idx], "\\", "")
 }
 
+func isNetaudioService(s string) bool {
+	return strings.Contains(s, "_netaudio-cmc._udp") || strings.Contains(s, "_netaudio-arc._udp")
+}
+
+func extractNetaudioName(s string) string {
+	for _, suffix := range []string{"._netaudio-cmc._udp", "._netaudio-arc._udp"} {
+		idx := strings.Index(s, suffix)
+		if idx > 0 {
+			return strings.ReplaceAll(s[:idx], "\\", "")
+		}
+	}
+	return ""
+}
+
 func (t *Tendrils) listenMDNS(ctx context.Context, iface net.Interface) {
 	addr, err := net.ResolveUDPAddr("udp4", mdnsAddr)
 	if err != nil {
@@ -86,6 +100,7 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 	aRecords := map[string]net.IP{}
 	srvTargets := map[string]string{}
 	skaarhojNames := map[string]bool{}
+	netaudioNames := map[string]bool{}
 
 	for _, rr := range allRecords {
 		switch r := rr.(type) {
@@ -112,6 +127,15 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 					}
 				}
 			}
+			if isNetaudioService(r.Hdr.Name) {
+				name := extractNetaudioName(r.Hdr.Name)
+				if name != "" {
+					netaudioNames[name] = true
+					if target != "" {
+						srvTargets[name] = target
+					}
+				}
+			}
 		}
 	}
 
@@ -129,7 +153,26 @@ func (t *Tendrils) processMDNSResponse(ifaceName string, srcIP net.IP, msg *dns.
 		t.nodes.Update(nil, nil, []net.IP{ip}, "", name, "skaarhoj")
 	}
 
-	if len(skaarhojNames) == 0 {
+	for name := range netaudioNames {
+		var ip net.IP
+		var targetHostname string
+		if target, ok := srvTargets[name]; ok {
+			ip = aRecords[target]
+			targetHostname = strings.TrimSuffix(target, ".local")
+		}
+		if ip == nil {
+			ip = srcIP
+		}
+		if t.DebugMDNS {
+			log.Printf("[mdns] %s: netaudio %s -> %s (target %s)", ifaceName, name, ip, targetHostname)
+		}
+		t.nodes.Update(nil, nil, []net.IP{ip}, "", name, "mdns-srv")
+		if targetHostname != "" && targetHostname != name {
+			t.nodes.Update(nil, nil, []net.IP{ip}, "", targetHostname, "mdns-srv")
+		}
+	}
+
+	if len(skaarhojNames) == 0 && len(netaudioNames) == 0 {
 		for aName, ip := range aRecords {
 			hostname := strings.TrimSuffix(aName, ".local")
 			if hostname != "" && hostname != aName && !strings.Contains(hostname, "in-addr") && !strings.Contains(hostname, "ip6.arpa") {
@@ -150,6 +193,8 @@ var mdnsServices = []string{
 	"_qlab._tcp.local.",
 	"_blackmagic._tcp.local.",
 	"_hyperdeck_ctrl._tcp.local.",
+	"_netaudio-cmc._udp.local.",
+	"_netaudio-arc._udp.local.",
 }
 
 func (t *Tendrils) runMDNSQuerier(ctx context.Context, iface net.Interface, conn *net.UDPConn) {
