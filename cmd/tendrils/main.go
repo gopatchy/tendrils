@@ -31,7 +31,7 @@ func main() {
 	debugBMD := flag.Bool("debug-bmd", false, "debug Blackmagic discovery")
 	debugShure := flag.Bool("debug-shure", false, "debug Shure discovery")
 	debugYamaha := flag.Bool("debug-yamaha", false, "debug Yamaha discovery")
-	httpPort := flag.String("http", ":80", "HTTP server port (empty to disable)")
+	enableHTTPS := flag.Bool("https", false, "enable HTTPS server on port 443")
 	flag.Parse()
 
 	t := tendrils.New()
@@ -59,6 +59,6 @@ func main() {
 	t.DebugBMD = *debugBMD
 	t.DebugShure = *debugShure
 	t.DebugYamaha = *debugYamaha
-	t.HTTPPort = *httpPort
+	t.EnableHTTPS = *enableHTTPS
 	t.Run()
 }

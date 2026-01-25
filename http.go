@@ -1,12 +1,26 @@
 package tendrils
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"log"
+	"math/big"
 	"net/http"
+	"os"
 	"sort"
+	"time"
 
 	"github.com/fvbommel/sortorder"
+)
+
+const (
+	certFile = "cert.pem"
+	keyFile  = "key.pem"
 )
 
 type StatusResponse struct {
@@ -18,7 +32,12 @@ type StatusResponse struct {
 }
 
 func (t *Tendrils) startHTTPServer() {
-	if t.HTTPPort == "" {
+	if !t.EnableHTTPS {
+		return
+	}
+
+	if err := ensureCert(); err != nil {
+		log.Printf("[ERROR] failed to ensure certificate: %v", err)
 		return
 	}
 
@@ -27,12 +46,73 @@ func (t *Tendrils) startHTTPServer() {
 	mux.HandleFunc("/api/config", t.handleAPIConfig)
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
-	log.Printf("[http] listening on %s", t.HTTPPort)
+	log.Printf("[https] listening on :443")
 	go func() {
-		if err := http.ListenAndServe(t.HTTPPort, mux); err != nil {
-			log.Printf("[ERROR] http server failed: %v", err)
+		if err := http.ListenAndServeTLS(":443", certFile, keyFile, mux); err != nil {
+			log.Printf("[ERROR] https server failed: %v", err)
 		}
 	}()
+}
+
+func ensureCert() error {
+	if _, err := os.Stat(certFile); err == nil {
+		if _, err := os.Stat(keyFile); err == nil {
+			return nil
+		}
+	}
+
+	log.Printf("[https] generating self-signed certificate")
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return err
+	}
+
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Tendrils"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(10, 0, 0),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return err
+	}
+
+	certOut, err := os.Create(certFile)
+	if err != nil {
+		return err
+	}
+	defer certOut.Close()
+	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+		return err
+	}
+
+	keyOut, err := os.Create(keyFile)
+	if err != nil {
+		return err
+	}
+	defer keyOut.Close()
+	keyDER, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return err
+	}
+	if err := pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (t *Tendrils) handleAPIStatus(w http.ResponseWriter, r *http.Request) {

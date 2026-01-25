@@ -60,7 +60,7 @@ type Tendrils struct {
 	DebugBMD      bool
 	DebugShure    bool
 	DebugYamaha   bool
-	HTTPPort      string
+	EnableHTTPS   bool
 }
 
 func New() *Tendrils {
