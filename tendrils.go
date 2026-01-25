@@ -60,7 +60,6 @@ type Tendrils struct {
 	DebugBMD      bool
 	DebugShure    bool
 	DebugYamaha   bool
-	EnableHTTPS   bool
 }
 
 func New() *Tendrils {
@@ -101,10 +100,9 @@ func (t *Tendrils) Run() {
 
 	cfg, err := LoadConfig(t.ConfigFile)
 	if err != nil {
-		log.Printf("[ERROR] failed to load config: %v", err)
-	} else {
-		t.config = cfg
+		log.Fatalf("[ERROR] failed to load config: %v", err)
 	}
+	t.config = cfg
 
 	t.populateLocalAddresses()
 	t.startHTTPServer()

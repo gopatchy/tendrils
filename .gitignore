@@ -3,3 +3,5 @@ log
 *.swp
 *.swo
 *~
+cert.pem
+key.pem

@@ -8,7 +8,12 @@ locations:
         - lighting-2
         - "48:59:00:41:00:29" # Pixie Driver 8k Port 1
         - "48:59:00:28:00:27" # Pixie Driver 8k Port 2
+        - "48:59:00:43:00:29" # Pixie Driver 8k Port 3
+        - "48:59:00:42:00:29" # Pixie Driver 8k Port 4
         - "48:59:00:3c:00:3e" # Pixie Driver 8k Port 5
+        - "48:59:00:3f:00:3e" # Pixie Driver 8k Port 6
+        - "48:59:00:25:00:3e" # Pixie Driver 8k Port 7
+        - "48:59:00:41:00:3e" # Pixie Driver 8k Port 8
         - ART9 # Cyc
         - ART10 # Cyc
         - ART11 # Cyc
@@ -140,6 +145,7 @@ locations:
       - name: Sound Control
         nodes:
         - SQ-7
+        - "00:04:c4:15:07:a4" # SQ-7 bridge port
         - BT
   
       - name: Camera Control

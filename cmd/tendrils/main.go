@@ -8,7 +8,7 @@ import (
 
 func main() {
 	iface := flag.String("i", "", "interface to use")
-	configFile := flag.String("config", "", "path to YAML config file")
+	configFile := flag.String("config", "config.yaml", "path to YAML config file")
 	noARP := flag.Bool("no-arp", false, "disable ARP discovery")
 	noLLDP := flag.Bool("no-lldp", false, "disable LLDP discovery")
 	noSNMP := flag.Bool("no-snmp", false, "disable SNMP discovery")
@@ -31,7 +31,6 @@ func main() {
 	debugBMD := flag.Bool("debug-bmd", false, "debug Blackmagic discovery")
 	debugShure := flag.Bool("debug-shure", false, "debug Shure discovery")
 	debugYamaha := flag.Bool("debug-yamaha", false, "debug Yamaha discovery")
-	enableHTTPS := flag.Bool("https", false, "enable HTTPS server on port 443")
 	flag.Parse()
 
 	t := tendrils.New()
@@ -59,6 +58,5 @@ func main() {
 	t.DebugBMD = *debugBMD
 	t.DebugShure = *debugShure
 	t.DebugYamaha = *debugYamaha
-	t.EnableHTTPS = *enableHTTPS
 	t.Run()
 }

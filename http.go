@@ -32,10 +32,6 @@ type StatusResponse struct {
 }
 
 func (t *Tendrils) startHTTPServer() {
-	if !t.EnableHTTPS {
-		return
-	}
-
 	if err := ensureCert(); err != nil {
 		log.Printf("[ERROR] failed to ensure certificate: %v", err)
 		return
