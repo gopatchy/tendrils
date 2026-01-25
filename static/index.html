@@ -104,10 +104,12 @@
             return chain;
         }
 
+        let topLevelOrder = [];
+
         function doLayout() {
-            cy.layout({
+            const layout = cy.layout({
                 name: 'elk',
-                fit: true,
+                fit: false,
                 padding: 50,
                 nodeDimensionsIncludeLabels: true,
                 elk: {
@@ -119,8 +121,44 @@
                     'elk.layered.spacing.nodeNodeBetweenLayers': 100,
                     'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
                     'elk.hierarchyHandling': 'INCLUDE_CHILDREN'
+                },
+                stop: function() {
+                    reorderTopLevel();
+                    cy.fit(50);
                 }
-            }).run();
+            });
+            layout.run();
+        }
+
+        function reorderTopLevel() {
+            if (topLevelOrder.length < 2) return;
+
+            const boxes = topLevelOrder.map(locId => {
+                const node = cy.getElementById(locId);
+                if (node.empty()) return null;
+                const bb = node.boundingBox();
+                return { id: locId, bb: bb, height: bb.y2 - bb.y1 };
+            }).filter(b => b !== null);
+
+            if (boxes.length < 2) return;
+
+            const minY = Math.min(...boxes.map(b => b.bb.y1));
+            const gap = 50;
+
+            let targetY = minY;
+            const targets = boxes.map(box => {
+                const result = { id: box.id, deltaY: targetY - box.bb.y1 };
+                targetY += box.height + gap;
+                return result;
+            });
+
+            targets.forEach(target => {
+                const node = cy.getElementById(target.id);
+                node.descendants().filter(n => !n.isParent()).forEach(n => {
+                    const pos = n.position();
+                    n.position({ x: pos.x, y: pos.y + target.deltaY });
+                });
+            });
         }
 
         async function init() {
@@ -215,6 +253,18 @@
                     }
                 });
             });
+
+            // Find top-level locations and sort by config order
+            topLevelOrder = sortedLocations
+                .filter(locId => {
+                    const meta = locationMeta.get(locId);
+                    return !meta.parentId;
+                })
+                .sort((a, b) => {
+                    const metaA = locationMeta.get(a);
+                    const metaB = locationMeta.get(b);
+                    return metaA.order - metaB.order;
+                });
 
             cy = cytoscape({
                 container: document.getElementById('cy'),
