@@ -49,7 +49,12 @@
       "Bash(gofmt:*)",
       "Bash(wc:*)",
       "Bash(ls:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(sudo timeout 45 go run:*)",
+      "Bash(git stash drop:*)",
+      "Bash(git remote set-url:*)",
+      "WebFetch(domain:iphostmonitor.com)",
+      "WebFetch(domain:mibbrowser.online)"
     ]
   }
 }
