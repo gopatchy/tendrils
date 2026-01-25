@@ -229,10 +229,14 @@ func (t *Tendrils) runMDNSQuerier(ctx context.Context, iface net.Interface, conn
 	}
 }
 
+var mdnsQueryOffset int
+
 func (t *Tendrils) sendMDNSQueries(ifaceName string, conn *net.UDPConn) {
 	dest := &net.UDPAddr{IP: net.IPv4(224, 0, 0, 251), Port: 5353}
 
-	for _, service := range mdnsServices {
+	n := len(mdnsServices)
+	for i := 0; i < n; i++ {
+		service := mdnsServices[(i+mdnsQueryOffset)%n]
 		msg := new(dns.Msg)
 		msg.SetQuestion(service, dns.TypePTR)
 		msg.RecursionDesired = false
@@ -244,6 +248,7 @@ func (t *Tendrils) sendMDNSQueries(ifaceName string, conn *net.UDPConn) {
 
 		conn.WriteToUDP(data, dest)
 	}
+	mdnsQueryOffset++
 
 	if t.DebugMDNS {
 		log.Printf("[mdns] %s: sent queries for %d services", ifaceName, len(mdnsServices))
