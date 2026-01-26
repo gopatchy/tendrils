@@ -866,9 +866,9 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 				if sub.TxChannelName != "" {
 					typeStr := sub.ChannelType.String()
 					if typeStr != "" {
-						channelInfo = fmt.Sprintf("%s->%02d:%s", sub.TxChannelName, sub.RxChannel, typeStr)
+						channelInfo = fmt.Sprintf("%s → %02d [%s]", sub.TxChannelName, sub.RxChannel, typeStr)
 					} else {
-						channelInfo = fmt.Sprintf("%s->%02d", sub.TxChannelName, sub.RxChannel)
+						channelInfo = fmt.Sprintf("%s → %02d", sub.TxChannelName, sub.RxChannel)
 					}
 				}
 				sourceNode := t.nodes.GetOrCreateByName(txDeviceName)

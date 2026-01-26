@@ -141,14 +141,18 @@
             border: 1px dashed #c9f;
         }
 
-        .node .switch-port .error-info,
-        .node .uplink .error-info {
+        .node .switch-port .link-stats-wrapper,
+        .node .uplink .link-stats-wrapper {
             display: none;
             position: absolute;
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            margin-bottom: 4px;
+            padding-bottom: 8px;
+        }
+
+        .node .switch-port .link-stats,
+        .node .uplink .link-stats {
             font-size: 10px;
             white-space: pre;
             text-align: left;
@@ -159,8 +163,7 @@
             line-height: 1.4;
         }
 
-
-        .error-info .lbl,
+        .link-stats .lbl,
         .node-info .lbl,
         .dante-info .lbl,
         .dante-detail .lbl,
@@ -180,8 +183,8 @@
             width: 120px;
         }
 
-        .node .switch-port:hover .error-info,
-        .node .uplink:hover .error-info {
+        .node .switch-port:hover .link-stats-wrapper,
+        .node .uplink:hover .link-stats-wrapper {
             display: block;
             will-change: transform;
         }
@@ -355,13 +358,16 @@
             background: #358;
         }
 
-        .node .dante-info .dante-detail {
+        .node .dante-info .dante-detail-wrapper {
             display: none;
             position: absolute;
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            margin-bottom: 4px;
+            padding-bottom: 8px;
+        }
+
+        .node .dante-info .dante-detail {
             font-size: 10px;
             white-space: pre;
             text-align: left;
@@ -371,7 +377,6 @@
             padding: 6px 8px;
             line-height: 1.4;
         }
-
 
         .node .dante-info::after {
             content: '';
@@ -387,8 +392,9 @@
             z-index: 100;
         }
 
-        .node .dante-info:hover .dante-detail {
+        .node .dante-info:hover .dante-detail-wrapper {
             display: block;
+            will-change: transform;
         }
 
         body.dante-mode .node.dante-tx .dante-info,
@@ -405,11 +411,11 @@
             bottom: -8px;
         }
 
-        body.dante-mode .node.dante-tx.dante-rx .dante-info.rx-info .dante-detail {
+        body.dante-mode .node.dante-tx.dante-rx .dante-info.rx-info .dante-detail-wrapper {
             bottom: auto;
             top: 100%;
-            margin-bottom: 0;
-            margin-top: 4px;
+            padding-bottom: 0;
+            padding-top: 8px;
         }
 
 
@@ -460,13 +466,16 @@
             background: #245;
         }
 
-        .node .artnet-info .artnet-detail {
+        .node .artnet-info .artnet-detail-wrapper {
             display: none;
             position: absolute;
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            margin-bottom: 4px;
+            padding-bottom: 8px;
+        }
+
+        .node .artnet-info .artnet-detail {
             font-size: 10px;
             white-space: pre;
             text-align: left;
@@ -476,7 +485,6 @@
             padding: 6px 8px;
             line-height: 1.4;
         }
-
 
         .node .artnet-info::after {
             content: '';
@@ -492,8 +500,9 @@
             z-index: 100;
         }
 
-        .node .artnet-info:hover .artnet-detail {
+        .node .artnet-info:hover .artnet-detail-wrapper {
             display: block;
+            will-change: transform;
         }
 
         body.artnet-mode .node.artnet-out .artnet-info,
@@ -510,11 +519,11 @@
             bottom: -8px;
         }
 
-        body.artnet-mode .node.artnet-out.artnet-in .artnet-info.in-info .artnet-detail {
+        body.artnet-mode .node.artnet-out.artnet-in .artnet-info.in-info .artnet-detail-wrapper {
             bottom: auto;
             top: 100%;
-            margin-bottom: 0;
-            margin-top: 4px;
+            padding-bottom: 0;
+            padding-top: 8px;
         }
 
 
@@ -549,13 +558,16 @@
             z-index: 10;
         }
 
-        .node .sacn-info .sacn-detail {
+        .node .sacn-info .sacn-detail-wrapper {
             display: none;
             position: absolute;
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            margin-bottom: 4px;
+            padding-bottom: 8px;
+        }
+
+        .node .sacn-info .sacn-detail {
             font-size: 10px;
             white-space: pre;
             text-align: left;
@@ -565,7 +577,6 @@
             padding: 6px 8px;
             line-height: 1.4;
         }
-
 
         .node .sacn-info::after {
             content: '';
@@ -581,8 +592,9 @@
             z-index: 100;
         }
 
-        .node .sacn-info:hover .sacn-detail {
+        .node .sacn-info:hover .sacn-detail-wrapper {
             display: block;
+            will-change: transform;
         }
 
         body.sacn-mode .node.sacn-consumer .sacn-info {
@@ -610,56 +622,51 @@
             z-index: 100;
         }
 
-        .node .node-info {
+        .node .node-info-wrapper {
             display: none;
             position: absolute;
             top: 100%;
             left: 50%;
             transform: translateX(-50%);
-            margin-top: 4px;
+            padding-top: 8px;
+            z-index: 1000;
+        }
+
+        .node .node-info {
             background: #333;
             border: 1px solid #555;
             border-radius: 6px;
             padding: 6px 8px;
             font-size: 10px;
             white-space: pre;
-            z-index: 1000;
             text-align: left;
             line-height: 1.4;
             cursor: pointer;
         }
 
-        .node .node-info::before {
-            content: '';
-            position: absolute;
-            bottom: 100%;
-            left: 0;
-            right: 0;
-            height: 8px;
-        }
 
-        .node:hover .node-info {
+        .node:hover .node-info-wrapper {
             display: block;
             will-change: transform;
         }
 
-        body.dante-mode .node:not(.dante-tx):not(.dante-rx):hover .node-info {
+        body.dante-mode .node:not(.dante-tx):not(.dante-rx):hover .node-info-wrapper {
             display: none;
         }
 
-        body.artnet-mode .node:not(.artnet-out):not(.artnet-in):hover .node-info {
+        body.artnet-mode .node:not(.artnet-out):not(.artnet-in):hover .node-info-wrapper {
             display: none;
         }
 
-        body.sacn-mode .node:not(.sacn-consumer):hover .node-info {
+        body.sacn-mode .node:not(.sacn-consumer):hover .node-info-wrapper {
             display: none;
         }
 
-        .node:has(.switch-port:hover) .node-info,
-        .node:has(.uplink:hover) .node-info,
-        .node:has(.dante-info:hover) .node-info,
-        .node:has(.artnet-info:hover) .node-info,
-        .node:has(.sacn-info:hover) .node-info {
+        .node:has(.switch-port:hover) .node-info-wrapper,
+        .node:has(.uplink:hover) .node-info-wrapper,
+        .node:has(.dante-info:hover) .node-info-wrapper,
+        .node:has(.artnet-info:hover) .node-info-wrapper,
+        .node:has(.sacn-info:hover) .node-info-wrapper {
             display: none;
         }
 
@@ -1137,18 +1144,28 @@
                 if (speedClass) portEl.classList.add(speedClass);
                 const errIn = switchConnection.errors?.in || 0;
                 const errOut = switchConnection.errors?.out || 0;
+                const statsWrapper = document.createElement('div');
+                statsWrapper.className = 'link-stats-wrapper';
                 const statsInfo = document.createElement('div');
-                statsInfo.className = 'error-info';
+                statsInfo.className = 'link-stats';
                 let statsHtml = '<span class="lbl">LINK</span> ' + formatLinkSpeed(switchConnection.speed);
                 statsHtml += '\n<span class="lbl">ERR</span> RX ' + errIn + ' / TX ' + errOut;
+                let statsPlain = 'LINK: ' + formatLinkSpeed(switchConnection.speed);
+                statsPlain += '\nERR: RX ' + errIn + ' / TX ' + errOut;
                 if (switchConnection.rates) {
                     const r = switchConnection.rates;
                     statsHtml += '\n<span class="lbl">RX</span> ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
                     statsHtml += '\n<span class="lbl">TX</span> ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
+                    statsPlain += '\nRX: ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
+                    statsPlain += '\nTX: ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
                 }
                 statsInfo.innerHTML = statsHtml;
-                statsInfo.addEventListener('click', (e) => e.stopPropagation());
-                portEl.appendChild(statsInfo);
+                statsInfo.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(statsPlain);
+                });
+                statsWrapper.appendChild(statsInfo);
+                portEl.appendChild(statsWrapper);
                 div.appendChild(portEl);
             }
 
@@ -1156,6 +1173,8 @@
             labelEl.textContent = getLabel(node);
             div.appendChild(labelEl);
 
+            const nodeInfoWrapper = document.createElement('div');
+            nodeInfoWrapper.className = 'node-info-wrapper';
             const nodeInfo = document.createElement('div');
             nodeInfo.className = 'node-info';
             if (node.interfaces) {
@@ -1186,7 +1205,8 @@
                 }
             }
             if (nodeInfo.textContent) {
-                div.appendChild(nodeInfo);
+                nodeInfoWrapper.appendChild(nodeInfo);
+                div.appendChild(nodeInfoWrapper);
             }
 
             if (isSwitch(node) && uplinkInfo === 'ROOT') {
@@ -1202,18 +1222,28 @@
                 if (speedClass) uplinkEl.classList.add(speedClass);
                 const errIn = uplinkInfo.errors?.in || 0;
                 const errOut = uplinkInfo.errors?.out || 0;
+                const statsWrapper = document.createElement('div');
+                statsWrapper.className = 'link-stats-wrapper';
                 const statsInfo = document.createElement('div');
-                statsInfo.className = 'error-info';
+                statsInfo.className = 'link-stats';
                 let statsHtml = '<span class="lbl">LINK</span> ' + formatLinkSpeed(uplinkInfo.speed);
                 statsHtml += '\n<span class="lbl">ERR</span> RX ' + errIn + ' / TX ' + errOut;
+                let statsPlain = 'LINK: ' + formatLinkSpeed(uplinkInfo.speed);
+                statsPlain += '\nERR: RX ' + errIn + ' / TX ' + errOut;
                 if (uplinkInfo.rates) {
                     const r = uplinkInfo.rates;
                     statsHtml += '\n<span class="lbl">RX</span> ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
                     statsHtml += '\n<span class="lbl">TX</span> ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
+                    statsPlain += '\nRX: ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
+                    statsPlain += '\nTX: ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
                 }
                 statsInfo.innerHTML = statsHtml;
-                statsInfo.addEventListener('click', (e) => e.stopPropagation());
-                uplinkEl.appendChild(statsInfo);
+                statsInfo.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(statsPlain);
+                });
+                statsWrapper.appendChild(statsInfo);
+                uplinkEl.appendChild(statsWrapper);
                 div.appendChild(uplinkEl);
             }
 
@@ -1221,7 +1251,10 @@
                 const txEl = document.createElement('div');
                 txEl.className = 'dante-info tx-info';
                 const firstDest = danteInfo.txTo[0].split('\n')[0];
-                txEl.innerHTML = '<span class="lbl">→</span> ' + firstDest;
+                const txMore = danteInfo.txTo.length > 1 ? ', ...' : '';
+                txEl.innerHTML = '<span class="lbl">→</span> ' + firstDest + txMore;
+                const detailWrapper = document.createElement('div');
+                detailWrapper.className = 'dante-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'dante-detail';
                 const txHtml = danteInfo.txTo.map(entry => {
@@ -1233,9 +1266,22 @@
                         return '<span class="lbl">→</span> ' + line;
                     }).join('\n');
                 }).join('\n\n');
+                const txPlain = danteInfo.txTo.map(entry => {
+                    const lines = entry.split('\n');
+                    return lines.map(line => {
+                        if (line.startsWith(' ')) {
+                            return '      ' + line.trim();
+                        }
+                        return '→ ' + line;
+                    }).join('\n');
+                }).join('\n\n');
                 detail.innerHTML = txHtml;
-                detail.addEventListener('click', (e) => e.stopPropagation());
-                txEl.appendChild(detail);
+                detail.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(txPlain);
+                });
+                detailWrapper.appendChild(detail);
+                txEl.appendChild(detailWrapper);
                 div.appendChild(txEl);
             }
 
@@ -1243,7 +1289,10 @@
                 const rxEl = document.createElement('div');
                 rxEl.className = 'dante-info rx-info';
                 const firstSource = danteInfo.rxFrom[0].split('\n')[0];
-                rxEl.innerHTML = '<span class="lbl">←</span> ' + firstSource;
+                const rxMore = danteInfo.rxFrom.length > 1 ? ', ...' : '';
+                rxEl.innerHTML = '<span class="lbl">←</span> ' + firstSource + rxMore;
+                const detailWrapper = document.createElement('div');
+                detailWrapper.className = 'dante-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'dante-detail';
                 const rxHtml = danteInfo.rxFrom.map(entry => {
@@ -1255,45 +1304,82 @@
                         return '<span class="lbl">←</span> ' + line;
                     }).join('\n');
                 }).join('\n\n');
+                const rxPlain = danteInfo.rxFrom.map(entry => {
+                    const lines = entry.split('\n');
+                    return lines.map(line => {
+                        if (line.startsWith(' ')) {
+                            return '      ' + line.trim();
+                        }
+                        return '← ' + line;
+                    }).join('\n');
+                }).join('\n\n');
                 detail.innerHTML = rxHtml;
-                detail.addEventListener('click', (e) => e.stopPropagation());
-                rxEl.appendChild(detail);
+                detail.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(rxPlain);
+                });
+                detailWrapper.appendChild(detail);
+                rxEl.appendChild(detailWrapper);
                 div.appendChild(rxEl);
             }
 
             if (artnetInfo && artnetInfo.isOut) {
                 const outEl = document.createElement('div');
                 outEl.className = 'artnet-info out-info';
-                outEl.innerHTML = '<span class="lbl">←</span> ' + artnetInfo.outputs[0];
+                const outMore = artnetInfo.outputs.length > 1 ? ', ...' : '';
+                outEl.innerHTML = '<span class="lbl">←</span> ' + artnetInfo.outputs[0] + outMore;
+                const detailWrapper = document.createElement('div');
+                detailWrapper.className = 'artnet-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'artnet-detail';
                 detail.innerHTML = artnetInfo.outputs.map(u => '<span class="lbl">←</span> ' + u).join('\n');
-                detail.addEventListener('click', (e) => e.stopPropagation());
-                outEl.appendChild(detail);
+                const outPlain = artnetInfo.outputs.map(u => '← ' + u).join('\n');
+                detail.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(outPlain);
+                });
+                detailWrapper.appendChild(detail);
+                outEl.appendChild(detailWrapper);
                 div.appendChild(outEl);
             }
 
             if (artnetInfo && artnetInfo.isIn) {
                 const inEl = document.createElement('div');
                 inEl.className = 'artnet-info in-info';
-                inEl.innerHTML = '<span class="lbl">→</span> ' + artnetInfo.inputs[0];
+                const inMore = artnetInfo.inputs.length > 1 ? ', ...' : '';
+                inEl.innerHTML = '<span class="lbl">→</span> ' + artnetInfo.inputs[0] + inMore;
+                const detailWrapper = document.createElement('div');
+                detailWrapper.className = 'artnet-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'artnet-detail';
                 detail.innerHTML = artnetInfo.inputs.map(u => '<span class="lbl">→</span> ' + u).join('\n');
-                detail.addEventListener('click', (e) => e.stopPropagation());
-                inEl.appendChild(detail);
+                const inPlain = artnetInfo.inputs.map(u => '→ ' + u).join('\n');
+                detail.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(inPlain);
+                });
+                detailWrapper.appendChild(detail);
+                inEl.appendChild(detailWrapper);
                 div.appendChild(inEl);
             }
 
             if (sacnInfo && sacnInfo.isConsumer) {
                 const sacnEl = document.createElement('div');
                 sacnEl.className = 'sacn-info';
-                sacnEl.innerHTML = '<span class="lbl">←</span> ' + sacnInfo.universes[0];
+                const sacnMore = sacnInfo.universes.length > 1 ? ', ...' : '';
+                sacnEl.innerHTML = '<span class="lbl">←</span> ' + sacnInfo.universes[0] + sacnMore;
+                const detailWrapper = document.createElement('div');
+                detailWrapper.className = 'sacn-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'sacn-detail';
                 detail.innerHTML = sacnInfo.universes.map(u => '<span class="lbl">←</span> ' + u).join('\n');
-                detail.addEventListener('click', (e) => e.stopPropagation());
-                sacnEl.appendChild(detail);
+                const sacnPlain = sacnInfo.universes.map(u => '← ' + u).join('\n');
+                detail.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(sacnPlain);
+                });
+                detailWrapper.appendChild(detail);
+                sacnEl.appendChild(detailWrapper);
                 div.appendChild(sacnEl);
             }
 
@@ -1644,7 +1730,7 @@
                     const net = (u >> 8) & 0x7f;
                     const subnet = (u >> 4) & 0x0f;
                     const universe = u & 0x0f;
-                    return net + ':' + subnet + ':' + universe;
+                    return net + ':' + subnet + ':' + universe + ' (' + u + ')';
                 };
 
                 const inputs = (an.inputs || []).map(formatUniverse);
