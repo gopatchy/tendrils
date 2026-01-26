@@ -12,9 +12,10 @@ type Config struct {
 }
 
 type Location struct {
-	Name     string      `yaml:"name" json:"name"`
-	Nodes    []string    `yaml:"nodes,omitempty" json:"nodes,omitempty"`
-	Children []*Location `yaml:"children,omitempty" json:"children,omitempty"`
+	Name      string      `yaml:"name" json:"name"`
+	Direction string      `yaml:"direction,omitempty" json:"direction,omitempty"`
+	Nodes     []string    `yaml:"nodes,omitempty" json:"nodes,omitempty"`
+	Children  []*Location `yaml:"children,omitempty" json:"children,omitempty"`
 }
 
 func LoadConfig(path string) (*Config, error) {

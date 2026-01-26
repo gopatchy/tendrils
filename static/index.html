@@ -12,47 +12,120 @@
             padding: 10px;
             background: #111;
             color: #eee;
-            height: 100vh;
         }
         #controls {
             margin-bottom: 10px;
         }
-        #controls button {
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-            padding: 6px 12px;
-            margin-right: 5px;
-            border-radius: 4px;
-            cursor: pointer;
+        #stats { margin-left: 10px; }
+        #error { color: #f66; padding: 20px; }
+
+        #container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
-        #controls button:hover { background: #444; }
-        #cy {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            height: calc(100vh - 50px);
+
+        .location {
+            background: #222;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .location.top-level {
             width: 100%;
         }
-        #error { color: #f66; padding: 20px; }
+
+        .location-name {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .location.anonymous {
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+
+        .location.anonymous > .location-name {
+            display: none;
+        }
+
+        .node-row {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .node-row + .node-row {
+            margin-top: 8px;
+        }
+
+        .node {
+            width: 120px;
+            height: 50px;
+            background: #a6d;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 11px;
+            padding: 4px;
+            cursor: pointer;
+            overflow: hidden;
+            word-break: normal;
+            overflow-wrap: break-word;
+            white-space: pre-line;
+        }
+
+        .node:hover {
+            filter: brightness(1.2);
+        }
+
+        .node.switch {
+            background: #2a2;
+            border: 2px solid #4f4;
+            font-weight: bold;
+        }
+
+        .node.copied {
+            outline: 2px solid #fff;
+        }
+
+        .children {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .children.horizontal {
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-evenly;
+            width: 100%;
+        }
+
+        .children.vertical {
+            flex-direction: column;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
     <div id="controls">
         <strong>Tendrils</strong>
-        <button onclick="doLayout()">Layout</button>
-        <button onclick="cy.fit(50)">Fit</button>
         <span id="stats"></span>
     </div>
     <div id="error"></div>
-    <div id="cy"></div>
+    <div id="container"></div>
 
-    <script src="cytoscape.min.js"></script>
-    <script src="elk.bundled.js"></script>
-    <script src="cytoscape-elk.min.js"></script>
     <script>
-        cytoscape.use(cytoscapeElk);
-        let cy;
-
         function getLabel(node) {
             if (node.names && node.names.length > 0) return node.names.join('\n');
             if (node.interfaces && node.interfaces.length > 0) {
@@ -89,151 +162,115 @@
 
         let anonCounter = 0;
 
-        function buildLocationIndex(locations, parentId, nodeToLocation, locationMeta, depth, orderBase) {
-            if (!locations) return;
-            locations.forEach((loc, idx) => {
+        function buildLocationTree(locations, parentId) {
+            if (!locations) return [];
+            return locations.map((loc, idx) => {
                 let locId;
+                let anonymous = false;
                 if (loc.name) {
                     locId = 'loc_' + loc.name.replace(/[^a-zA-Z0-9]/g, '_');
-                    locationMeta.set(locId, { name: loc.name, parentId, depth, order: orderBase + idx, anonymous: false });
                 } else {
                     locId = 'loc_anon_' + (anonCounter++);
-                    locationMeta.set(locId, { name: '', parentId, depth, order: orderBase + idx, anonymous: true });
+                    anonymous = true;
                 }
-
-                if (loc.nodes) {
-                    loc.nodes.forEach(nodeRef => {
-                        nodeToLocation.set(nodeRef.toLowerCase(), locId);
-                    });
-                }
-
-                if (loc.children) {
-                    buildLocationIndex(loc.children, locId, nodeToLocation, locationMeta, depth + 1, 0);
-                }
-            });
-        }
-
-        function getLocationChain(locId, locationMeta) {
-            const chain = [];
-            let current = locId;
-            while (current) {
-                chain.push(current);
-                const meta = locationMeta.get(current);
-                current = meta ? meta.parentId : null;
-            }
-            return chain;
-        }
-
-        let locationMeta = new Map();
-        let usedLocations = new Set();
-
-        function doLayout() {
-            const layout = cy.layout({
-                name: 'elk',
-                fit: false,
-                padding: 50,
-                nodeDimensionsIncludeLabels: true,
-                elk: {
-                    algorithm: 'layered',
-                    'elk.direction': 'DOWN',
-                    'elk.spacing.nodeNode': 80,
-                    'elk.spacing.edgeNode': 40,
-                    'elk.spacing.edgeEdge': 30,
-                    'elk.layered.spacing.nodeNodeBetweenLayers': 100,
-                    'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-                    'elk.hierarchyHandling': 'INCLUDE_CHILDREN'
-                },
-                stop: function() {
-                    reorderLocations();
-                    cy.fit(50);
-                }
-            });
-            layout.run();
-        }
-
-        function reorderLocations() {
-            const locationsByParent = new Map();
-            locationMeta.forEach((meta, locId) => {
-                if (!usedLocations.has(locId)) return;
-                const parentKey = meta.parentId || '__root__';
-                if (!locationsByParent.has(parentKey)) {
-                    locationsByParent.set(parentKey, []);
-                }
-                locationsByParent.get(parentKey).push({ id: locId, order: meta.order, depth: meta.depth });
-            });
-
-            const depths = new Set();
-            locationMeta.forEach((meta, locId) => {
-                if (usedLocations.has(locId)) depths.add(meta.depth);
-            });
-            const sortedDepths = Array.from(depths).sort((a, b) => b - a);
-
-            sortedDepths.forEach(depth => {
-                const isVertical = depth % 2 === 0;
-
-                locationsByParent.forEach((siblings, parentKey) => {
-                    const locationsAtDepth = siblings.filter(s => s.depth === depth);
-                    if (locationsAtDepth.length < 2) return;
-
-                    locationsAtDepth.sort((a, b) => a.order - b.order);
-                    reorderSiblings(locationsAtDepth.map(l => l.id), isVertical);
-                });
-            });
-        }
-
-        function reorderSiblings(locIds, isVertical) {
-            const boxes = locIds.map(locId => {
-                const node = cy.getElementById(locId);
-                if (node.empty()) return null;
-                const bb = node.boundingBox();
                 return {
                     id: locId,
-                    bb: bb,
-                    width: bb.x2 - bb.x1,
-                    height: bb.y2 - bb.y1,
-                    centerX: (bb.x1 + bb.x2) / 2,
-                    centerY: (bb.y1 + bb.y2) / 2
+                    name: loc.name || '',
+                    anonymous: anonymous,
+                    direction: loc.direction || 'horizontal',
+                    nodeRefs: (loc.nodes || []).map(n => n.toLowerCase()),
+                    children: buildLocationTree(loc.children, locId)
                 };
-            }).filter(b => b !== null);
-
-            if (boxes.length < 2) return;
-
-            const gap = 50;
-
-            if (isVertical) {
-                const widest = boxes.reduce((a, b) => b.width > a.width ? b : a);
-                const targetCenterX = widest.centerX;
-                const minY = Math.min(...boxes.map(b => b.bb.y1));
-
-                let targetY = minY;
-                boxes.forEach(box => {
-                    const deltaX = targetCenterX - box.centerX;
-                    const deltaY = targetY - box.bb.y1;
-                    moveLocationAndDescendants(box.id, deltaX, deltaY);
-                    targetY += box.height + gap;
-                });
-            } else {
-                const tallest = boxes.reduce((a, b) => b.height > a.height ? b : a);
-                const targetCenterY = tallest.centerY;
-                const minX = Math.min(...boxes.map(b => b.bb.x1));
-
-                let targetX = minX;
-                boxes.forEach(box => {
-                    const deltaX = targetX - box.bb.x1;
-                    const deltaY = targetCenterY - box.centerY;
-                    moveLocationAndDescendants(box.id, deltaX, deltaY);
-                    targetX += box.width + gap;
-                });
-            }
+            });
         }
 
-        function moveLocationAndDescendants(locId, deltaX, deltaY) {
-            if (deltaX === 0 && deltaY === 0) return;
-            const node = cy.getElementById(locId);
-            node.descendants().filter(n => !n.isParent()).forEach(n => {
-                const pos = n.position();
-                n.position({ x: pos.x + deltaX, y: pos.y + deltaY });
+        function buildNodeIndex(locations, index) {
+            locations.forEach(loc => {
+                loc.nodeRefs.forEach(ref => {
+                    index.set(ref, loc);
+                });
+                buildNodeIndex(loc.children, index);
             });
+        }
+
+        function findLocationForNode(node, nodeIndex) {
+            const identifiers = getNodeIdentifiers(node);
+            for (const ident of identifiers) {
+                if (nodeIndex.has(ident)) {
+                    return nodeIndex.get(ident);
+                }
+            }
+            return null;
+        }
+
+        function createNodeElement(node) {
+            const div = document.createElement('div');
+            div.className = 'node' + (isSwitch(node) ? ' switch' : '');
+            div.textContent = getLabel(node);
+            div.addEventListener('click', () => {
+                const json = JSON.stringify(node, null, 2);
+                navigator.clipboard.writeText(json).then(() => {
+                    div.classList.add('copied');
+                    setTimeout(() => div.classList.remove('copied'), 300);
+                });
+            });
+            return div;
+        }
+
+        function renderLocation(loc, assignedNodes, isTopLevel) {
+            const nodes = assignedNodes.get(loc) || [];
+            const hasNodes = nodes.length > 0;
+
+            const childElements = loc.children
+                .map(child => renderLocation(child, assignedNodes, false))
+                .filter(el => el !== null);
+
+            if (!hasNodes && childElements.length === 0) {
+                return null;
+            }
+
+            const container = document.createElement('div');
+            let classes = 'location';
+            if (loc.anonymous) classes += ' anonymous';
+            if (isTopLevel) classes += ' top-level';
+            container.className = classes;
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'location-name';
+            nameEl.textContent = loc.name;
+            container.appendChild(nameEl);
+
+            if (hasNodes) {
+                const switches = nodes.filter(n => isSwitch(n));
+                const nonSwitches = nodes.filter(n => !isSwitch(n));
+
+                if (switches.length > 0) {
+                    const switchRow = document.createElement('div');
+                    switchRow.className = 'node-row';
+                    switches.forEach(node => {
+                        switchRow.appendChild(createNodeElement(node));
+                    });
+                    container.appendChild(switchRow);
+                }
+
+                if (nonSwitches.length > 0) {
+                    const nodeRow = document.createElement('div');
+                    nodeRow.className = 'node-row';
+                    nonSwitches.forEach(node => {
+                        nodeRow.appendChild(createNodeElement(node));
+                    });
+                    container.appendChild(nodeRow);
+                }
+            }
+
+            if (childElements.length > 0) {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'children ' + loc.direction;
+                childElements.forEach(el => childrenContainer.appendChild(el));
+                container.appendChild(childrenContainer);
+            }
+
+            return container;
         }
 
         async function init() {
@@ -251,210 +288,65 @@
             document.getElementById('stats').textContent =
                 `${nodes.length} nodes, ${links.length} links`;
 
-            const elements = [];
-            const idMap = new Map();
-            const switchIds = new Set();
+            const locationTree = buildLocationTree(config.locations || [], null);
+            const nodeIndex = new Map();
+            buildNodeIndex(locationTree, nodeIndex);
 
-            const nodeToLocation = new Map();
-            locationMeta = new Map();
-            buildLocationIndex(config.locations || [], null, nodeToLocation, locationMeta, 0, 0);
+            const assignedNodes = new Map();
+            const unassignedNodes = [];
 
-            nodes.forEach((n, i) => {
-                const id = 'n' + i;
-                idMap.set(n.typeid, id);
-                if (isSwitch(n)) switchIds.add(id);
-            });
-
-            usedLocations = new Set();
-            const nodeParents = new Map();
-
-            nodes.forEach((n, i) => {
-                const id = 'n' + i;
-                const identifiers = getNodeIdentifiers(n);
-                for (const ident of identifiers) {
-                    if (nodeToLocation.has(ident)) {
-                        const locId = nodeToLocation.get(ident);
-                        nodeParents.set(id, locId);
-                        getLocationChain(locId, locationMeta).forEach(l => usedLocations.add(l));
-                        break;
+            nodes.forEach(node => {
+                const loc = findLocationForNode(node, nodeIndex);
+                if (loc) {
+                    if (!assignedNodes.has(loc)) {
+                        assignedNodes.set(loc, []);
                     }
+                    assignedNodes.get(loc).push(node);
+                } else {
+                    unassignedNodes.push(node);
                 }
             });
 
-            const sortedLocations = Array.from(usedLocations).sort((a, b) => {
-                const chainA = getLocationChain(a, locationMeta).length;
-                const chainB = getLocationChain(b, locationMeta).length;
-                return chainA - chainB;
+            const container = document.getElementById('container');
+            container.innerHTML = '';
+
+            locationTree.forEach(loc => {
+                const el = renderLocation(loc, assignedNodes, true);
+                if (el) container.appendChild(el);
             });
 
-            sortedLocations.forEach(locId => {
-                const meta = locationMeta.get(locId);
-                elements.push({
-                    data: {
-                        id: locId,
-                        label: meta.name,
-                        parent: meta.parentId && usedLocations.has(meta.parentId) ? meta.parentId : null,
-                        isLocation: true,
-                        isAnonymous: meta.anonymous
-                    }
-                });
-            });
+            if (unassignedNodes.length > 0) {
+                const unassignedLoc = document.createElement('div');
+                unassignedLoc.className = 'location top-level';
 
-            nodes.forEach((n, i) => {
-                const id = 'n' + i;
-                const sw = switchIds.has(id);
-                const parent = nodeParents.get(id) || null;
+                const nameEl = document.createElement('div');
+                nameEl.className = 'location-name';
+                nameEl.textContent = 'Unassigned';
+                unassignedLoc.appendChild(nameEl);
 
-                elements.push({
-                    data: {
-                        id: id,
-                        label: getLabel(n),
-                        isSwitch: sw,
-                        parent: parent,
-                        rawData: n
-                    }
-                });
-            });
+                const switches = unassignedNodes.filter(n => isSwitch(n));
+                const nonSwitches = unassignedNodes.filter(n => !isSwitch(n));
 
-            links.forEach((link, i) => {
-                const idA = idMap.get(link.node_a?.typeid);
-                const idB = idMap.get(link.node_b?.typeid);
-                if (!idA || !idB) return;
-
-                elements.push({
-                    data: {
-                        id: 'e' + i,
-                        source: idA,
-                        target: idB,
-                        sourceLabel: link.interface_a || '',
-                        targetLabel: link.interface_b || '',
-                        rawData: link
-                    }
-                });
-            });
-
-            cy = cytoscape({
-                container: document.getElementById('cy'),
-                elements: elements,
-                autoungrabify: true,
-                autounselectify: true,
-                style: [
-                    {
-                        selector: 'node',
-                        style: {
-                            'label': 'data(label)',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'background-color': '#a6d',
-                            'color': '#fff',
-                            'font-size': 12,
-                            'width': 120,
-                            'height': 40,
-                            'padding': 8,
-                            'shape': 'round-rectangle',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 110
-                        }
-                    },
-                    {
-                        selector: 'node[?isSwitch]',
-                        style: {
-                            'background-color': '#2a2',
-                            'border-width': 3,
-                            'border-color': '#4f4',
-                            'font-size': 14,
-                            'font-weight': 'bold',
-                            'width': 100,
-                            'height': 50
-                        }
-                    },
-                    {
-                        selector: 'node[?isLocation]',
-                        style: {
-                            'background-color': '#333',
-                            'background-opacity': 0.8,
-                            'border-width': 2,
-                            'border-color': '#666',
-                            'text-valign': 'top',
-                            'text-halign': 'center',
-                            'text-margin-y': 10,
-                            'font-size': 16,
-                            'font-weight': 'bold',
-                            'color': '#fff',
-                            'padding': 30,
-                            'shape': 'round-rectangle'
-                        }
-                    },
-                    {
-                        selector: ':parent',
-                        style: {
-                            'background-opacity': 0.5,
-                            'border-width': 2,
-                            'border-color': '#666',
-                            'text-valign': 'top',
-                            'text-halign': 'center',
-                            'text-margin-y': 10,
-                            'padding': 30
-                        }
-                    },
-                    {
-                        selector: 'node[?isAnonymous]',
-                        style: {
-                            'background-opacity': 0,
-                            'border-width': 0,
-                            'padding': 10
-                        }
-                    },
-                    {
-                        selector: 'edge',
-                        style: {
-                            'width': 2,
-                            'line-color': '#666',
-                            'curve-style': 'bezier',
-                            'source-label': 'data(sourceLabel)',
-                            'target-label': 'data(targetLabel)',
-                            'source-text-offset': 40,
-                            'target-text-offset': 40,
-                            'source-text-rotation': 'autorotate',
-                            'target-text-rotation': 'autorotate',
-                            'font-size': 9,
-                            'color': '#aaa',
-                            'text-background-color': '#1a1a1a',
-                            'text-background-opacity': 1,
-                            'text-background-padding': 2
-                        }
-                    }
-                ],
-                layout: { name: 'preset' }
-            });
-
-            cy.on('click', 'node', function(evt) {
-                const node = evt.target;
-                const rawData = node.data('rawData');
-                if (rawData && !node.data('isLocation')) {
-                    const json = JSON.stringify(rawData, null, 2);
-                    navigator.clipboard.writeText(json).then(() => {
-                        console.log('Copied node data');
-                    }).catch(err => {
-                        console.error('Copy failed:', err);
+                if (switches.length > 0) {
+                    const switchRow = document.createElement('div');
+                    switchRow.className = 'node-row';
+                    switches.forEach(node => {
+                        switchRow.appendChild(createNodeElement(node));
                     });
+                    unassignedLoc.appendChild(switchRow);
                 }
-            });
 
-            cy.on('click', 'edge', function(evt) {
-                const edge = evt.target;
-                const rawData = edge.data('rawData');
-                if (rawData) {
-                    const json = JSON.stringify(rawData, null, 2);
-                    navigator.clipboard.writeText(json).then(() => {
-                        console.log('Copied link data');
-                    }).catch(err => {
-                        console.error('Copy failed:', err);
+                if (nonSwitches.length > 0) {
+                    const nodeRow = document.createElement('div');
+                    nodeRow.className = 'node-row';
+                    nonSwitches.forEach(node => {
+                        nodeRow.appendChild(createNodeElement(node));
                     });
+                    unassignedLoc.appendChild(nodeRow);
                 }
-            });
 
-            doLayout();
+                container.appendChild(unassignedLoc);
+            }
         }
 
         init().catch(e => {
