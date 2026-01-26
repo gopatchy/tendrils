@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"log"
 	"math/big"
 	"net/http"
@@ -40,6 +41,7 @@ func (t *Tendrils) startHTTPServer() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", t.handleAPIStatus)
+	mux.HandleFunc("/api/status/stream", t.handleAPIStatusStream)
 	mux.HandleFunc("/api/config", t.handleAPIConfig)
 	mux.HandleFunc("/api/errors/clear", t.handleClearError)
 	mux.Handle("/", http.FileServer(http.Dir("static")))
@@ -155,6 +157,59 @@ func (t *Tendrils) handleClearError(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (t *Tendrils) handleAPIStatusStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	subID, updateCh := t.subscribeSSE()
+	defer t.unsubscribeSSE(subID)
+
+	sendStatus := func() error {
+		data, err := json.Marshal(t.GetStatus())
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
+		if err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	}
+
+	if err := sendStatus(); err != nil {
+		return
+	}
+
+	heartbeat := time.NewTicker(3 * time.Second)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-updateCh:
+			if err := sendStatus(); err != nil {
+				return
+			}
+		case <-heartbeat.C:
+			_, err := fmt.Fprintf(w, ": heartbeat\n\n")
+			if err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
 }
 
 func (t *Tendrils) getNodes() []*Node {

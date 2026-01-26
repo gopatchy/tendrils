@@ -38,12 +38,14 @@ type ErrorTracker struct {
 	errors    map[string]*PortError
 	baselines map[string]*portErrorBaseline
 	nextID    int
+	t         *Tendrils
 }
 
-func NewErrorTracker() *ErrorTracker {
+func NewErrorTracker(t *Tendrils) *ErrorTracker {
 	return &ErrorTracker{
 		errors:    map[string]*PortError{},
 		baselines: map[string]*portErrorBaseline{},
+		t:         t,
 	}
 }
 
@@ -52,6 +54,13 @@ func (e *ErrorTracker) CheckPort(node *Node, portName string, stats *InterfaceSt
 		return
 	}
 
+	changed := e.checkPortLocked(node, portName, stats)
+	if changed {
+		e.t.NotifyUpdate()
+	}
+}
+
+func (e *ErrorTracker) checkPortLocked(node *Node, portName string, stats *InterfaceStats) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -79,8 +88,9 @@ func (e *ErrorTracker) CheckPort(node *Node, portName string, stats *InterfaceSt
 				FirstSeen:   now,
 				LastUpdated: now,
 			}
+			return true
 		}
-		return
+		return false
 	}
 
 	inDelta := uint64(0)
@@ -92,6 +102,7 @@ func (e *ErrorTracker) CheckPort(node *Node, portName string, stats *InterfaceSt
 		outDelta = stats.OutErrors - baseline.OutErrors
 	}
 
+	changed := false
 	if inDelta > 0 || outDelta > 0 {
 		if existing, ok := e.errors[key]; ok {
 			existing.InErrors = stats.InErrors
@@ -115,29 +126,49 @@ func (e *ErrorTracker) CheckPort(node *Node, portName string, stats *InterfaceSt
 				LastUpdated: now,
 			}
 		}
+		changed = true
 	}
 
 	e.baselines[key].InErrors = stats.InErrors
 	e.baselines[key].OutErrors = stats.OutErrors
+
+	return changed
 }
 
 func (e *ErrorTracker) ClearError(errorID string) {
+	found := e.clearErrorLocked(errorID)
+	if found {
+		e.t.NotifyUpdate()
+	}
+}
+
+func (e *ErrorTracker) clearErrorLocked(errorID string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	for key, err := range e.errors {
 		if err.ID == errorID {
 			delete(e.errors, key)
-			return
+			return true
 		}
 	}
+	return false
 }
 
 func (e *ErrorTracker) ClearAllErrors() {
+	had := e.clearAllErrorsLocked()
+	if had {
+		e.t.NotifyUpdate()
+	}
+}
+
+func (e *ErrorTracker) clearAllErrorsLocked() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	had := len(e.errors) > 0
 	e.errors = map[string]*PortError{}
+	return had
 }
 
 func (e *ErrorTracker) GetErrors() []*PortError {

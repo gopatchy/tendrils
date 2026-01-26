@@ -15,6 +15,42 @@
         }
         #error { color: #f66; padding: 20px; }
 
+        #connection-status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #222;
+            border-radius: 6px;
+            border: 1px solid #444;
+            font-size: 11px;
+        }
+
+        #connection-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        #connection-status.connected .dot {
+            background: #4f4;
+        }
+
+        #connection-status.disconnected .dot {
+            background: #f44;
+            animation: pulse-dot 1s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
         #container {
             display: flex;
             flex-direction: column;
@@ -394,6 +430,10 @@
     </style>
 </head>
 <body>
+    <div id="connection-status" class="disconnected">
+        <div class="dot"></div>
+        <span class="text">Connecting...</span>
+    </div>
     <div id="mode-selector">
         <button id="mode-network" class="active">Network</button>
         <button id="mode-dante">Dante</button>
@@ -720,22 +760,51 @@
 
         async function clearError(id) {
             await fetch('/api/errors/clear?id=' + encodeURIComponent(id), { method: 'POST' });
-            init();
         }
 
         async function clearAllErrors() {
             await fetch('/api/errors/clear?all=true', { method: 'POST' });
-            init();
         }
 
-        async function init() {
+        let currentConfig = null;
+
+        function setConnectionStatus(connected) {
+            const el = document.getElementById('connection-status');
+            const textEl = el.querySelector('.text');
+            if (connected) {
+                el.className = 'connected';
+                textEl.textContent = 'Connected';
+            } else {
+                el.className = 'disconnected';
+                textEl.textContent = 'Disconnected';
+            }
+        }
+
+        function connectSSE() {
+            const evtSource = new EventSource('/api/status/stream');
+
+            evtSource.addEventListener('status', async (event) => {
+                const data = JSON.parse(event.data);
+                if (!currentConfig) {
+                    const configResp = await fetch('/api/config');
+                    currentConfig = await configResp.json();
+                }
+                render(data, currentConfig);
+            });
+
+            evtSource.onopen = () => {
+                setConnectionStatus(true);
+            };
+
+            evtSource.onerror = () => {
+                setConnectionStatus(false);
+                evtSource.close();
+                setTimeout(connectSSE, 2000);
+            };
+        }
+
+        function render(data, config) {
             anonCounter = 0;
-            const [statusResp, configResp] = await Promise.all([
-                fetch('/api/status'),
-                fetch('/api/config')
-            ]);
-            const data = await statusResp.json();
-            const config = await configResp.json();
 
             const nodes = data.nodes || [];
             const links = data.links || [];
@@ -974,9 +1043,7 @@
             updateErrorPanel();
         }
 
-        init().catch(e => {
-            document.getElementById('error').textContent = e.message;
-        });
+        connectSSE();
 
         function setMode(mode) {
             if (mode === 'dante') {

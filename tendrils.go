@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -36,6 +37,10 @@ type Tendrils struct {
 	danteFlows       *DanteFlows
 	errors           *ErrorTracker
 	config           *Config
+
+	sseSubsMu   sync.RWMutex
+	sseSubsNext int
+	sseSubs     map[int]chan struct{}
 
 	Interface     string
 	ConfigFile    string
@@ -68,10 +73,44 @@ func New() *Tendrils {
 		activeInterfaces: map[string]context.CancelFunc{},
 		artnet:           NewArtNetNodes(),
 		danteFlows:       NewDanteFlows(),
-		errors:           NewErrorTracker(),
+		sseSubs:          map[int]chan struct{}{},
 	}
 	t.nodes = NewNodes(t)
+	t.errors = NewErrorTracker(t)
 	return t
+}
+
+func (t *Tendrils) NotifyUpdate() {
+	t.sseSubsMu.RLock()
+	defer t.sseSubsMu.RUnlock()
+
+	for _, ch := range t.sseSubs {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (t *Tendrils) subscribeSSE() (int, chan struct{}) {
+	t.sseSubsMu.Lock()
+	defer t.sseSubsMu.Unlock()
+
+	t.sseSubsNext++
+	id := t.sseSubsNext
+	ch := make(chan struct{}, 1)
+	t.sseSubs[id] = ch
+	return id, ch
+}
+
+func (t *Tendrils) unsubscribeSSE(id int) {
+	t.sseSubsMu.Lock()
+	defer t.sseSubsMu.Unlock()
+
+	if ch, ok := t.sseSubs[id]; ok {
+		close(ch)
+		delete(t.sseSubs, id)
+	}
 }
 
 func (t *Tendrils) Run() {

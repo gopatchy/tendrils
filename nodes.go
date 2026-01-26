@@ -48,11 +48,18 @@ func (n *Nodes) Shutdown() {
 }
 
 func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) {
+	changed := n.updateLocked(target, mac, ips, ifaceName, nodeName, source)
+	if changed {
+		n.t.NotifyUpdate()
+	}
+}
+
+func (n *Nodes) updateLocked(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) bool {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	if mac == nil && target == nil && len(ips) == 0 {
-		return
+		return false
 	}
 
 	targetID, isNew := n.resolveTargetNode(target, mac, ips, nodeName)
@@ -65,6 +72,8 @@ func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceNa
 	if hasNewIP(added) {
 		n.triggerPoll(node)
 	}
+
+	return isNew || len(added) > 0
 }
 
 func (n *Nodes) resolveTargetNode(target *Node, mac net.HardwareAddr, ips []net.IP, nodeName string) (int, bool) {
