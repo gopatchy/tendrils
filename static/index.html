@@ -533,6 +533,90 @@
             bottom: 100%;
         }
 
+        body.sacn-mode .node {
+            opacity: 0.3;
+        }
+
+        body.sacn-mode .node.sacn-consumer {
+            opacity: 1;
+            background: #26d;
+        }
+
+        body.sacn-mode .node .switch-port,
+        body.sacn-mode .node .uplink,
+        body.sacn-mode .node .root-label {
+            display: none;
+        }
+
+        .node .sacn-info {
+            display: none;
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            font-weight: normal;
+            padding: 1px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+            background: #444;
+            color: #fff;
+            z-index: 10;
+        }
+
+        .node .sacn-info .sacn-detail {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 4px;
+            font-size: 10px;
+            white-space: pre;
+            text-align: left;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 6px 8px;
+            line-height: 1.4;
+        }
+
+        .node .sacn-info .sacn-detail::before {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            height: 8px;
+        }
+
+        .node .sacn-info::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+        }
+
+        .node .sacn-info:hover {
+            z-index: 100;
+        }
+
+        .node .sacn-info:hover .sacn-detail {
+            display: block;
+        }
+
+        body.sacn-mode .node.sacn-consumer .sacn-info {
+            display: block;
+        }
+
+        .sacn-info .lbl,
+        .sacn-detail .lbl {
+            color: #888;
+        }
+
         .node.has-error {
             box-shadow: 0 0 0 3px #f66;
         }
@@ -590,10 +674,15 @@
             display: none;
         }
 
+        body.sacn-mode .node:not(.sacn-consumer):hover .node-info {
+            display: none;
+        }
+
         .node:has(.switch-port:hover) .node-info,
         .node:has(.uplink:hover) .node-info,
         .node:has(.dante-info:hover) .node-info,
-        .node:has(.artnet-info:hover) .node-info {
+        .node:has(.artnet-info:hover) .node-info,
+        .node:has(.sacn-info:hover) .node-info {
             display: none;
         }
 
@@ -797,6 +886,7 @@
         <button id="mode-network" class="active">Network</button>
         <button id="mode-dante">Dante</button>
         <button id="mode-artnet">Art-Net</button>
+        <button id="mode-sacn">sACN</button>
     </div>
     <div id="error-panel">
         <div id="error-header">
@@ -1034,7 +1124,7 @@
             return null;
         }
 
-        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, artnetInfo, hasError, isUnreachable) {
+        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable) {
             const div = document.createElement('div');
             div.className = 'node' + (isSwitch(node) ? ' switch' : '');
             div.dataset.typeid = node.typeid;
@@ -1049,6 +1139,10 @@
             if (artnetInfo) {
                 if (artnetInfo.isOut) div.classList.add('artnet-out');
                 if (artnetInfo.isIn) div.classList.add('artnet-in');
+            }
+
+            if (sacnInfo && sacnInfo.isConsumer) {
+                div.classList.add('sacn-consumer');
             }
 
             if (!isSwitch(node) && switchConnection) {
@@ -1214,6 +1308,18 @@
                 div.appendChild(inEl);
             }
 
+            if (sacnInfo && sacnInfo.isConsumer) {
+                const sacnEl = document.createElement('div');
+                sacnEl.className = 'sacn-info';
+                sacnEl.innerHTML = '<span class="lbl">←</span> ' + sacnInfo.universes[0];
+                const detail = document.createElement('div');
+                detail.className = 'sacn-detail';
+                detail.innerHTML = sacnInfo.universes.map(u => '<span class="lbl">←</span> ' + u).join('\n');
+                detail.addEventListener('click', (e) => e.stopPropagation());
+                sacnEl.appendChild(detail);
+                div.appendChild(sacnEl);
+            }
+
             div.addEventListener('click', () => {
                 const json = JSON.stringify(node, null, 2);
                 navigator.clipboard.writeText(json).then(() => {
@@ -1224,12 +1330,12 @@
             return div;
         }
 
-        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes, artnetNodes, errorNodeIds, unreachableNodeIds) {
+        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes, artnetNodes, sacnNodes, errorNodeIds, unreachableNodeIds) {
             const nodes = assignedNodes.get(loc) || [];
             const hasNodes = nodes.length > 0;
 
             const childElements = loc.children
-                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes, artnetNodes, errorNodeIds, unreachableNodeIds))
+                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes, artnetNodes, sacnNodes, errorNodeIds, unreachableNodeIds))
                 .filter(el => el !== null);
 
             if (!hasNodes && childElements.length === 0) {
@@ -1258,9 +1364,10 @@
                         const uplink = switchUplinks.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
                         const artnetInfo = artnetNodes.get(node.typeid);
+                        const sacnInfo = sacnNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
                         const isUnreachable = unreachableNodeIds.has(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo, artnetInfo, hasError, isUnreachable));
+                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable));
                     });
                     container.appendChild(switchRow);
                 }
@@ -1272,9 +1379,10 @@
                         const conn = switchConnections.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
                         const artnetInfo = artnetNodes.get(node.typeid);
+                        const sacnInfo = sacnNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
                         const isUnreachable = unreachableNodeIds.has(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo, artnetInfo, hasError, isUnreachable));
+                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable));
                     });
                     container.appendChild(nodeRow);
                 }
@@ -1573,6 +1681,21 @@
                 });
             });
 
+            const sacnData = data.sacn_nodes || [];
+            const sacnNodes = new Map();
+
+            sacnData.forEach(sn => {
+                const nodeId = sn.node?.typeid;
+                if (!nodeId) return;
+
+                const universes = (sn.universes || []).map(u => String(u));
+
+                sacnNodes.set(nodeId, {
+                    isConsumer: universes.length > 0,
+                    universes: universes
+                });
+            });
+
             const switchUplinks = new Map();
             if (allSwitches.length > 0 && switchLinks.length > 0) {
                 const adjacency = new Map();
@@ -1663,7 +1786,7 @@
             container.innerHTML = '';
 
             locationTree.forEach(loc => {
-                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes, artnetNodes, errorNodeIds, unreachableNodeIds);
+                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes, artnetNodes, sacnNodes, errorNodeIds, unreachableNodeIds);
                 if (el) container.appendChild(el);
             });
 
@@ -1686,9 +1809,10 @@
                         const uplink = switchUplinks.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
                         const artnetInfo = artnetNodes.get(node.typeid);
+                        const sacnInfo = sacnNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
                         const isUnreachable = unreachableNodeIds.has(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo, artnetInfo, hasError, isUnreachable));
+                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable));
                     });
                     unassignedLoc.appendChild(switchRow);
                 }
@@ -1700,9 +1824,10 @@
                         const conn = switchConnections.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
                         const artnetInfo = artnetNodes.get(node.typeid);
+                        const sacnInfo = sacnNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
                         const isUnreachable = unreachableNodeIds.has(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo, artnetInfo, hasError, isUnreachable));
+                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable));
                     });
                     unassignedLoc.appendChild(nodeRow);
                 }
@@ -1717,10 +1842,11 @@
         connectSSE();
 
         function setMode(mode) {
-            document.body.classList.remove('dante-mode', 'artnet-mode');
+            document.body.classList.remove('dante-mode', 'artnet-mode', 'sacn-mode');
             document.getElementById('mode-network').classList.remove('active');
             document.getElementById('mode-dante').classList.remove('active');
             document.getElementById('mode-artnet').classList.remove('active');
+            document.getElementById('mode-sacn').classList.remove('active');
 
             if (mode === 'dante') {
                 document.body.classList.add('dante-mode');
@@ -1730,6 +1856,10 @@
                 document.body.classList.add('artnet-mode');
                 document.getElementById('mode-artnet').classList.add('active');
                 window.location.hash = 'artnet';
+            } else if (mode === 'sacn') {
+                document.body.classList.add('sacn-mode');
+                document.getElementById('mode-sacn').classList.add('active');
+                window.location.hash = 'sacn';
             } else {
                 document.getElementById('mode-network').classList.add('active');
                 window.location.hash = '';
@@ -1739,6 +1869,7 @@
         document.getElementById('mode-network').addEventListener('click', () => setMode('network'));
         document.getElementById('mode-dante').addEventListener('click', () => setMode('dante'));
         document.getElementById('mode-artnet').addEventListener('click', () => setMode('artnet'));
+        document.getElementById('mode-sacn').addEventListener('click', () => setMode('sacn'));
 
         document.getElementById('clear-all-errors').addEventListener('click', clearAllErrors);
         document.getElementById('toggle-errors').addEventListener('click', () => {
@@ -1758,6 +1889,8 @@
             setMode('dante');
         } else if (window.location.hash === '#artnet') {
             setMode('artnet');
+        } else if (window.location.hash === '#sacn') {
+            setMode('sacn');
         }
     </script>
 </body>
