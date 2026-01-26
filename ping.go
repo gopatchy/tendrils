@@ -16,18 +16,22 @@ type pendingPing struct {
 }
 
 type PingManager struct {
-	mu      sync.Mutex
-	conn    *icmp.PacketConn
-	pending map[uint16]*pendingPing
-	nextID  uint16
-	minID   uint16
+	mu       sync.Mutex
+	conn     *icmp.PacketConn
+	pending  map[uint16]*pendingPing
+	nextID   uint16
+	minID    uint16
+	failures map[string]int
 }
+
+const pingFailureThreshold = 3
 
 func NewPingManager() *PingManager {
 	pm := &PingManager{
-		pending: map[uint16]*pendingPing{},
-		nextID:  1000,
-		minID:   1000,
+		pending:  map[uint16]*pendingPing{},
+		nextID:   1000,
+		minID:    1000,
+		failures: map[string]int{},
 	}
 
 	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
@@ -154,13 +158,22 @@ func (t *Tendrils) pingNode(node *Node) {
 
 	for _, ipStr := range ips {
 		reachable := t.ping.Ping(ipStr, 2*time.Second)
+
+		t.ping.mu.Lock()
 		if reachable {
+			t.ping.failures[ipStr] = 0
+			t.ping.mu.Unlock()
 			if t.errors.ClearUnreachable(node, ipStr) {
 				log.Printf("[ping] %s (%s) is now reachable", nodeName, ipStr)
 			}
 		} else {
-			if t.errors.SetUnreachable(node, ipStr) {
-				log.Printf("[ping] %s (%s) is now unreachable", nodeName, ipStr)
+			t.ping.failures[ipStr]++
+			failures := t.ping.failures[ipStr]
+			t.ping.mu.Unlock()
+			if failures >= pingFailureThreshold {
+				if t.errors.SetUnreachable(node, ipStr) {
+					log.Printf("[ping] %s (%s) is now unreachable", nodeName, ipStr)
+				}
 			}
 		}
 	}
