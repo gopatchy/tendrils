@@ -76,22 +76,20 @@ func (n *Nodes) getDirectLinks() []*Link {
 			}
 			seenMACs[mac] = true
 
-			lastHop, lastPort := n.findLastHop(target, mac, macToNode)
-			if lastHop == nil {
-				continue
-			}
-
-			targetIface := n.findTargetInterface(target, lastHop, macToNode)
-			key := makeLinkKey(lastHop, lastPort, target, targetIface)
-			if !seen[key] {
-				seen[key] = true
-				links = append(links, &Link{
-					TypeID:     newTypeID("link"),
-					NodeA:      lastHop,
-					InterfaceA: lastPort,
-					NodeB:      target,
-					InterfaceB: targetIface,
-				})
+			lastHops := n.findAllLastHops(target, mac, macToNode)
+			for _, lh := range lastHops {
+				targetIface := n.findTargetInterface(target, lh.node, macToNode)
+				key := makeLinkKey(lh.node, lh.port, target, targetIface)
+				if !seen[key] {
+					seen[key] = true
+					links = append(links, &Link{
+						TypeID:     newTypeID("link"),
+						NodeA:      lh.node,
+						InterfaceA: lh.port,
+						NodeB:      target,
+						InterfaceB: targetIface,
+					})
+				}
 			}
 		}
 	}
@@ -99,7 +97,15 @@ func (n *Nodes) getDirectLinks() []*Link {
 	return links
 }
 
-func (n *Nodes) findLastHop(target *Node, mac string, macToNode map[string]*Node) (*Node, string) {
+func (n *Nodes) findAllLastHops(target *Node, mac string, macToNode map[string]*Node) []struct {
+	node *Node
+	port string
+} {
+	var results []struct {
+		node *Node
+		port string
+	}
+
 	for _, node := range n.nodes {
 		port, sees := node.MACTable[mac]
 		if !sees || node == target {
@@ -107,10 +113,13 @@ func (n *Nodes) findLastHop(target *Node, mac string, macToNode map[string]*Node
 		}
 
 		if !n.hasCloserNode(node, target, mac, port, macToNode) {
-			return node, port
+			results = append(results, struct {
+				node *Node
+				port string
+			}{node, port})
 		}
 	}
-	return nil, ""
+	return results
 }
 
 func (n *Nodes) hasCloserNode(node, target *Node, mac, port string, macToNode map[string]*Node) bool {

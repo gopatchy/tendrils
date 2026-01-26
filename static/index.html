@@ -112,6 +112,19 @@
             white-space: nowrap;
         }
 
+        .node .root-label {
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            background: #664;
+            color: #ffa;
+            padding: 1px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+
         .node:hover {
             filter: brightness(1.2);
         }
@@ -277,7 +290,12 @@
             labelEl.textContent = getLabel(node);
             div.appendChild(labelEl);
 
-            if (isSwitch(node) && uplinkInfo) {
+            if (isSwitch(node) && uplinkInfo === 'ROOT') {
+                const rootEl = document.createElement('div');
+                rootEl.className = 'root-label';
+                rootEl.textContent = 'ROOT';
+                div.appendChild(rootEl);
+            } else if (isSwitch(node) && uplinkInfo) {
                 const uplinkEl = document.createElement('div');
                 uplinkEl.className = 'uplink';
                 uplinkEl.textContent = uplinkInfo.localPort + ' → ' + uplinkInfo.parentName + ':' + uplinkInfo.remotePort;
@@ -447,10 +465,18 @@
                     });
                 });
 
-                let bestRoot = allSwitches[0];
+                for (const edges of adjacency.values()) {
+                    edges.sort((a, b) => getLabel(a.neighbor).localeCompare(getLabel(b.neighbor)));
+                }
+
+                const sortedSwitches = [...allSwitches].sort((a, b) =>
+                    getLabel(a).localeCompare(getLabel(b)));
+
+                let bestRoot = sortedSwitches[0];
+                let bestReachable = 0;
                 let bestMaxDepth = Infinity;
 
-                allSwitches.forEach(candidate => {
+                for (const candidate of sortedSwitches) {
                     const visited = new Set([candidate.typeid]);
                     const queue = [{ sw: candidate, depth: 0 }];
                     let maxDepth = 0;
@@ -466,11 +492,16 @@
                         }
                     }
 
-                    if (maxDepth < bestMaxDepth) {
+                    const reachable = visited.size;
+                    if (reachable > bestReachable ||
+                        (reachable === bestReachable && maxDepth < bestMaxDepth)) {
+                        bestReachable = reachable;
                         bestMaxDepth = maxDepth;
                         bestRoot = candidate;
                     }
-                });
+                }
+
+                switchUplinks.set(bestRoot.typeid, 'ROOT');
 
                 const visited = new Set([bestRoot.typeid]);
                 const queue = [bestRoot];
@@ -489,6 +520,7 @@
                         }
                     }
                 }
+
             }
 
             const container = document.getElementById('container');
