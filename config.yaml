@@ -130,8 +130,7 @@ locations:
 - name: Booth
   direction: vertical
   children:
-  - name: SATELLITE-1 Rack
-    nodes:
+  - nodes:
     - satellite-1
 
   - direction: horizontal

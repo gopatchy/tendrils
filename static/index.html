@@ -66,8 +66,9 @@
         }
 
         .node {
+            position: relative;
             width: 120px;
-            height: 50px;
+            min-height: 50px;
             background: #a6d;
             border-radius: 6px;
             display: flex;
@@ -77,10 +78,29 @@
             font-size: 11px;
             padding: 4px;
             cursor: pointer;
-            overflow: hidden;
+            overflow: visible;
             word-break: normal;
             overflow-wrap: break-word;
             white-space: pre-line;
+            margin-top: 8px;
+        }
+
+        .node .switch-port {
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            background: #444;
+            color: #ccc;
+            padding: 1px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+
+        .node .switch-port.external {
+            background: #633;
+            color: #f99;
         }
 
         .node:hover {
@@ -162,7 +182,7 @@
 
         let anonCounter = 0;
 
-        function buildLocationTree(locations, parentId) {
+        function buildLocationTree(locations, parent) {
             if (!locations) return [];
             return locations.map((loc, idx) => {
                 let locId;
@@ -173,15 +193,44 @@
                     locId = 'loc_anon_' + (anonCounter++);
                     anonymous = true;
                 }
-                return {
+                const locObj = {
                     id: locId,
                     name: loc.name || '',
                     anonymous: anonymous,
                     direction: loc.direction || 'horizontal',
                     nodeRefs: (loc.nodes || []).map(n => n.toLowerCase()),
-                    children: buildLocationTree(loc.children, locId)
+                    parent: parent,
+                    children: []
                 };
+                locObj.children = buildLocationTree(loc.children, locObj);
+                return locObj;
             });
+        }
+
+        function getSwitchesInLocation(loc, assignedNodes) {
+            const switches = [];
+            const nodes = assignedNodes.get(loc) || [];
+            nodes.forEach(n => {
+                if (isSwitch(n)) switches.push(n);
+            });
+            loc.children.forEach(child => {
+                if (child.anonymous) {
+                    switches.push(...getSwitchesInLocation(child, assignedNodes));
+                }
+            });
+            return switches;
+        }
+
+        function findEffectiveSwitch(loc, assignedNodes) {
+            if (!loc) return null;
+            const switches = getSwitchesInLocation(loc, assignedNodes);
+            if (switches.length === 1) {
+                return switches[0];
+            }
+            if (loc.parent) {
+                return findEffectiveSwitch(loc.parent, assignedNodes);
+            }
+            return null;
         }
 
         function buildNodeIndex(locations, index) {
@@ -203,10 +252,26 @@
             return null;
         }
 
-        function createNodeElement(node) {
+        function createNodeElement(node, switchConnection, nodeLocation) {
             const div = document.createElement('div');
             div.className = 'node' + (isSwitch(node) ? ' switch' : '');
-            div.textContent = getLabel(node);
+
+            if (!isSwitch(node) && switchConnection) {
+                const portEl = document.createElement('div');
+                portEl.className = 'switch-port';
+                if (switchConnection.external) {
+                    portEl.classList.add('external');
+                    portEl.textContent = switchConnection.switchName + ':' + switchConnection.port;
+                } else {
+                    portEl.textContent = switchConnection.port;
+                }
+                div.appendChild(portEl);
+            }
+
+            const labelEl = document.createElement('span');
+            labelEl.textContent = getLabel(node);
+            div.appendChild(labelEl);
+
             div.addEventListener('click', () => {
                 const json = JSON.stringify(node, null, 2);
                 navigator.clipboard.writeText(json).then(() => {
@@ -217,12 +282,12 @@
             return div;
         }
 
-        function renderLocation(loc, assignedNodes, isTopLevel) {
+        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections) {
             const nodes = assignedNodes.get(loc) || [];
             const hasNodes = nodes.length > 0;
 
             const childElements = loc.children
-                .map(child => renderLocation(child, assignedNodes, false))
+                .map(child => renderLocation(child, assignedNodes, false, switchConnections))
                 .filter(el => el !== null);
 
             if (!hasNodes && childElements.length === 0) {
@@ -248,7 +313,7 @@
                     const switchRow = document.createElement('div');
                     switchRow.className = 'node-row';
                     switches.forEach(node => {
-                        switchRow.appendChild(createNodeElement(node));
+                        switchRow.appendChild(createNodeElement(node, null, loc));
                     });
                     container.appendChild(switchRow);
                 }
@@ -257,7 +322,8 @@
                     const nodeRow = document.createElement('div');
                     nodeRow.className = 'node-row';
                     nonSwitches.forEach(node => {
-                        nodeRow.appendChild(createNodeElement(node));
+                        const conn = switchConnections.get(node.typeid);
+                        nodeRow.appendChild(createNodeElement(node, conn, loc));
                     });
                     container.appendChild(nodeRow);
                 }
@@ -292,12 +358,19 @@
             const nodeIndex = new Map();
             buildNodeIndex(locationTree, nodeIndex);
 
+            const nodesByTypeId = new Map();
+            nodes.forEach(node => {
+                nodesByTypeId.set(node.typeid, node);
+            });
+
+            const nodeLocations = new Map();
             const assignedNodes = new Map();
             const unassignedNodes = [];
 
             nodes.forEach(node => {
                 const loc = findLocationForNode(node, nodeIndex);
                 if (loc) {
+                    nodeLocations.set(node.typeid, loc);
                     if (!assignedNodes.has(loc)) {
                         assignedNodes.set(loc, []);
                     }
@@ -307,11 +380,39 @@
                 }
             });
 
+            const switchConnections = new Map();
+            links.forEach(link => {
+                const nodeA = nodesByTypeId.get(link.node_a?.typeid);
+                const nodeB = nodesByTypeId.get(link.node_b?.typeid);
+                if (!nodeA || !nodeB) return;
+
+                const aIsSwitch = isSwitch(nodeA);
+                const bIsSwitch = isSwitch(nodeB);
+
+                if (aIsSwitch && !bIsSwitch) {
+                    const nodeLoc = nodeLocations.get(nodeB.typeid);
+                    const effectiveSwitch = findEffectiveSwitch(nodeLoc, assignedNodes);
+                    switchConnections.set(nodeB.typeid, {
+                        port: link.interface_a || '?',
+                        switchName: getLabel(nodeA),
+                        external: !effectiveSwitch || effectiveSwitch.typeid !== nodeA.typeid
+                    });
+                } else if (bIsSwitch && !aIsSwitch) {
+                    const nodeLoc = nodeLocations.get(nodeA.typeid);
+                    const effectiveSwitch = findEffectiveSwitch(nodeLoc, assignedNodes);
+                    switchConnections.set(nodeA.typeid, {
+                        port: link.interface_b || '?',
+                        switchName: getLabel(nodeB),
+                        external: !effectiveSwitch || effectiveSwitch.typeid !== nodeB.typeid
+                    });
+                }
+            });
+
             const container = document.getElementById('container');
             container.innerHTML = '';
 
             locationTree.forEach(loc => {
-                const el = renderLocation(loc, assignedNodes, true);
+                const el = renderLocation(loc, assignedNodes, true, switchConnections);
                 if (el) container.appendChild(el);
             });
 
@@ -331,7 +432,7 @@
                     const switchRow = document.createElement('div');
                     switchRow.className = 'node-row';
                     switches.forEach(node => {
-                        switchRow.appendChild(createNodeElement(node));
+                        switchRow.appendChild(createNodeElement(node, null, null));
                     });
                     unassignedLoc.appendChild(switchRow);
                 }
@@ -340,7 +441,8 @@
                     const nodeRow = document.createElement('div');
                     nodeRow.className = 'node-row';
                     nonSwitches.forEach(node => {
-                        nodeRow.appendChild(createNodeElement(node));
+                        const conn = switchConnections.get(node.typeid);
+                        nodeRow.appendChild(createNodeElement(node, conn, null));
                     });
                     unassignedLoc.appendChild(nodeRow);
                 }
