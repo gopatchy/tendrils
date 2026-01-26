@@ -137,6 +137,23 @@
             color: #f99;
         }
 
+        .node .switch-port .error-info,
+        .node .uplink .error-info {
+            display: none;
+            font-size: 8px;
+            opacity: 0.8;
+        }
+
+        .node .switch-port:hover .error-info,
+        .node .uplink:hover .error-info {
+            display: block;
+        }
+
+        .node .switch-port:hover,
+        .node .uplink:hover {
+            z-index: 100;
+        }
+
         .node .uplink {
             position: absolute;
             top: -8px;
@@ -678,6 +695,16 @@
             return iface.stats?.speed || 0;
         }
 
+        function getInterfaceErrors(node) {
+            if (!node.interfaces || node.interfaces.length === 0) return null;
+            const iface = node.interfaces[0];
+            if (!iface.stats) return null;
+            const inErr = iface.stats.in_errors || 0;
+            const outErr = iface.stats.out_errors || 0;
+            if (inErr === 0 && outErr === 0) return null;
+            return { in: inErr, out: outErr };
+        }
+
         let anonCounter = 0;
 
         function buildLocationTree(locations, parent) {
@@ -773,6 +800,12 @@
                 }
                 const speedClass = getSpeedClass(switchConnection.speed);
                 if (speedClass) portEl.classList.add(speedClass);
+                const errIn = switchConnection.errors?.in || 0;
+                const errOut = switchConnection.errors?.out || 0;
+                const errInfo = document.createElement('div');
+                errInfo.className = 'error-info';
+                errInfo.textContent = 'err: ' + errIn + '/' + errOut;
+                portEl.appendChild(errInfo);
                 div.appendChild(portEl);
             }
 
@@ -791,6 +824,12 @@
                 uplinkEl.textContent = uplinkInfo.localPort + ' → ' + uplinkInfo.parentName + ':' + uplinkInfo.remotePort;
                 const speedClass = getSpeedClass(uplinkInfo.speed);
                 if (speedClass) uplinkEl.classList.add(speedClass);
+                const errIn = uplinkInfo.errors?.in || 0;
+                const errOut = uplinkInfo.errors?.out || 0;
+                const errInfo = document.createElement('div');
+                errInfo.className = 'error-info';
+                errInfo.textContent = 'err: ' + errIn + '/' + errOut;
+                uplinkEl.appendChild(errInfo);
                 div.appendChild(uplinkEl);
             }
 
@@ -1050,7 +1089,9 @@
                         portA: link.interface_a || '?',
                         portB: link.interface_b || '?',
                         speedA: getInterfaceSpeed(link.node_a),
-                        speedB: getInterfaceSpeed(link.node_b)
+                        speedB: getInterfaceSpeed(link.node_b),
+                        errorsA: getInterfaceErrors(link.node_a),
+                        errorsB: getInterfaceErrors(link.node_b)
                     });
                 } else if (aIsSwitch && !bIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeB.typeid);
@@ -1059,7 +1100,8 @@
                         port: link.interface_a || '?',
                         switchName: getLabel(nodeA),
                         external: !effectiveSwitch || effectiveSwitch.typeid !== nodeA.typeid,
-                        speed: getInterfaceSpeed(link.node_a)
+                        speed: getInterfaceSpeed(link.node_a),
+                        errors: getInterfaceErrors(link.node_a)
                     });
                 } else if (bIsSwitch && !aIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeA.typeid);
@@ -1068,7 +1110,8 @@
                         port: link.interface_b || '?',
                         switchName: getLabel(nodeB),
                         external: !effectiveSwitch || effectiveSwitch.typeid !== nodeB.typeid,
-                        speed: getInterfaceSpeed(link.node_b)
+                        speed: getInterfaceSpeed(link.node_b),
+                        errors: getInterfaceErrors(link.node_b)
                     });
                 }
             });
@@ -1123,13 +1166,15 @@
                         neighbor: link.switchB,
                         localPort: link.portA,
                         remotePort: link.portB,
-                        localSpeed: link.speedA
+                        localSpeed: link.speedA,
+                        localErrors: link.errorsA
                     });
                     adjacency.get(link.switchB.typeid).push({
                         neighbor: link.switchA,
                         localPort: link.portB,
                         remotePort: link.portA,
-                        localSpeed: link.speedB
+                        localSpeed: link.speedB,
+                        localErrors: link.errorsB
                     });
                 });
 
@@ -1183,7 +1228,8 @@
                                 localPort: edge.localPort,
                                 remotePort: edge.remotePort,
                                 parentName: getLabel(current),
-                                speed: edge.localSpeed
+                                speed: edge.localSpeed,
+                                errors: edge.localErrors
                             });
                             queue.push(edge.neighbor);
                         }
