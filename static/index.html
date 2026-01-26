@@ -13,10 +13,6 @@
             background: #111;
             color: #eee;
         }
-        #controls {
-            margin-bottom: 10px;
-        }
-        #stats { margin-left: 10px; }
         #error { color: #f66; padding: 20px; }
 
         #container {
@@ -103,6 +99,19 @@
             color: #f99;
         }
 
+        .node .uplink {
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            background: #446;
+            color: #aaf;
+            padding: 1px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+
         .node:hover {
             filter: brightness(1.2);
         }
@@ -138,10 +147,6 @@
     </style>
 </head>
 <body>
-    <div id="controls">
-        <strong>Tendrils</strong>
-        <span id="stats"></span>
-    </div>
     <div id="error"></div>
     <div id="container"></div>
 
@@ -252,7 +257,7 @@
             return null;
         }
 
-        function createNodeElement(node, switchConnection, nodeLocation) {
+        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo) {
             const div = document.createElement('div');
             div.className = 'node' + (isSwitch(node) ? ' switch' : '');
 
@@ -272,6 +277,13 @@
             labelEl.textContent = getLabel(node);
             div.appendChild(labelEl);
 
+            if (isSwitch(node) && uplinkInfo) {
+                const uplinkEl = document.createElement('div');
+                uplinkEl.className = 'uplink';
+                uplinkEl.textContent = uplinkInfo.localPort + ' → ' + uplinkInfo.parentName + ':' + uplinkInfo.remotePort;
+                div.appendChild(uplinkEl);
+            }
+
             div.addEventListener('click', () => {
                 const json = JSON.stringify(node, null, 2);
                 navigator.clipboard.writeText(json).then(() => {
@@ -282,12 +294,12 @@
             return div;
         }
 
-        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections) {
+        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks) {
             const nodes = assignedNodes.get(loc) || [];
             const hasNodes = nodes.length > 0;
 
             const childElements = loc.children
-                .map(child => renderLocation(child, assignedNodes, false, switchConnections))
+                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks))
                 .filter(el => el !== null);
 
             if (!hasNodes && childElements.length === 0) {
@@ -313,7 +325,8 @@
                     const switchRow = document.createElement('div');
                     switchRow.className = 'node-row';
                     switches.forEach(node => {
-                        switchRow.appendChild(createNodeElement(node, null, loc));
+                        const uplink = switchUplinks.get(node.typeid);
+                        switchRow.appendChild(createNodeElement(node, null, loc, uplink));
                     });
                     container.appendChild(switchRow);
                 }
@@ -323,7 +336,7 @@
                     nodeRow.className = 'node-row';
                     nonSwitches.forEach(node => {
                         const conn = switchConnections.get(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, loc));
+                        nodeRow.appendChild(createNodeElement(node, conn, loc, null));
                     });
                     container.appendChild(nodeRow);
                 }
@@ -351,8 +364,6 @@
             const nodes = data.nodes || [];
             const links = data.links || [];
 
-            document.getElementById('stats').textContent =
-                `${nodes.length} nodes, ${links.length} links`;
 
             const locationTree = buildLocationTree(config.locations || [], null);
             const nodeIndex = new Map();
@@ -381,6 +392,9 @@
             });
 
             const switchConnections = new Map();
+            const switchLinks = [];
+            const allSwitches = nodes.filter(n => isSwitch(n));
+
             links.forEach(link => {
                 const nodeA = nodesByTypeId.get(link.node_a?.typeid);
                 const nodeB = nodesByTypeId.get(link.node_b?.typeid);
@@ -389,7 +403,14 @@
                 const aIsSwitch = isSwitch(nodeA);
                 const bIsSwitch = isSwitch(nodeB);
 
-                if (aIsSwitch && !bIsSwitch) {
+                if (aIsSwitch && bIsSwitch) {
+                    switchLinks.push({
+                        switchA: nodeA,
+                        switchB: nodeB,
+                        portA: link.interface_a || '?',
+                        portB: link.interface_b || '?'
+                    });
+                } else if (aIsSwitch && !bIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeB.typeid);
                     const effectiveSwitch = findEffectiveSwitch(nodeLoc, assignedNodes);
                     switchConnections.set(nodeB.typeid, {
@@ -408,11 +429,73 @@
                 }
             });
 
+            const switchUplinks = new Map();
+            if (allSwitches.length > 0 && switchLinks.length > 0) {
+                const adjacency = new Map();
+                allSwitches.forEach(sw => adjacency.set(sw.typeid, []));
+
+                switchLinks.forEach(link => {
+                    adjacency.get(link.switchA.typeid).push({
+                        neighbor: link.switchB,
+                        localPort: link.portA,
+                        remotePort: link.portB
+                    });
+                    adjacency.get(link.switchB.typeid).push({
+                        neighbor: link.switchA,
+                        localPort: link.portB,
+                        remotePort: link.portA
+                    });
+                });
+
+                let bestRoot = allSwitches[0];
+                let bestMaxDepth = Infinity;
+
+                allSwitches.forEach(candidate => {
+                    const visited = new Set([candidate.typeid]);
+                    const queue = [{ sw: candidate, depth: 0 }];
+                    let maxDepth = 0;
+
+                    while (queue.length > 0) {
+                        const { sw, depth } = queue.shift();
+                        maxDepth = Math.max(maxDepth, depth);
+                        for (const edge of adjacency.get(sw.typeid) || []) {
+                            if (!visited.has(edge.neighbor.typeid)) {
+                                visited.add(edge.neighbor.typeid);
+                                queue.push({ sw: edge.neighbor, depth: depth + 1 });
+                            }
+                        }
+                    }
+
+                    if (maxDepth < bestMaxDepth) {
+                        bestMaxDepth = maxDepth;
+                        bestRoot = candidate;
+                    }
+                });
+
+                const visited = new Set([bestRoot.typeid]);
+                const queue = [bestRoot];
+
+                while (queue.length > 0) {
+                    const current = queue.shift();
+                    for (const edge of adjacency.get(current.typeid) || []) {
+                        if (!visited.has(edge.neighbor.typeid)) {
+                            visited.add(edge.neighbor.typeid);
+                            switchUplinks.set(edge.neighbor.typeid, {
+                                localPort: edge.localPort,
+                                remotePort: edge.remotePort,
+                                parentName: getLabel(current)
+                            });
+                            queue.push(edge.neighbor);
+                        }
+                    }
+                }
+            }
+
             const container = document.getElementById('container');
             container.innerHTML = '';
 
             locationTree.forEach(loc => {
-                const el = renderLocation(loc, assignedNodes, true, switchConnections);
+                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks);
                 if (el) container.appendChild(el);
             });
 
@@ -432,7 +515,8 @@
                     const switchRow = document.createElement('div');
                     switchRow.className = 'node-row';
                     switches.forEach(node => {
-                        switchRow.appendChild(createNodeElement(node, null, null));
+                        const uplink = switchUplinks.get(node.typeid);
+                        switchRow.appendChild(createNodeElement(node, null, null, uplink));
                     });
                     unassignedLoc.appendChild(switchRow);
                 }
@@ -442,7 +526,7 @@
                     nodeRow.className = 'node-row';
                     nonSwitches.forEach(node => {
                         const conn = switchConnections.get(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, null));
+                        nodeRow.appendChild(createNodeElement(node, conn, null, null));
                     });
                     unassignedLoc.appendChild(nodeRow);
                 }
