@@ -503,6 +503,32 @@
             display: flex;
             align-items: center;
         }
+
+        #broadcast-stats .buckets {
+            display: none;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #444;
+        }
+
+        #broadcast-stats:hover .buckets {
+            display: block;
+        }
+
+        #broadcast-stats .bucket {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 2px 0;
+        }
+
+        #broadcast-stats .bucket-name {
+            color: #aaa;
+        }
+
+        #broadcast-stats .bucket-rate {
+            color: #eee;
+        }
     </style>
 </head>
 <body>
@@ -520,6 +546,7 @@
                 <span class="value" id="broadcast-bps">0 B/s</span>
             </div>
         </div>
+        <div class="buckets" id="broadcast-buckets"></div>
     </div>
     <div id="mode-selector">
         <button id="mode-network" class="active">Network</button>
@@ -554,10 +581,12 @@
             const panel = document.getElementById('broadcast-stats');
             const ppsEl = document.getElementById('broadcast-pps');
             const bpsEl = document.getElementById('broadcast-bps');
+            const bucketsEl = document.getElementById('broadcast-buckets');
 
             if (!stats) {
                 ppsEl.textContent = '0 pps';
                 bpsEl.textContent = '0 B/s';
+                bucketsEl.innerHTML = '';
                 panel.className = '';
                 return;
             }
@@ -570,6 +599,17 @@
                 panel.classList.add('critical');
             } else if (stats.packets_per_s > 100) {
                 panel.classList.add('warning');
+            }
+
+            bucketsEl.innerHTML = '';
+            if (stats.buckets && stats.buckets.length > 0) {
+                stats.buckets.filter(b => b.packets_per_s >= 0.5).forEach(bucket => {
+                    const div = document.createElement('div');
+                    div.className = 'bucket';
+                    div.innerHTML = '<span class="bucket-name">' + bucket.name + '</span>' +
+                        '<span class="bucket-rate">' + formatPackets(bucket.packets_per_s) + '</span>';
+                    bucketsEl.appendChild(div);
+                });
             }
         }
 
