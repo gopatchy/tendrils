@@ -1224,12 +1224,13 @@
                     for (const edge of adjacency.get(current.typeid) || []) {
                         if (!visited.has(edge.neighbor.typeid)) {
                             visited.add(edge.neighbor.typeid);
+                            const reverseEdge = adjacency.get(edge.neighbor.typeid).find(e => e.neighbor.typeid === current.typeid);
                             switchUplinks.set(edge.neighbor.typeid, {
-                                localPort: edge.localPort,
-                                remotePort: edge.remotePort,
+                                localPort: edge.remotePort,
+                                remotePort: edge.localPort,
                                 parentName: getLabel(current),
-                                speed: edge.localSpeed,
-                                errors: edge.localErrors
+                                speed: reverseEdge?.localSpeed || 0,
+                                errors: reverseEdge?.localErrors || null
                             });
                             queue.push(edge.neighbor);
                         }
