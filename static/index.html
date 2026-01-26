@@ -159,16 +159,6 @@
             line-height: 1.4;
         }
 
-        .node .switch-port .error-info::before,
-        .node .uplink .error-info::before {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 120px;
-            height: 8px;
-        }
 
         .error-info .lbl,
         .node-info .lbl,
@@ -358,11 +348,11 @@
         }
 
         .node .dante-info.tx-info {
-            background: #586;
+            background: #853;
         }
 
         .node .dante-info.rx-info {
-            background: #468;
+            background: #358;
         }
 
         .node .dante-info .dante-detail {
@@ -382,14 +372,6 @@
             line-height: 1.4;
         }
 
-        .node .dante-info .dante-detail::before {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            height: 8px;
-        }
 
         .node .dante-info::after {
             content: '';
@@ -430,10 +412,6 @@
             margin-top: 4px;
         }
 
-        body.dante-mode .node.dante-tx.dante-rx .dante-info.rx-info .dante-detail::before {
-            top: auto;
-            bottom: 100%;
-        }
 
         body.artnet-mode .node {
             opacity: 0.3;
@@ -441,16 +419,16 @@
 
         body.artnet-mode .node.artnet-out {
             opacity: 1;
-            background: #a62;
+            background: #287;
         }
 
         body.artnet-mode .node.artnet-in {
             opacity: 1;
-            background: #26d;
+            background: #268;
         }
 
         body.artnet-mode .node.artnet-out.artnet-in {
-            background: linear-gradient(135deg, #a62 50%, #26d 50%);
+            background: linear-gradient(135deg, #287 50%, #268 50%);
         }
 
         body.artnet-mode .node .switch-port,
@@ -475,11 +453,11 @@
         }
 
         .node .artnet-info.out-info {
-            background: #586;
+            background: #254;
         }
 
         .node .artnet-info.in-info {
-            background: #468;
+            background: #245;
         }
 
         .node .artnet-info .artnet-detail {
@@ -499,14 +477,6 @@
             line-height: 1.4;
         }
 
-        .node .artnet-info .artnet-detail::before {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            height: 8px;
-        }
 
         .node .artnet-info::after {
             content: '';
@@ -547,10 +517,6 @@
             margin-top: 4px;
         }
 
-        body.artnet-mode .node.artnet-out.artnet-in .artnet-info.in-info .artnet-detail::before {
-            top: auto;
-            bottom: 100%;
-        }
 
         body.sacn-mode .node {
             opacity: 0.3;
@@ -600,14 +566,6 @@
             line-height: 1.4;
         }
 
-        .node .sacn-info .sacn-detail::before {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            height: 8px;
-        }
 
         .node .sacn-info::after {
             content: '';
