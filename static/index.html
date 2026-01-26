@@ -284,6 +284,19 @@
     <script>
         function getLabel(node) {
             if (node.names && node.names.length > 0) return node.names.join('\n');
+            if (node.interfaces && node.interfaces.length > 0) {
+                const ips = [];
+                node.interfaces.forEach(iface => {
+                    if (iface.ips) iface.ips.forEach(ip => ips.push(ip));
+                });
+                if (ips.length > 0) return ips.join('\n');
+                const macs = [];
+                node.interfaces.forEach(iface => {
+                    if (iface.mac) macs.push(iface.mac);
+                });
+                if (macs.length > 0) return macs.join('\n');
+            }
+            return '??';
         }
 
         function getShortLabel(node) {
