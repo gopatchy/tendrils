@@ -410,6 +410,10 @@
             will-change: transform;
         }
 
+        body.dante-mode .node:not(.dante-tx):not(.dante-rx):hover .node-info {
+            display: none;
+        }
+
         .node:has(.switch-port:hover) .node-info,
         .node:has(.uplink:hover) .node-info,
         .node:has(.dante-info:hover) .node-info {
