@@ -252,8 +252,10 @@ func (n *Nodes) startNodePoller(nodeID int, node *Node) {
 	n.nodeCancel[nodeID] = cancel
 
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
+		pollTicker := time.NewTicker(10 * time.Second)
+		pingTicker := time.NewTicker(1 * time.Second)
+		defer pollTicker.Stop()
+		defer pingTicker.Stop()
 
 		for {
 			select {
@@ -261,8 +263,10 @@ func (n *Nodes) startNodePoller(nodeID int, node *Node) {
 				return
 			case <-node.pollTrigger:
 				n.t.pollNode(node)
-			case <-ticker.C:
+			case <-pollTicker.C:
 				n.t.pollNode(node)
+			case <-pingTicker.C:
+				n.t.pingNode(node)
 			}
 		}
 	}()

@@ -9,8 +9,9 @@ import (
 type PortErrorType string
 
 const (
-	ErrorTypeStartup PortErrorType = "startup"
-	ErrorTypeNew     PortErrorType = "new"
+	ErrorTypeStartup     PortErrorType = "startup"
+	ErrorTypeNew         PortErrorType = "new"
+	ErrorTypeUnreachable PortErrorType = "unreachable"
 )
 
 type PortError struct {
@@ -180,4 +181,53 @@ func (e *ErrorTracker) GetErrors() []*PortError {
 		errors = append(errors, err)
 	}
 	return errors
+}
+
+func (e *ErrorTracker) SetUnreachable(node *Node, ip string) {
+	changed := e.setUnreachableLocked(node, ip)
+	if changed {
+		e.t.NotifyUpdate()
+	}
+}
+
+func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := "unreachable:" + node.TypeID + ":" + ip
+	if _, exists := e.errors[key]; exists {
+		return false
+	}
+
+	now := time.Now()
+	e.nextID++
+	e.errors[key] = &PortError{
+		ID:          fmt.Sprintf("err-%d", e.nextID),
+		NodeTypeID:  node.TypeID,
+		NodeName:    node.DisplayName(),
+		PortName:    ip,
+		ErrorType:   ErrorTypeUnreachable,
+		FirstSeen:   now,
+		LastUpdated: now,
+	}
+	return true
+}
+
+func (e *ErrorTracker) ClearUnreachable(node *Node, ip string) {
+	changed := e.clearUnreachableLocked(node, ip)
+	if changed {
+		e.t.NotifyUpdate()
+	}
+}
+
+func (e *ErrorTracker) clearUnreachableLocked(node *Node, ip string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := "unreachable:" + node.TypeID + ":" + ip
+	if _, exists := e.errors[key]; exists {
+		delete(e.errors, key)
+		return true
+	}
+	return false
 }

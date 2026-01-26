@@ -725,20 +725,32 @@
                 nodeEl.addEventListener('click', () => scrollToNode(err.node_typeid));
                 item.appendChild(nodeEl);
 
-                const portEl = document.createElement('div');
-                portEl.className = 'error-port';
-                portEl.textContent = 'Port: ' + err.port_name;
-                item.appendChild(portEl);
+                if (err.error_type === 'unreachable') {
+                    const ipEl = document.createElement('div');
+                    ipEl.className = 'error-port';
+                    ipEl.textContent = 'IP: ' + err.port_name;
+                    item.appendChild(ipEl);
 
-                const countsEl = document.createElement('div');
-                countsEl.className = 'error-counts';
-                countsEl.textContent = 'In: ' + err.in_errors + ' (+' + (err.in_delta || 0) + ') / Out: ' + err.out_errors + ' (+' + (err.out_delta || 0) + ')';
-                item.appendChild(countsEl);
+                    const typeEl = document.createElement('div');
+                    typeEl.className = 'error-type';
+                    typeEl.textContent = 'Unreachable';
+                    item.appendChild(typeEl);
+                } else {
+                    const portEl = document.createElement('div');
+                    portEl.className = 'error-port';
+                    portEl.textContent = 'Port: ' + err.port_name;
+                    item.appendChild(portEl);
 
-                const typeEl = document.createElement('div');
-                typeEl.className = 'error-type';
-                typeEl.textContent = err.error_type === 'startup' ? 'Present at startup' : 'New errors detected';
-                item.appendChild(typeEl);
+                    const countsEl = document.createElement('div');
+                    countsEl.className = 'error-counts';
+                    countsEl.textContent = 'In: ' + err.in_errors + ' (+' + (err.in_delta || 0) + ') / Out: ' + err.out_errors + ' (+' + (err.out_delta || 0) + ')';
+                    item.appendChild(countsEl);
+
+                    const typeEl = document.createElement('div');
+                    typeEl.className = 'error-type';
+                    typeEl.textContent = err.error_type === 'startup' ? 'Present at startup' : 'New errors detected';
+                    item.appendChild(typeEl);
+                }
 
                 const dismissBtn = document.createElement('button');
                 dismissBtn.textContent = 'Dismiss';
