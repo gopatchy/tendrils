@@ -111,10 +111,14 @@ type Interface struct {
 }
 
 type InterfaceStats struct {
-	Speed     uint64    `json:"speed,omitempty"`
-	InErrors  uint64    `json:"in_errors,omitempty"`
-	OutErrors uint64    `json:"out_errors,omitempty"`
-	PoE       *PoEStats `json:"poe,omitempty"`
+	Speed       uint64    `json:"speed,omitempty"`
+	InErrors    uint64    `json:"in_errors,omitempty"`
+	OutErrors   uint64    `json:"out_errors,omitempty"`
+	InPktsRate  float64   `json:"in_pkts_rate,omitempty"`
+	OutPktsRate float64   `json:"out_pkts_rate,omitempty"`
+	InBytesRate float64   `json:"in_bytes_rate,omitempty"`
+	OutBytesRate float64  `json:"out_bytes_rate,omitempty"`
+	PoE         *PoEStats `json:"poe,omitempty"`
 }
 
 type PoEStats struct {
@@ -193,6 +197,10 @@ func (s *InterfaceStats) String() string {
 
 	if s.InErrors > 0 || s.OutErrors > 0 {
 		parts = append(parts, fmt.Sprintf("err:%d/%d", s.InErrors, s.OutErrors))
+	}
+
+	if s.InBytesRate > 0 || s.OutBytesRate > 0 {
+		parts = append(parts, fmt.Sprintf("%.0f/%.0fB/s", s.InBytesRate, s.OutBytesRate))
 	}
 
 	if s.PoE != nil {

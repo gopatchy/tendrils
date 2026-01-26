@@ -144,16 +144,20 @@
             display: none;
             font-size: 8px;
             opacity: 0.8;
+            white-space: pre;
+            text-align: left;
         }
 
         .node .switch-port:hover .error-info,
         .node .uplink:hover .error-info {
             display: block;
+            will-change: transform;
         }
 
         .node .switch-port:hover,
         .node .uplink:hover {
             z-index: 100;
+            will-change: transform;
         }
 
         .node .uplink {
@@ -407,7 +411,8 @@
         }
 
         .node:has(.switch-port:hover) .node-info,
-        .node:has(.uplink:hover) .node-info {
+        .node:has(.uplink:hover) .node-info,
+        .node:has(.dante-info:hover) .node-info {
             display: none;
         }
 
@@ -820,6 +825,31 @@
             return { in: inErr, out: outErr };
         }
 
+        function getInterfaceRates(node) {
+            if (!node.interfaces || node.interfaces.length === 0) return null;
+            const iface = node.interfaces[0];
+            if (!iface.stats) return null;
+            return {
+                inPkts: iface.stats.in_pkts_rate || 0,
+                outPkts: iface.stats.out_pkts_rate || 0,
+                inBytes: iface.stats.in_bytes_rate || 0,
+                outBytes: iface.stats.out_bytes_rate || 0
+            };
+        }
+
+        function formatRate(bps) {
+            if (bps < 1024) return bps.toFixed(0) + ' B/s';
+            if (bps < 1024 * 1024) return (bps / 1024).toFixed(1) + ' KB/s';
+            if (bps < 1024 * 1024 * 1024) return (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
+            return (bps / (1024 * 1024 * 1024)).toFixed(1) + ' GB/s';
+        }
+
+        function formatPps(pps) {
+            if (pps < 1000) return pps.toFixed(0) + ' pps';
+            if (pps < 1000000) return (pps / 1000).toFixed(1) + 'K pps';
+            return (pps / 1000000).toFixed(1) + 'M pps';
+        }
+
         let anonCounter = 0;
 
         function buildLocationTree(locations, parent) {
@@ -917,10 +947,16 @@
                 if (speedClass) portEl.classList.add(speedClass);
                 const errIn = switchConnection.errors?.in || 0;
                 const errOut = switchConnection.errors?.out || 0;
-                const errInfo = document.createElement('div');
-                errInfo.className = 'error-info';
-                errInfo.textContent = 'err: ' + errIn + '/' + errOut;
-                portEl.appendChild(errInfo);
+                const statsInfo = document.createElement('div');
+                statsInfo.className = 'error-info';
+                let statsText = 'err: ' + errIn + '/' + errOut;
+                if (switchConnection.rates) {
+                    const r = switchConnection.rates;
+                    statsText += '\nrx: ' + formatRate(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
+                    statsText += '\ntx: ' + formatRate(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
+                }
+                statsInfo.textContent = statsText;
+                portEl.appendChild(statsInfo);
                 div.appendChild(portEl);
             }
 
@@ -993,10 +1029,16 @@
                 if (speedClass) uplinkEl.classList.add(speedClass);
                 const errIn = uplinkInfo.errors?.in || 0;
                 const errOut = uplinkInfo.errors?.out || 0;
-                const errInfo = document.createElement('div');
-                errInfo.className = 'error-info';
-                errInfo.textContent = 'err: ' + errIn + '/' + errOut;
-                uplinkEl.appendChild(errInfo);
+                const statsInfo = document.createElement('div');
+                statsInfo.className = 'error-info';
+                let statsText = 'err: ' + errIn + '/' + errOut;
+                if (uplinkInfo.rates) {
+                    const r = uplinkInfo.rates;
+                    statsText += '\nrx: ' + formatRate(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
+                    statsText += '\ntx: ' + formatRate(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
+                }
+                statsInfo.textContent = statsText;
+                uplinkEl.appendChild(statsInfo);
                 div.appendChild(uplinkEl);
             }
 
@@ -1258,7 +1300,9 @@
                         speedA: getInterfaceSpeed(link.node_a),
                         speedB: getInterfaceSpeed(link.node_b),
                         errorsA: getInterfaceErrors(link.node_a),
-                        errorsB: getInterfaceErrors(link.node_b)
+                        errorsB: getInterfaceErrors(link.node_b),
+                        ratesA: getInterfaceRates(link.node_a),
+                        ratesB: getInterfaceRates(link.node_b)
                     });
                 } else if (aIsSwitch && !bIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeB.typeid);
@@ -1268,7 +1312,8 @@
                         switchName: getLabel(nodeA),
                         external: !effectiveSwitch || effectiveSwitch.typeid !== nodeA.typeid,
                         speed: getInterfaceSpeed(link.node_a),
-                        errors: getInterfaceErrors(link.node_a)
+                        errors: getInterfaceErrors(link.node_a),
+                        rates: getInterfaceRates(link.node_a)
                     });
                 } else if (bIsSwitch && !aIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeA.typeid);
@@ -1278,7 +1323,8 @@
                         switchName: getLabel(nodeB),
                         external: !effectiveSwitch || effectiveSwitch.typeid !== nodeB.typeid,
                         speed: getInterfaceSpeed(link.node_b),
-                        errors: getInterfaceErrors(link.node_b)
+                        errors: getInterfaceErrors(link.node_b),
+                        rates: getInterfaceRates(link.node_b)
                     });
                 }
             });
@@ -1334,14 +1380,16 @@
                         localPort: link.portA,
                         remotePort: link.portB,
                         localSpeed: link.speedA,
-                        localErrors: link.errorsA
+                        localErrors: link.errorsA,
+                        localRates: link.ratesA
                     });
                     adjacency.get(link.switchB.typeid).push({
                         neighbor: link.switchA,
                         localPort: link.portB,
                         remotePort: link.portA,
                         localSpeed: link.speedB,
-                        localErrors: link.errorsB
+                        localErrors: link.errorsB,
+                        localRates: link.ratesB
                     });
                 });
 
@@ -1397,7 +1445,8 @@
                                 remotePort: edge.localPort,
                                 parentName: getLabel(current),
                                 speed: reverseEdge?.localSpeed || 0,
-                                errors: reverseEdge?.localErrors || null
+                                errors: reverseEdge?.localErrors || null,
+                                rates: reverseEdge?.localRates || null
                             });
                             queue.push(edge.neighbor);
                         }

@@ -6,10 +6,28 @@ import (
 	"net"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
 )
+
+type ifaceCounters struct {
+	inPkts    uint64
+	outPkts   uint64
+	inBytes   uint64
+	outBytes  uint64
+	timestamp time.Time
+}
+
+type counterTracker struct {
+	mu       sync.Mutex
+	counters map[string]*ifaceCounters
+}
+
+var ifaceTracker = &counterTracker{
+	counters: map[string]*ifaceCounters{},
+}
 
 var portNameRewrites = []struct {
 	re   *regexp.Regexp
@@ -183,7 +201,13 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 	ifInErrors := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.14")
 	ifOutErrors := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.20")
 
+	ifHCInOctets := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.6")
+	ifHCOutOctets := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.10")
+	ifHCInUcastPkts := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.7")
+	ifHCOutUcastPkts := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.11")
+
 	poeStats := t.getPoEStats(snmp, ifNames)
+	now := time.Now()
 
 	t.nodes.mu.Lock()
 	defer t.nodes.mu.Unlock()
@@ -214,6 +238,46 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 
 		if outErr, ok := ifOutErrors[ifIndex]; ok {
 			stats.OutErrors = uint64(outErr)
+		}
+
+		inPkts, hasInPkts := ifHCInUcastPkts[ifIndex]
+		outPkts, hasOutPkts := ifHCOutUcastPkts[ifIndex]
+		inBytes, hasInBytes := ifHCInOctets[ifIndex]
+		outBytes, hasOutBytes := ifHCOutOctets[ifIndex]
+
+		if hasInPkts && hasOutPkts && hasInBytes && hasOutBytes {
+			key := node.TypeID + ":" + name
+			ifaceTracker.mu.Lock()
+			prev, hasPrev := ifaceTracker.counters[key]
+			if hasPrev {
+				elapsed := now.Sub(prev.timestamp).Seconds()
+				if elapsed > 0 {
+					stats.InPktsRate = float64(inPkts-prev.inPkts) / elapsed
+					stats.OutPktsRate = float64(outPkts-prev.outPkts) / elapsed
+					stats.InBytesRate = float64(inBytes-prev.inBytes) / elapsed
+					stats.OutBytesRate = float64(outBytes-prev.outBytes) / elapsed
+					if stats.InPktsRate < 0 {
+						stats.InPktsRate = 0
+					}
+					if stats.OutPktsRate < 0 {
+						stats.OutPktsRate = 0
+					}
+					if stats.InBytesRate < 0 {
+						stats.InBytesRate = 0
+					}
+					if stats.OutBytesRate < 0 {
+						stats.OutBytesRate = 0
+					}
+				}
+			}
+			ifaceTracker.counters[key] = &ifaceCounters{
+				inPkts:    inPkts,
+				outPkts:   outPkts,
+				inBytes:   inBytes,
+				outBytes:  outBytes,
+				timestamp: now,
+			}
+			ifaceTracker.mu.Unlock()
 		}
 
 		if poe, ok := poeStats[name]; ok {
@@ -273,6 +337,34 @@ func (t *Tendrils) getInterfaceTable(snmp *gosnmp.GoSNMP, oid string) map[int]in
 			continue
 		}
 		table[ifIndex] = value
+	}
+	return table
+}
+
+func (t *Tendrils) getInterfaceTable64(snmp *gosnmp.GoSNMP, oid string) map[int]uint64 {
+	results, err := snmp.BulkWalkAll(oid)
+	if err != nil {
+		return nil
+	}
+
+	table := map[int]uint64{}
+	for _, result := range results {
+		oidSuffix := strings.TrimPrefix(strings.TrimPrefix(result.Name, "."+oid), ".")
+		var ifIndex int
+		if _, err := fmt.Sscanf(oidSuffix, "%d", &ifIndex); err != nil {
+			continue
+		}
+
+		switch v := result.Value.(type) {
+		case uint64:
+			table[ifIndex] = v
+		case uint:
+			table[ifIndex] = uint64(v)
+		case int:
+			table[ifIndex] = uint64(v)
+		case int64:
+			table[ifIndex] = uint64(v)
+		}
 	}
 	return table
 }
