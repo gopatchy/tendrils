@@ -936,6 +936,8 @@
                 portEl.className = 'switch-port';
                 if (switchConnection.external) {
                     portEl.classList.add('external');
+                }
+                if (switchConnection.showSwitchName) {
                     portEl.textContent = switchConnection.switchName + ':' + switchConnection.port;
                 } else {
                     portEl.textContent = switchConnection.port;
@@ -1321,10 +1323,12 @@
                 } else if (aIsSwitch && !bIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeB.typeid);
                     const effectiveSwitch = findEffectiveSwitch(nodeLoc, assignedNodes);
+                    const isLocalSwitch = effectiveSwitch && effectiveSwitch.typeid === nodeA.typeid;
                     switchConnections.set(nodeB.typeid, {
                         port: link.interface_a || '?',
                         switchName: getLabel(nodeA),
-                        external: !effectiveSwitch || effectiveSwitch.typeid !== nodeA.typeid,
+                        showSwitchName: !isLocalSwitch,
+                        external: effectiveSwitch && !isLocalSwitch,
                         speed: getInterfaceSpeed(link.node_a),
                         errors: getInterfaceErrors(link.node_a),
                         rates: getInterfaceRates(link.node_a)
@@ -1332,10 +1336,12 @@
                 } else if (bIsSwitch && !aIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeA.typeid);
                     const effectiveSwitch = findEffectiveSwitch(nodeLoc, assignedNodes);
+                    const isLocalSwitch = effectiveSwitch && effectiveSwitch.typeid === nodeB.typeid;
                     switchConnections.set(nodeA.typeid, {
                         port: link.interface_b || '?',
                         switchName: getLabel(nodeB),
-                        external: !effectiveSwitch || effectiveSwitch.typeid !== nodeB.typeid,
+                        showSwitchName: !isLocalSwitch,
+                        external: effectiveSwitch && !isLocalSwitch,
                         speed: getInterfaceSpeed(link.node_b),
                         errors: getInterfaceErrors(link.node_b),
                         rates: getInterfaceRates(link.node_b)
