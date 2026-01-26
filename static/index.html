@@ -822,7 +822,9 @@
             const links = data.links || [];
 
             portErrors = data.port_errors || [];
+            const unreachableNodes = new Set(data.unreachable_nodes || []);
             const errorNodeIds = new Set(portErrors.map(e => e.node_typeid));
+            unreachableNodes.forEach(id => errorNodeIds.add(id));
 
 
             const locationTree = buildLocationTree(config.locations || [], null);

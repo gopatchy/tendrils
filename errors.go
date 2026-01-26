@@ -35,20 +35,22 @@ type portErrorBaseline struct {
 }
 
 type ErrorTracker struct {
-	mu                   sync.RWMutex
-	errors               map[string]*PortError
-	baselines            map[string]*portErrorBaseline
+	mu                    sync.RWMutex
+	errors                map[string]*PortError
+	baselines             map[string]*portErrorBaseline
 	suppressedUnreachable map[string]bool
-	nextID               int
-	t                    *Tendrils
+	unreachableNodes      map[string]bool
+	nextID                int
+	t                     *Tendrils
 }
 
 func NewErrorTracker(t *Tendrils) *ErrorTracker {
 	return &ErrorTracker{
-		errors:               map[string]*PortError{},
-		baselines:            map[string]*portErrorBaseline{},
+		errors:                map[string]*PortError{},
+		baselines:             map[string]*portErrorBaseline{},
 		suppressedUnreachable: map[string]bool{},
-		t:                    t,
+		unreachableNodes:      map[string]bool{},
+		t:                     t,
 	}
 }
 
@@ -193,6 +195,17 @@ func (e *ErrorTracker) GetErrors() []*PortError {
 	return errors
 }
 
+func (e *ErrorTracker) GetUnreachableNodes() []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	nodes := make([]string, 0, len(e.unreachableNodes))
+	for nodeTypeID := range e.unreachableNodes {
+		nodes = append(nodes, nodeTypeID)
+	}
+	return nodes
+}
+
 func (e *ErrorTracker) SetUnreachable(node *Node, ip string) {
 	changed := e.setUnreachableLocked(node, ip)
 	if changed {
@@ -206,12 +219,15 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) bool {
 
 	key := "unreachable:" + node.TypeID + ":" + ip
 
+	wasUnreachable := e.unreachableNodes[node.TypeID]
+	e.unreachableNodes[node.TypeID] = true
+
 	if e.suppressedUnreachable[key] {
-		return false
+		return !wasUnreachable
 	}
 
 	if _, exists := e.errors[key]; exists {
-		return false
+		return !wasUnreachable
 	}
 
 	now := time.Now()
@@ -243,9 +259,12 @@ func (e *ErrorTracker) clearUnreachableLocked(node *Node, ip string) bool {
 
 	delete(e.suppressedUnreachable, key)
 
+	wasUnreachable := e.unreachableNodes[node.TypeID]
+	delete(e.unreachableNodes, node.TypeID)
+
 	if _, exists := e.errors[key]; exists {
 		delete(e.errors, key)
 		return true
 	}
-	return false
+	return wasUnreachable
 }

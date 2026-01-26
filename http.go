@@ -25,12 +25,13 @@ const (
 )
 
 type StatusResponse struct {
-	Nodes           []*Node                  `json:"nodes"`
-	Links           []*Link                  `json:"links"`
-	MulticastGroups []*MulticastGroupMembers `json:"multicast_groups"`
-	ArtNetNodes     []*ArtNetNode            `json:"artnet_nodes"`
-	DanteFlows      []*DanteFlow             `json:"dante_flows"`
-	PortErrors      []*PortError             `json:"port_errors"`
+	Nodes            []*Node                  `json:"nodes"`
+	Links            []*Link                  `json:"links"`
+	MulticastGroups  []*MulticastGroupMembers `json:"multicast_groups"`
+	ArtNetNodes      []*ArtNetNode            `json:"artnet_nodes"`
+	DanteFlows       []*DanteFlow             `json:"dante_flows"`
+	PortErrors       []*PortError             `json:"port_errors"`
+	UnreachableNodes []string                 `json:"unreachable_nodes"`
 }
 
 func (t *Tendrils) startHTTPServer() {
@@ -132,12 +133,13 @@ func (t *Tendrils) handleAPIConfig(w http.ResponseWriter, r *http.Request) {
 
 func (t *Tendrils) GetStatus() *StatusResponse {
 	return &StatusResponse{
-		Nodes:           t.getNodes(),
-		Links:           t.getLinks(),
-		MulticastGroups: t.getMulticastGroups(),
-		ArtNetNodes:     t.getArtNetNodes(),
-		DanteFlows:      t.getDanteFlows(),
-		PortErrors:      t.errors.GetErrors(),
+		Nodes:            t.getNodes(),
+		Links:            t.getLinks(),
+		MulticastGroups:  t.getMulticastGroups(),
+		ArtNetNodes:      t.getArtNetNodes(),
+		DanteFlows:       t.getDanteFlows(),
+		PortErrors:       t.errors.GetErrors(),
+		UnreachableNodes: t.errors.GetUnreachableNodes(),
 	}
 }
 
