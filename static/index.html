@@ -271,12 +271,140 @@
             top: auto;
             bottom: -8px;
         }
+
+        .node.has-error {
+            box-shadow: 0 0 0 3px #f66;
+            animation: error-pulse 2s infinite;
+        }
+
+        @keyframes error-pulse {
+            0%, 100% { box-shadow: 0 0 0 3px #f66; }
+            50% { box-shadow: 0 0 0 3px #f00; }
+        }
+
+        #error-panel {
+            position: fixed;
+            top: 50px;
+            right: 10px;
+            z-index: 1000;
+            background: #2a1a1a;
+            border: 1px solid #f66;
+            border-radius: 6px;
+            max-width: 500px;
+            max-height: 400px;
+            overflow: hidden;
+            display: none;
+        }
+
+        #error-panel.has-errors {
+            display: block;
+        }
+
+        #error-panel.collapsed #error-list {
+            display: none;
+        }
+
+        #error-header {
+            padding: 8px 12px;
+            background: #3a2a2a;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        #error-count {
+            flex: 1;
+            color: #f99;
+            font-weight: bold;
+        }
+
+        #error-header button {
+            padding: 4px 8px;
+            border: none;
+            background: #444;
+            color: #ccc;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        #error-header button:hover {
+            background: #555;
+        }
+
+        #error-list {
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .error-item {
+            background: #3a2a2a;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .error-item .error-node {
+            color: #faa;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .error-item .error-node:hover {
+            text-decoration: underline;
+        }
+
+        .error-item .error-port {
+            color: #ccc;
+            font-size: 11px;
+        }
+
+        .error-item .error-counts {
+            color: #f66;
+            font-size: 11px;
+        }
+
+        .error-item .error-type {
+            font-size: 9px;
+            color: #888;
+        }
+
+        .error-item button {
+            align-self: flex-end;
+            padding: 2px 6px;
+            border: none;
+            background: #555;
+            color: #ccc;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 10px;
+        }
+
+        .error-item button:hover {
+            background: #666;
+        }
+
+        .node.scroll-highlight {
+            outline: 3px solid white;
+        }
     </style>
 </head>
 <body>
     <div id="mode-selector">
         <button id="mode-network" class="active">Network</button>
         <button id="mode-dante">Dante</button>
+    </div>
+    <div id="error-panel">
+        <div id="error-header">
+            <span id="error-count">0 Errors</span>
+            <button id="clear-all-errors">Clear All</button>
+            <button id="toggle-errors">Hide</button>
+        </div>
+        <div id="error-list"></div>
     </div>
     <div id="error"></div>
     <div id="container"></div>
@@ -405,9 +533,11 @@
             return null;
         }
 
-        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo) {
+        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, hasError) {
             const div = document.createElement('div');
             div.className = 'node' + (isSwitch(node) ? ' switch' : '');
+            div.dataset.typeid = node.typeid;
+            if (hasError) div.classList.add('has-error');
 
             if (danteInfo) {
                 if (danteInfo.isTx) div.classList.add('dante-tx');
@@ -466,12 +596,12 @@
             return div;
         }
 
-        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes) {
+        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes, errorNodeIds) {
             const nodes = assignedNodes.get(loc) || [];
             const hasNodes = nodes.length > 0;
 
             const childElements = loc.children
-                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes))
+                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes, errorNodeIds))
                 .filter(el => el !== null);
 
             if (!hasNodes && childElements.length === 0) {
@@ -499,7 +629,8 @@
                     switches.forEach(node => {
                         const uplink = switchUplinks.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo));
+                        const hasError = errorNodeIds.has(node.typeid);
+                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo, hasError));
                     });
                     container.appendChild(switchRow);
                 }
@@ -510,7 +641,8 @@
                     nonSwitches.forEach(node => {
                         const conn = switchConnections.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo));
+                        const hasError = errorNodeIds.has(node.typeid);
+                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo, hasError));
                     });
                     container.appendChild(nodeRow);
                 }
@@ -526,6 +658,76 @@
             return container;
         }
 
+        let portErrors = [];
+        let errorPanelCollapsed = false;
+
+        function updateErrorPanel() {
+            const panel = document.getElementById('error-panel');
+            const countEl = document.getElementById('error-count');
+            const listEl = document.getElementById('error-list');
+
+            if (portErrors.length === 0) {
+                panel.classList.remove('has-errors');
+                return;
+            }
+
+            panel.classList.add('has-errors');
+            countEl.textContent = portErrors.length + ' Error' + (portErrors.length !== 1 ? 's' : '');
+
+            listEl.innerHTML = '';
+            portErrors.forEach(err => {
+                const item = document.createElement('div');
+                item.className = 'error-item';
+
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'error-node';
+                nodeEl.textContent = err.node_name || err.node_typeid;
+                nodeEl.addEventListener('click', () => scrollToNode(err.node_typeid));
+                item.appendChild(nodeEl);
+
+                const portEl = document.createElement('div');
+                portEl.className = 'error-port';
+                portEl.textContent = 'Port: ' + err.port_name;
+                item.appendChild(portEl);
+
+                const countsEl = document.createElement('div');
+                countsEl.className = 'error-counts';
+                countsEl.textContent = 'In: ' + err.in_errors + ' (+' + (err.in_delta || 0) + ') / Out: ' + err.out_errors + ' (+' + (err.out_delta || 0) + ')';
+                item.appendChild(countsEl);
+
+                const typeEl = document.createElement('div');
+                typeEl.className = 'error-type';
+                typeEl.textContent = err.error_type === 'startup' ? 'Present at startup' : 'New errors detected';
+                item.appendChild(typeEl);
+
+                const dismissBtn = document.createElement('button');
+                dismissBtn.textContent = 'Dismiss';
+                dismissBtn.addEventListener('click', () => clearError(err.id));
+                item.appendChild(dismissBtn);
+
+                listEl.appendChild(item);
+            });
+        }
+
+        function scrollToNode(typeid) {
+            const nodeEl = document.querySelector('.node[data-typeid="' + typeid + '"]');
+            if (nodeEl) {
+                nodeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                nodeEl.classList.add('scroll-highlight');
+                setTimeout(() => nodeEl.classList.remove('scroll-highlight'), 1000);
+            }
+        }
+
+        async function clearError(id) {
+            await fetch('/api/errors/clear?id=' + encodeURIComponent(id), { method: 'POST' });
+            init();
+        }
+
+        async function clearAllErrors() {
+            await fetch('/api/errors/clear?all=true', { method: 'POST' });
+            init();
+        }
+
         async function init() {
             anonCounter = 0;
             const [statusResp, configResp] = await Promise.all([
@@ -537,6 +739,9 @@
 
             const nodes = data.nodes || [];
             const links = data.links || [];
+
+            portErrors = data.port_errors || [];
+            const errorNodeIds = new Set(portErrors.map(e => e.node_typeid));
 
 
             const locationTree = buildLocationTree(config.locations || [], null);
@@ -723,7 +928,7 @@
             container.innerHTML = '';
 
             locationTree.forEach(loc => {
-                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes);
+                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes, errorNodeIds);
                 if (el) container.appendChild(el);
             });
 
@@ -745,7 +950,8 @@
                     switches.forEach(node => {
                         const uplink = switchUplinks.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo));
+                        const hasError = errorNodeIds.has(node.typeid);
+                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo, hasError));
                     });
                     unassignedLoc.appendChild(switchRow);
                 }
@@ -756,13 +962,16 @@
                     nonSwitches.forEach(node => {
                         const conn = switchConnections.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo));
+                        const hasError = errorNodeIds.has(node.typeid);
+                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo, hasError));
                     });
                     unassignedLoc.appendChild(nodeRow);
                 }
 
                 container.appendChild(unassignedLoc);
             }
+
+            updateErrorPanel();
         }
 
         init().catch(e => {
@@ -785,6 +994,20 @@
 
         document.getElementById('mode-network').addEventListener('click', () => setMode('network'));
         document.getElementById('mode-dante').addEventListener('click', () => setMode('dante'));
+
+        document.getElementById('clear-all-errors').addEventListener('click', clearAllErrors);
+        document.getElementById('toggle-errors').addEventListener('click', () => {
+            const panel = document.getElementById('error-panel');
+            const btn = document.getElementById('toggle-errors');
+            errorPanelCollapsed = !errorPanelCollapsed;
+            if (errorPanelCollapsed) {
+                panel.classList.add('collapsed');
+                btn.textContent = 'Show';
+            } else {
+                panel.classList.remove('collapsed');
+                btn.textContent = 'Hide';
+            }
+        });
 
         if (window.location.hash === '#dante') {
             setMode('dante');

@@ -29,6 +29,7 @@ type StatusResponse struct {
 	MulticastGroups []*MulticastGroupMembers `json:"multicast_groups"`
 	ArtNetNodes     []*ArtNetNode            `json:"artnet_nodes"`
 	DanteFlows      []*DanteFlow             `json:"dante_flows"`
+	PortErrors      []*PortError             `json:"port_errors"`
 }
 
 func (t *Tendrils) startHTTPServer() {
@@ -40,6 +41,7 @@ func (t *Tendrils) startHTTPServer() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", t.handleAPIStatus)
 	mux.HandleFunc("/api/config", t.handleAPIConfig)
+	mux.HandleFunc("/api/errors/clear", t.handleClearError)
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
 	log.Printf("[https] listening on :443")
@@ -133,7 +135,26 @@ func (t *Tendrils) GetStatus() *StatusResponse {
 		MulticastGroups: t.getMulticastGroups(),
 		ArtNetNodes:     t.getArtNetNodes(),
 		DanteFlows:      t.getDanteFlows(),
+		PortErrors:      t.errors.GetErrors(),
 	}
+}
+
+func (t *Tendrils) handleClearError(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.URL.Query().Get("all") == "true" {
+		t.errors.ClearAllErrors()
+	} else if id := r.URL.Query().Get("id"); id != "" {
+		t.errors.ClearError(id)
+	} else {
+		http.Error(w, "missing id or all parameter", http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (t *Tendrils) getNodes() []*Node {

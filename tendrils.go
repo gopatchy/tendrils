@@ -34,6 +34,7 @@ type Tendrils struct {
 	nodes            *Nodes
 	artnet           *ArtNetNodes
 	danteFlows       *DanteFlows
+	errors           *ErrorTracker
 	config           *Config
 
 	Interface     string
@@ -67,6 +68,7 @@ func New() *Tendrils {
 		activeInterfaces: map[string]context.CancelFunc{},
 		artnet:           NewArtNetNodes(),
 		danteFlows:       NewDanteFlows(),
+		errors:           NewErrorTracker(),
 	}
 	t.nodes = NewNodes(t)
 	return t
