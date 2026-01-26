@@ -133,6 +133,8 @@
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
+            overflow: visible;
+            max-width: none;
         }
 
         .node .switch-port.external {
@@ -211,6 +213,8 @@
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
+            overflow: visible;
+            max-width: none;
         }
 
         .node .root-label {
@@ -348,9 +352,16 @@
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
-            background: #444;
             color: #fff;
             z-index: 10;
+        }
+
+        .node .dante-info.tx-info {
+            background: #853;
+        }
+
+        .node .dante-info.rx-info {
+            background: #357;
         }
 
         .node .dante-info .dante-detail {
@@ -429,7 +440,7 @@
 
         body.artnet-mode .node.artnet-out {
             opacity: 1;
-            background: #2a2;
+            background: #a62;
         }
 
         body.artnet-mode .node.artnet-in {
@@ -438,7 +449,7 @@
         }
 
         body.artnet-mode .node.artnet-out.artnet-in {
-            background: linear-gradient(135deg, #2a2 50%, #26d 50%);
+            background: linear-gradient(135deg, #a62 50%, #26d 50%);
         }
 
         body.artnet-mode .node .switch-port,
@@ -458,9 +469,16 @@
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
-            background: #444;
             color: #fff;
             z-index: 10;
+        }
+
+        .node .artnet-info.out-info {
+            background: #753;
+        }
+
+        .node .artnet-info.in-info {
+            background: #357;
         }
 
         .node .artnet-info .artnet-detail {
@@ -559,7 +577,7 @@
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
-            background: #444;
+            background: #357;
             color: #fff;
             z-index: 10;
         }
