@@ -35,18 +35,20 @@ type portErrorBaseline struct {
 }
 
 type ErrorTracker struct {
-	mu        sync.RWMutex
-	errors    map[string]*PortError
-	baselines map[string]*portErrorBaseline
-	nextID    int
-	t         *Tendrils
+	mu                   sync.RWMutex
+	errors               map[string]*PortError
+	baselines            map[string]*portErrorBaseline
+	suppressedUnreachable map[string]bool
+	nextID               int
+	t                    *Tendrils
 }
 
 func NewErrorTracker(t *Tendrils) *ErrorTracker {
 	return &ErrorTracker{
-		errors:    map[string]*PortError{},
-		baselines: map[string]*portErrorBaseline{},
-		t:         t,
+		errors:               map[string]*PortError{},
+		baselines:            map[string]*portErrorBaseline{},
+		suppressedUnreachable: map[string]bool{},
+		t:                    t,
 	}
 }
 
@@ -149,6 +151,9 @@ func (e *ErrorTracker) clearErrorLocked(errorID string) bool {
 
 	for key, err := range e.errors {
 		if err.ID == errorID {
+			if err.ErrorType == ErrorTypeUnreachable {
+				e.suppressedUnreachable[key] = true
+			}
 			delete(e.errors, key)
 			return true
 		}
@@ -168,6 +173,11 @@ func (e *ErrorTracker) clearAllErrorsLocked() bool {
 	defer e.mu.Unlock()
 
 	had := len(e.errors) > 0
+	for key, err := range e.errors {
+		if err.ErrorType == ErrorTypeUnreachable {
+			e.suppressedUnreachable[key] = true
+		}
+	}
 	e.errors = map[string]*PortError{}
 	return had
 }
@@ -195,6 +205,11 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) bool {
 	defer e.mu.Unlock()
 
 	key := "unreachable:" + node.TypeID + ":" + ip
+
+	if e.suppressedUnreachable[key] {
+		return false
+	}
+
 	if _, exists := e.errors[key]; exists {
 		return false
 	}
@@ -225,6 +240,9 @@ func (e *ErrorTracker) clearUnreachableLocked(node *Node, ip string) bool {
 	defer e.mu.Unlock()
 
 	key := "unreachable:" + node.TypeID + ":" + ip
+
+	delete(e.suppressedUnreachable, key)
+
 	if _, exists := e.errors[key]; exists {
 		delete(e.errors, key)
 		return true
