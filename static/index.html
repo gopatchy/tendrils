@@ -26,6 +26,7 @@
             border: 1px solid #444;
             border-radius: 8px;
             padding: 10px;
+            overflow: visible;
         }
 
         .location.top-level {
@@ -55,6 +56,7 @@
             flex-wrap: wrap;
             gap: 8px;
             justify-content: center;
+            overflow: visible;
         }
 
         .node-row + .node-row {
@@ -143,6 +145,7 @@
             display: flex;
             gap: 15px;
             margin-top: 10px;
+            overflow: visible;
         }
 
         .children.horizontal {
@@ -157,14 +160,133 @@
             flex-direction: column;
             align-items: center;
         }
+
+        #mode-selector {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            gap: 0;
+            background: #333;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #555;
+        }
+
+        #mode-selector button {
+            padding: 8px 16px;
+            border: none;
+            background: #333;
+            color: #aaa;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        #mode-selector button:hover {
+            background: #444;
+        }
+
+        #mode-selector button.active {
+            background: #555;
+            color: #fff;
+        }
+
+        body.dante-mode .node {
+            opacity: 0.3;
+        }
+
+        body.dante-mode .node.dante-tx {
+            opacity: 1;
+            background: #d62;
+            border: 2px solid #f84;
+        }
+
+        body.dante-mode .node.dante-rx {
+            opacity: 1;
+            background: #26d;
+            border: 2px solid #48f;
+        }
+
+        body.dante-mode .node.dante-tx.dante-rx {
+            background: linear-gradient(135deg, #d62 50%, #26d 50%);
+        }
+
+        body.dante-mode .node .switch-port,
+        body.dante-mode .node .uplink,
+        body.dante-mode .node .root-label {
+            display: none;
+        }
+
+        .node .dante-info {
+            display: none;
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            z-index: 10;
+            cursor: default;
+        }
+
+        .node:has(.dante-info:hover) {
+            z-index: 1000;
+        }
+
+        .node .dante-info:hover {
+            white-space: pre;
+            max-width: none;
+            width: max-content;
+            z-index: 100;
+            padding: 4px 8px;
+        }
+
+        .node .dante-info.tx-info {
+            background: #fca;
+            color: #630;
+        }
+
+        .node .dante-info.rx-info {
+            background: #acf;
+            color: #036;
+        }
+
+        body.dante-mode .node.dante-tx .dante-info,
+        body.dante-mode .node.dante-rx .dante-info {
+            display: block;
+        }
+
+        body.dante-mode .node.dante-tx.dante-rx .dante-info.tx-info {
+            top: -8px;
+        }
+
+        body.dante-mode .node.dante-tx.dante-rx .dante-info.rx-info {
+            top: auto;
+            bottom: -8px;
+        }
     </style>
 </head>
 <body>
+    <div id="mode-selector">
+        <button id="mode-network" class="active">Network</button>
+        <button id="mode-dante">Dante</button>
+    </div>
     <div id="error"></div>
     <div id="container"></div>
 
     <script>
         function getLabel(node) {
+            if (node.names && node.names.length > 0) return node.names.join('\n');
+        }
+
+        function getShortLabel(node) {
             if (node.names && node.names.length > 0) return node.names.join('\n');
             if (node.interfaces && node.interfaces.length > 0) {
                 const ips = [];
@@ -270,9 +392,14 @@
             return null;
         }
 
-        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo) {
+        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo) {
             const div = document.createElement('div');
             div.className = 'node' + (isSwitch(node) ? ' switch' : '');
+
+            if (danteInfo) {
+                if (danteInfo.isTx) div.classList.add('dante-tx');
+                if (danteInfo.isRx) div.classList.add('dante-rx');
+            }
 
             if (!isSwitch(node) && switchConnection) {
                 const portEl = document.createElement('div');
@@ -302,6 +429,20 @@
                 div.appendChild(uplinkEl);
             }
 
+            if (danteInfo && danteInfo.isTx) {
+                const txEl = document.createElement('div');
+                txEl.className = 'dante-info tx-info';
+                txEl.textContent = '→ ' + danteInfo.txTo.join('\n\n→ ');
+                div.appendChild(txEl);
+            }
+
+            if (danteInfo && danteInfo.isRx) {
+                const rxEl = document.createElement('div');
+                rxEl.className = 'dante-info rx-info';
+                rxEl.textContent = '← ' + danteInfo.rxFrom.join('\n\n← ');
+                div.appendChild(rxEl);
+            }
+
             div.addEventListener('click', () => {
                 const json = JSON.stringify(node, null, 2);
                 navigator.clipboard.writeText(json).then(() => {
@@ -312,12 +453,12 @@
             return div;
         }
 
-        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks) {
+        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes) {
             const nodes = assignedNodes.get(loc) || [];
             const hasNodes = nodes.length > 0;
 
             const childElements = loc.children
-                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks))
+                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes))
                 .filter(el => el !== null);
 
             if (!hasNodes && childElements.length === 0) {
@@ -344,7 +485,8 @@
                     switchRow.className = 'node-row';
                     switches.forEach(node => {
                         const uplink = switchUplinks.get(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, loc, uplink));
+                        const danteInfo = danteNodes.get(node.typeid);
+                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo));
                     });
                     container.appendChild(switchRow);
                 }
@@ -354,7 +496,8 @@
                     nodeRow.className = 'node-row';
                     nonSwitches.forEach(node => {
                         const conn = switchConnections.get(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, loc, null));
+                        const danteInfo = danteNodes.get(node.typeid);
+                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo));
                     });
                     container.appendChild(nodeRow);
                 }
@@ -447,6 +590,46 @@
                 }
             });
 
+            const danteFlows = data.dante_flows || [];
+            const danteNodes = new Map();
+
+            danteFlows.forEach(flow => {
+                const sourceId = flow.source?.typeid;
+                if (!sourceId) return;
+
+                if (!danteNodes.has(sourceId)) {
+                    danteNodes.set(sourceId, { isTx: false, isRx: false, txTo: [], rxFrom: [] });
+                }
+                const sourceInfo = danteNodes.get(sourceId);
+                sourceInfo.isTx = true;
+
+                (flow.subscribers || []).forEach(sub => {
+                    const subId = sub.node?.typeid;
+                    if (!subId) return;
+
+                    const subName = getShortLabel(sub.node);
+                    const channels = sub.channels || [];
+                    const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
+                    const txEntry = subName + channelSummary;
+                    if (!sourceInfo.txTo.some(e => e.startsWith(subName))) {
+                        sourceInfo.txTo.push(txEntry);
+                    }
+
+                    if (!danteNodes.has(subId)) {
+                        danteNodes.set(subId, { isTx: false, isRx: false, txTo: [], rxFrom: [] });
+                    }
+                    const subInfo = danteNodes.get(subId);
+                    subInfo.isRx = true;
+
+                    const sourceName = getShortLabel(flow.source);
+                    const rxChannelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
+                    const rxEntry = sourceName + rxChannelSummary;
+                    if (!subInfo.rxFrom.some(e => e.startsWith(sourceName))) {
+                        subInfo.rxFrom.push(rxEntry);
+                    }
+                });
+            });
+
             const switchUplinks = new Map();
             if (allSwitches.length > 0 && switchLinks.length > 0) {
                 const adjacency = new Map();
@@ -527,7 +710,7 @@
             container.innerHTML = '';
 
             locationTree.forEach(loc => {
-                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks);
+                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes);
                 if (el) container.appendChild(el);
             });
 
@@ -548,7 +731,8 @@
                     switchRow.className = 'node-row';
                     switches.forEach(node => {
                         const uplink = switchUplinks.get(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, null, uplink));
+                        const danteInfo = danteNodes.get(node.typeid);
+                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo));
                     });
                     unassignedLoc.appendChild(switchRow);
                 }
@@ -558,7 +742,8 @@
                     nodeRow.className = 'node-row';
                     nonSwitches.forEach(node => {
                         const conn = switchConnections.get(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, null, null));
+                        const danteInfo = danteNodes.get(node.typeid);
+                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo));
                     });
                     unassignedLoc.appendChild(nodeRow);
                 }
@@ -570,6 +755,27 @@
         init().catch(e => {
             document.getElementById('error').textContent = e.message;
         });
+
+        function setMode(mode) {
+            if (mode === 'dante') {
+                document.body.classList.add('dante-mode');
+                document.getElementById('mode-dante').classList.add('active');
+                document.getElementById('mode-network').classList.remove('active');
+                window.location.hash = 'dante';
+            } else {
+                document.body.classList.remove('dante-mode');
+                document.getElementById('mode-network').classList.add('active');
+                document.getElementById('mode-dante').classList.remove('active');
+                window.location.hash = '';
+            }
+        }
+
+        document.getElementById('mode-network').addEventListener('click', () => setMode('network'));
+        document.getElementById('mode-dante').addEventListener('click', () => setMode('dante'));
+
+        if (window.location.hash === '#dante') {
+            setMode('dante');
+        }
     </script>
 </body>
 </html>

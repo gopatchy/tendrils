@@ -60,12 +60,21 @@ func (s IPSet) Slice() []string {
 
 type NameSet map[string]bool
 
+func sortNamesByLength(names []string) {
+	sort.Slice(names, func(i, j int) bool {
+		if len(names[i]) != len(names[j]) {
+			return len(names[i]) < len(names[j])
+		}
+		return names[i] < names[j]
+	})
+}
+
 func (s NameSet) MarshalJSON() ([]byte, error) {
 	names := make([]string, 0, len(s))
 	for name := range s {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	sortNamesByLength(names)
 	return json.Marshal(names)
 }
 
@@ -229,7 +238,7 @@ func (n *Node) DisplayName() string {
 	for name := range n.Names {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	sortNamesByLength(names)
 	return strings.Join(names, "/")
 }
 
