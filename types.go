@@ -239,15 +239,25 @@ func (n *Node) String() string {
 }
 
 func (n *Node) DisplayName() string {
-	if len(n.Names) == 0 {
-		return ""
+	if len(n.Names) > 0 {
+		var names []string
+		for name := range n.Names {
+			names = append(names, name)
+		}
+		sortNamesByLength(names)
+		return strings.Join(names, "/")
 	}
-	var names []string
-	for name := range n.Names {
-		names = append(names, name)
+	for _, iface := range n.Interfaces {
+		for ip := range iface.IPs {
+			return ip
+		}
 	}
-	sortNamesByLength(names)
-	return strings.Join(names, "/")
+	for _, iface := range n.Interfaces {
+		if iface.MAC != "" {
+			return string(iface.MAC)
+		}
+	}
+	return ""
 }
 
 func (n *Node) FirstMAC() string {
