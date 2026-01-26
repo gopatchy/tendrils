@@ -157,6 +157,25 @@
             line-height: 1.4;
         }
 
+        .node .switch-port .error-info::before,
+        .node .uplink .error-info::before {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            height: 8px;
+        }
+
+        .error-info .lbl,
+        .node-info .lbl,
+        .dante-info .lbl,
+        .dante-detail .lbl,
+        .artnet-info .lbl,
+        .artnet-detail .lbl {
+            color: #888;
+        }
+
         .node .switch-port::after,
         .node .uplink::after {
             content: '';
@@ -351,6 +370,15 @@
             line-height: 1.4;
         }
 
+        .node .dante-info .dante-detail::before {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            height: 8px;
+        }
+
         .node .dante-info::after {
             content: '';
             position: absolute;
@@ -388,6 +416,11 @@
             top: 100%;
             margin-bottom: 0;
             margin-top: 4px;
+        }
+
+        body.dante-mode .node.dante-tx.dante-rx .dante-info.rx-info .dante-detail::before {
+            top: auto;
+            bottom: 100%;
         }
 
         body.artnet-mode .node {
@@ -447,6 +480,15 @@
             line-height: 1.4;
         }
 
+        .node .artnet-info .artnet-detail::before {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            height: 8px;
+        }
+
         .node .artnet-info::after {
             content: '';
             position: absolute;
@@ -486,6 +528,11 @@
             margin-top: 4px;
         }
 
+        body.artnet-mode .node.artnet-out.artnet-in .artnet-info.in-info .artnet-detail::before {
+            top: auto;
+            bottom: 100%;
+        }
+
         .node.has-error {
             box-shadow: 0 0 0 3px #f66;
         }
@@ -514,10 +561,11 @@
             border-radius: 6px;
             padding: 6px 8px;
             font-size: 10px;
-            white-space: nowrap;
+            white-space: pre;
             z-index: 1000;
             text-align: left;
             line-height: 1.4;
+            cursor: pointer;
         }
 
         .node .node-info::before {
@@ -547,78 +595,6 @@
         .node:has(.dante-info:hover) .node-info,
         .node:has(.artnet-info:hover) .node-info {
             display: none;
-        }
-
-        .node .node-info .info-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 2px 0;
-        }
-
-        .node .node-info .info-label {
-            color: #888;
-            min-width: 28px;
-        }
-
-        .node .node-info .info-value {
-            color: #eee;
-            font-family: monospace;
-        }
-
-        .node .node-info .copy-btn {
-            padding: 2px 4px;
-            border: none;
-            background: transparent;
-            color: #888;
-            cursor: pointer;
-            font-size: 12px;
-            line-height: 1;
-            width: 20px;
-            text-align: center;
-        }
-
-        .node .node-info .copy-btn:hover {
-            color: #ccc;
-        }
-
-        .node .node-info .copy-btn.copied {
-            color: #4f4;
-        }
-
-        .node .node-info .info-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 2px 0;
-        }
-
-        .node .node-info .info-label {
-            color: #888;
-            min-width: 28px;
-        }
-
-        .node .node-info .info-value {
-            color: #eee;
-            font-family: monospace;
-        }
-
-        .node .node-info .copy-btn {
-            padding: 2px 4px;
-            border: none;
-            background: transparent;
-            color: #888;
-            cursor: pointer;
-            font-size: 12px;
-            line-height: 1;
-        }
-
-        .node .node-info .copy-btn:hover {
-            color: #ccc;
-        }
-
-        .node .node-info .copy-btn.copied {
-            color: #4f4;
         }
 
         #error-panel {
@@ -1092,14 +1068,15 @@
                 const errOut = switchConnection.errors?.out || 0;
                 const statsInfo = document.createElement('div');
                 statsInfo.className = 'error-info';
-                let statsText = 'link: ' + formatLinkSpeed(switchConnection.speed);
-                statsText += '\nerr: rx ' + errIn + ' / tx ' + errOut;
+                let statsHtml = '<span class="lbl">LINK</span> ' + formatLinkSpeed(switchConnection.speed);
+                statsHtml += '\n<span class="lbl">ERR</span> RX ' + errIn + ' / TX ' + errOut;
                 if (switchConnection.rates) {
                     const r = switchConnection.rates;
-                    statsText += '\nrx: ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
-                    statsText += '\ntx: ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
+                    statsHtml += '\n<span class="lbl">RX</span> ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
+                    statsHtml += '\n<span class="lbl">TX</span> ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
                 }
-                statsInfo.textContent = statsText;
+                statsInfo.innerHTML = statsHtml;
+                statsInfo.addEventListener('click', (e) => e.stopPropagation());
                 portEl.appendChild(statsInfo);
                 div.appendChild(portEl);
             }
@@ -1119,44 +1096,25 @@
                 });
                 ips.sort();
                 macs.sort();
+                const lines = [];
+                const plainLines = [];
                 ips.forEach(ip => {
-                    const row = document.createElement('div');
-                    row.className = 'info-row';
-                    row.innerHTML = '<span class="info-label">IP</span><span class="info-value">' + ip + '</span>';
-                    const btn = document.createElement('button');
-                    btn.className = 'copy-btn';
-                    btn.textContent = '⧉';
-                    btn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(ip).then(() => {
-                            btn.classList.add('copied');
-                            btn.textContent = '✓';
-                            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '⧉'; }, 500);
-                        });
-                    });
-                    row.appendChild(btn);
-                    nodeInfo.appendChild(row);
+                    lines.push('<span class="lbl">IP</span> ' + ip);
+                    plainLines.push('IP: ' + ip);
                 });
                 macs.forEach(mac => {
-                    const row = document.createElement('div');
-                    row.className = 'info-row';
-                    row.innerHTML = '<span class="info-label">MAC</span><span class="info-value">' + mac + '</span>';
-                    const btn = document.createElement('button');
-                    btn.className = 'copy-btn';
-                    btn.textContent = '⧉';
-                    btn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(mac).then(() => {
-                            btn.classList.add('copied');
-                            btn.textContent = '✓';
-                            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '⧉'; }, 500);
-                        });
-                    });
-                    row.appendChild(btn);
-                    nodeInfo.appendChild(row);
+                    lines.push('<span class="lbl">MAC</span> ' + mac);
+                    plainLines.push('MAC: ' + mac);
                 });
+                if (lines.length > 0) {
+                    nodeInfo.innerHTML = lines.join('\n');
+                    nodeInfo.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(plainLines.join('\n'));
+                    });
+                }
             }
-            if (nodeInfo.children.length > 0) {
+            if (nodeInfo.textContent) {
                 div.appendChild(nodeInfo);
             }
 
@@ -1175,14 +1133,15 @@
                 const errOut = uplinkInfo.errors?.out || 0;
                 const statsInfo = document.createElement('div');
                 statsInfo.className = 'error-info';
-                let statsText = 'link: ' + formatLinkSpeed(uplinkInfo.speed);
-                statsText += '\nerr: rx ' + errIn + ' / tx ' + errOut;
+                let statsHtml = '<span class="lbl">LINK</span> ' + formatLinkSpeed(uplinkInfo.speed);
+                statsHtml += '\n<span class="lbl">ERR</span> RX ' + errIn + ' / TX ' + errOut;
                 if (uplinkInfo.rates) {
                     const r = uplinkInfo.rates;
-                    statsText += '\nrx: ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
-                    statsText += '\ntx: ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
+                    statsHtml += '\n<span class="lbl">RX</span> ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
+                    statsHtml += '\n<span class="lbl">TX</span> ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
                 }
-                statsInfo.textContent = statsText;
+                statsInfo.innerHTML = statsHtml;
+                statsInfo.addEventListener('click', (e) => e.stopPropagation());
                 uplinkEl.appendChild(statsInfo);
                 div.appendChild(uplinkEl);
             }
@@ -1191,10 +1150,20 @@
                 const txEl = document.createElement('div');
                 txEl.className = 'dante-info tx-info';
                 const firstDest = danteInfo.txTo[0].split('\n')[0];
-                txEl.textContent = '→ ' + firstDest;
+                txEl.innerHTML = '<span class="lbl">→</span> ' + firstDest;
                 const detail = document.createElement('div');
                 detail.className = 'dante-detail';
-                detail.textContent = '→ ' + danteInfo.txTo.join('\n\n→ ');
+                const txHtml = danteInfo.txTo.map(entry => {
+                    const lines = entry.split('\n');
+                    return lines.map(line => {
+                        if (line.startsWith(' ')) {
+                            return '      ' + line.trim();
+                        }
+                        return '<span class="lbl">→</span> ' + line;
+                    }).join('\n');
+                }).join('\n\n');
+                detail.innerHTML = txHtml;
+                detail.addEventListener('click', (e) => e.stopPropagation());
                 txEl.appendChild(detail);
                 div.appendChild(txEl);
             }
@@ -1203,10 +1172,20 @@
                 const rxEl = document.createElement('div');
                 rxEl.className = 'dante-info rx-info';
                 const firstSource = danteInfo.rxFrom[0].split('\n')[0];
-                rxEl.textContent = '← ' + firstSource;
+                rxEl.innerHTML = '<span class="lbl">←</span> ' + firstSource;
                 const detail = document.createElement('div');
                 detail.className = 'dante-detail';
-                detail.textContent = '← ' + danteInfo.rxFrom.join('\n\n← ');
+                const rxHtml = danteInfo.rxFrom.map(entry => {
+                    const lines = entry.split('\n');
+                    return lines.map(line => {
+                        if (line.startsWith(' ')) {
+                            return '      ' + line.trim();
+                        }
+                        return '<span class="lbl">←</span> ' + line;
+                    }).join('\n');
+                }).join('\n\n');
+                detail.innerHTML = rxHtml;
+                detail.addEventListener('click', (e) => e.stopPropagation());
                 rxEl.appendChild(detail);
                 div.appendChild(rxEl);
             }
@@ -1214,10 +1193,11 @@
             if (artnetInfo && artnetInfo.isOut) {
                 const outEl = document.createElement('div');
                 outEl.className = 'artnet-info out-info';
-                outEl.textContent = '← ' + artnetInfo.outputs[0];
+                outEl.innerHTML = '<span class="lbl">←</span> ' + artnetInfo.outputs[0];
                 const detail = document.createElement('div');
                 detail.className = 'artnet-detail';
-                detail.textContent = '← ' + artnetInfo.outputs.join('\n← ');
+                detail.innerHTML = artnetInfo.outputs.map(u => '<span class="lbl">←</span> ' + u).join('\n');
+                detail.addEventListener('click', (e) => e.stopPropagation());
                 outEl.appendChild(detail);
                 div.appendChild(outEl);
             }
@@ -1225,10 +1205,11 @@
             if (artnetInfo && artnetInfo.isIn) {
                 const inEl = document.createElement('div');
                 inEl.className = 'artnet-info in-info';
-                inEl.textContent = '→ ' + artnetInfo.inputs[0];
+                inEl.innerHTML = '<span class="lbl">→</span> ' + artnetInfo.inputs[0];
                 const detail = document.createElement('div');
                 detail.className = 'artnet-detail';
-                detail.textContent = '→ ' + artnetInfo.inputs.join('\n→ ');
+                detail.innerHTML = artnetInfo.inputs.map(u => '<span class="lbl">→</span> ' + u).join('\n');
+                detail.addEventListener('click', (e) => e.stopPropagation());
                 inEl.appendChild(detail);
                 div.appendChild(inEl);
             }
