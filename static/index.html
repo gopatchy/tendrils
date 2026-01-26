@@ -910,11 +910,6 @@
                 item.appendChild(nodeEl);
 
                 if (err.error_type === 'unreachable') {
-                    const ipEl = document.createElement('div');
-                    ipEl.className = 'error-port';
-                    ipEl.textContent = 'IP: ' + err.port_name;
-                    item.appendChild(ipEl);
-
                     const typeEl = document.createElement('div');
                     typeEl.className = 'error-type';
                     typeEl.textContent = 'Unreachable';

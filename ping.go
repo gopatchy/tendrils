@@ -24,7 +24,7 @@ type PingManager struct {
 	failures map[string]int
 }
 
-const pingFailureThreshold = 3
+const pingFailureThreshold = 5
 
 func NewPingManager() *PingManager {
 	pm := &PingManager{
@@ -142,6 +142,7 @@ func (t *Tendrils) pingNode(node *Node) {
 	t.nodes.mu.RLock()
 	var ips []string
 	nodeName := node.DisplayName()
+	nodeID := node.TypeID
 	for _, iface := range node.Interfaces {
 		for ipStr := range iface.IPs {
 			ip := net.ParseIP(ipStr)
@@ -156,24 +157,28 @@ func (t *Tendrils) pingNode(node *Node) {
 		return
 	}
 
+	anyReachable := false
 	for _, ipStr := range ips {
-		reachable := t.ping.Ping(ipStr, 2*time.Second)
+		if t.ping.Ping(ipStr, 2*time.Second) {
+			anyReachable = true
+			break
+		}
+	}
 
-		t.ping.mu.Lock()
-		if reachable {
-			t.ping.failures[ipStr] = 0
-			t.ping.mu.Unlock()
-			if t.errors.ClearUnreachable(node, ipStr) {
-				log.Printf("[ping] %s (%s) is now reachable", nodeName, ipStr)
-			}
-		} else {
-			t.ping.failures[ipStr]++
-			failures := t.ping.failures[ipStr]
-			t.ping.mu.Unlock()
-			if failures >= pingFailureThreshold {
-				if t.errors.SetUnreachable(node, ipStr) {
-					log.Printf("[ping] %s (%s) is now unreachable", nodeName, ipStr)
-				}
+	t.ping.mu.Lock()
+	if anyReachable {
+		t.ping.failures[nodeID] = 0
+		t.ping.mu.Unlock()
+		if t.errors.ClearUnreachable(node) {
+			log.Printf("[ping] %s is now reachable", nodeName)
+		}
+	} else {
+		t.ping.failures[nodeID]++
+		failures := t.ping.failures[nodeID]
+		t.ping.mu.Unlock()
+		if failures >= pingFailureThreshold {
+			if t.errors.SetUnreachable(node) {
+				log.Printf("[ping] %s is now unreachable", nodeName)
 			}
 		}
 	}

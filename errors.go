@@ -206,19 +206,19 @@ func (e *ErrorTracker) GetUnreachableNodes() []string {
 	return nodes
 }
 
-func (e *ErrorTracker) SetUnreachable(node *Node, ip string) bool {
-	changed, becameUnreachable := e.setUnreachableLocked(node, ip)
+func (e *ErrorTracker) SetUnreachable(node *Node) bool {
+	changed, becameUnreachable := e.setUnreachableLocked(node)
 	if changed {
 		e.t.NotifyUpdate()
 	}
 	return becameUnreachable
 }
 
-func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) (changed bool, becameUnreachable bool) {
+func (e *ErrorTracker) setUnreachableLocked(node *Node) (changed bool, becameUnreachable bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	key := "unreachable:" + node.TypeID + ":" + ip
+	key := "unreachable:" + node.TypeID
 
 	wasUnreachable := e.unreachableNodes[node.TypeID]
 	e.unreachableNodes[node.TypeID] = true
@@ -238,7 +238,7 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) (changed bool
 		ID:          fmt.Sprintf("err-%d", e.nextID),
 		NodeTypeID:  node.TypeID,
 		NodeName:    node.DisplayName(),
-		PortName:    ip,
+		PortName:    "",
 		ErrorType:   ErrorTypeUnreachable,
 		FirstSeen:   now,
 		LastUpdated: now,
@@ -246,19 +246,19 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) (changed bool
 	return true, becameUnreachable
 }
 
-func (e *ErrorTracker) ClearUnreachable(node *Node, ip string) bool {
-	changed, becameReachable := e.clearUnreachableLocked(node, ip)
+func (e *ErrorTracker) ClearUnreachable(node *Node) bool {
+	changed, becameReachable := e.clearUnreachableLocked(node)
 	if changed {
 		e.t.NotifyUpdate()
 	}
 	return becameReachable
 }
 
-func (e *ErrorTracker) clearUnreachableLocked(node *Node, ip string) (changed bool, becameReachable bool) {
+func (e *ErrorTracker) clearUnreachableLocked(node *Node) (changed bool, becameReachable bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	key := "unreachable:" + node.TypeID + ":" + ip
+	key := "unreachable:" + node.TypeID
 
 	delete(e.suppressedUnreachable, key)
 
