@@ -127,16 +127,15 @@
             left: 50%;
             transform: translateX(-50%);
             font-size: 9px;
-            background: #444;
-            color: #ccc;
+            background: #555;
+            color: #fff;
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
         }
 
         .node .switch-port.external {
-            background: #633;
-            color: #f99;
+            border: 1px dashed #c9f;
         }
 
         .node .switch-port .error-info,
@@ -146,6 +145,8 @@
             opacity: 0.8;
             white-space: pre;
             text-align: left;
+            margin-top: 2px;
+            padding-bottom: 2px;
         }
 
         .node .switch-port:hover .error-info,
@@ -166,8 +167,8 @@
             left: 50%;
             transform: translateX(-50%);
             font-size: 9px;
-            background: #446;
-            color: #aaf;
+            background: #555;
+            color: #fff;
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
@@ -179,11 +180,31 @@
             left: 50%;
             transform: translateX(-50%);
             font-size: 9px;
-            background: #664;
-            color: #ffa;
+            background: #864;
+            color: #fff;
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
+        }
+
+        .node .switch-port.speed-10g,
+        .node .uplink.speed-10g {
+            background: #468;
+        }
+
+        .node .switch-port.speed-1g,
+        .node .uplink.speed-1g {
+            background: #486;
+        }
+
+        .node .switch-port.speed-100m,
+        .node .uplink.speed-100m {
+            background: #864;
+        }
+
+        .node .switch-port.speed-slow,
+        .node .uplink.speed-slow {
+            background: #844;
         }
 
         .node:hover {
@@ -192,41 +213,9 @@
 
         .node.switch {
             background: #2a2;
-            border: 2px solid #4f4;
             font-weight: bold;
         }
 
-        .node .switch-port.speed-10g {
-            border: 1px solid #4ff;
-        }
-
-        .node .switch-port.speed-1g {
-            border: 1px solid #4f4;
-        }
-
-        .node .switch-port.speed-100m {
-            border: 1px solid #fa0;
-        }
-
-        .node .switch-port.speed-slow {
-            border: 1px solid #f44;
-        }
-
-        .node .uplink.speed-10g {
-            border: 1px solid #4ff;
-        }
-
-        .node .uplink.speed-1g {
-            border: 1px solid #4f4;
-        }
-
-        .node .uplink.speed-100m {
-            border: 1px solid #fa0;
-        }
-
-        .node .uplink.speed-slow {
-            border: 1px solid #f44;
-        }
 
         .node.copied {
             outline: 2px solid #fff;
@@ -291,13 +280,11 @@
         body.dante-mode .node.dante-tx {
             opacity: 1;
             background: #d62;
-            border: 2px solid #f84;
         }
 
         body.dante-mode .node.dante-rx {
             opacity: 1;
             background: #26d;
-            border: 2px solid #48f;
         }
 
         body.dante-mode .node.dante-tx.dante-rx {
@@ -340,13 +327,13 @@
         }
 
         .node .dante-info.tx-info {
-            background: #fca;
-            color: #630;
+            background: #864;
+            color: #fff;
         }
 
         .node .dante-info.rx-info {
-            background: #acf;
-            color: #036;
+            background: #468;
+            color: #fff;
         }
 
         body.dante-mode .node.dante-tx .dante-info,
