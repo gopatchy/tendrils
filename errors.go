@@ -9,9 +9,10 @@ import (
 type PortErrorType string
 
 const (
-	ErrorTypeStartup     PortErrorType = "startup"
-	ErrorTypeNew         PortErrorType = "new"
-	ErrorTypeUnreachable PortErrorType = "unreachable"
+	ErrorTypeStartup        PortErrorType = "startup"
+	ErrorTypeNew            PortErrorType = "new"
+	ErrorTypeUnreachable    PortErrorType = "unreachable"
+	ErrorTypeHighUtilization PortErrorType = "high_utilization"
 )
 
 type PortError struct {
@@ -24,6 +25,7 @@ type PortError struct {
 	OutErrors   uint64        `json:"out_errors"`
 	InDelta     uint64        `json:"in_delta,omitempty"`
 	OutDelta    uint64        `json:"out_delta,omitempty"`
+	Utilization float64       `json:"utilization,omitempty"`
 	FirstSeen   time.Time     `json:"first_seen"`
 	LastUpdated time.Time     `json:"last_updated"`
 }
@@ -63,6 +65,59 @@ func (e *ErrorTracker) CheckPort(node *Node, portName string, stats *InterfaceSt
 	if changed {
 		e.t.NotifyUpdate()
 	}
+}
+
+func (e *ErrorTracker) CheckUtilization(node *Node, portName string, stats *InterfaceStats) {
+	if stats == nil || stats.Speed == 0 {
+		return
+	}
+
+	changed := e.checkUtilizationLocked(node, portName, stats)
+	if changed {
+		e.t.NotifyUpdate()
+	}
+}
+
+func (e *ErrorTracker) checkUtilizationLocked(node *Node, portName string, stats *InterfaceStats) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	maxBytesRate := stats.InBytesRate
+	if stats.OutBytesRate > maxBytesRate {
+		maxBytesRate = stats.OutBytesRate
+	}
+
+	speedBytes := float64(stats.Speed) / 8.0
+	utilization := (maxBytesRate / speedBytes) * 100.0
+
+	key := "util:" + node.TypeID + ":" + portName
+	now := time.Now()
+
+	if utilization < 70.0 {
+		return false
+	}
+
+	if existing, ok := e.errors[key]; ok {
+		if utilization > existing.Utilization {
+			existing.Utilization = utilization
+			existing.LastUpdated = now
+			return true
+		}
+		return false
+	}
+
+	e.nextID++
+	e.errors[key] = &PortError{
+		ID:          fmt.Sprintf("err-%d", e.nextID),
+		NodeTypeID:  node.TypeID,
+		NodeName:    node.DisplayName(),
+		PortName:    portName,
+		ErrorType:   ErrorTypeHighUtilization,
+		Utilization: utilization,
+		FirstSeen:   now,
+		LastUpdated: now,
+	}
+	return true
 }
 
 func (e *ErrorTracker) checkPortLocked(node *Node, portName string, stats *InterfaceStats) bool {
