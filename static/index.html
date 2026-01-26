@@ -126,7 +126,7 @@
             top: -8px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 9px;
+            font-size: 10px;
             font-weight: normal;
             background: #444;
             color: #fff;
@@ -142,12 +142,30 @@
         .node .switch-port .error-info,
         .node .uplink .error-info {
             display: none;
-            font-size: 8px;
-            opacity: 0.8;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 4px;
+            font-size: 10px;
             white-space: pre;
             text-align: left;
-            margin-top: 2px;
-            padding-bottom: 2px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 6px 8px;
+            line-height: 1.4;
+        }
+
+        .node .switch-port::after,
+        .node .uplink::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
         }
 
         .node .switch-port:hover .error-info,
@@ -167,7 +185,7 @@
             top: -8px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 9px;
+            font-size: 10px;
             font-weight: normal;
             background: #444;
             color: #fff;
@@ -181,7 +199,7 @@
             top: -8px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 9px;
+            font-size: 10px;
             font-weight: normal;
             background: #753;
             color: #fff;
@@ -306,38 +324,49 @@
             top: -8px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 9px;
+            font-size: 10px;
             font-weight: normal;
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
-            max-width: 100px;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            background: #444;
+            color: #fff;
             z-index: 10;
-            cursor: default;
         }
 
-        .node:has(.dante-info:hover) {
-            z-index: 1000;
+        .node .dante-info .dante-detail {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 4px;
+            font-size: 10px;
+            white-space: pre;
+            text-align: left;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 6px 8px;
+            line-height: 1.4;
+        }
+
+        .node .dante-info::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
         }
 
         .node .dante-info:hover {
-            white-space: pre;
-            max-width: none;
-            width: max-content;
             z-index: 100;
-            padding: 4px 8px;
         }
 
-        .node .dante-info.tx-info {
-            background: #753;
-            color: #fff;
-        }
-
-        .node .dante-info.rx-info {
-            background: #357;
-            color: #fff;
+        .node .dante-info:hover .dante-detail {
+            display: block;
         }
 
         body.dante-mode .node.dante-tx .dante-info,
@@ -352,6 +381,13 @@
         body.dante-mode .node.dante-tx.dante-rx .dante-info.rx-info {
             top: auto;
             bottom: -8px;
+        }
+
+        body.dante-mode .node.dante-tx.dante-rx .dante-info.rx-info .dante-detail {
+            bottom: auto;
+            top: 100%;
+            margin-bottom: 0;
+            margin-top: 4px;
         }
 
         body.artnet-mode .node {
@@ -384,38 +420,49 @@
             top: -8px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 9px;
+            font-size: 10px;
             font-weight: normal;
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
-            max-width: 100px;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            background: #444;
+            color: #fff;
             z-index: 10;
-            cursor: default;
         }
 
-        .node:has(.artnet-info:hover) {
-            z-index: 1000;
+        .node .artnet-info .artnet-detail {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 4px;
+            font-size: 10px;
+            white-space: pre;
+            text-align: left;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 6px 8px;
+            line-height: 1.4;
+        }
+
+        .node .artnet-info::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
         }
 
         .node .artnet-info:hover {
-            white-space: pre;
-            max-width: none;
-            width: max-content;
             z-index: 100;
-            padding: 4px 8px;
         }
 
-        .node .artnet-info.out-info {
-            background: #375;
-            color: #fff;
-        }
-
-        .node .artnet-info.in-info {
-            background: #357;
-            color: #fff;
+        .node .artnet-info:hover .artnet-detail {
+            display: block;
         }
 
         body.artnet-mode .node.artnet-out .artnet-info,
@@ -430,6 +477,13 @@
         body.artnet-mode .node.artnet-out.artnet-in .artnet-info.in-info {
             top: auto;
             bottom: -8px;
+        }
+
+        body.artnet-mode .node.artnet-out.artnet-in .artnet-info.in-info .artnet-detail {
+            bottom: auto;
+            top: 100%;
+            margin-bottom: 0;
+            margin-top: 4px;
         }
 
         .node.has-error {
@@ -458,11 +512,12 @@
             background: #333;
             border: 1px solid #555;
             border-radius: 6px;
-            padding: 8px;
+            padding: 6px 8px;
             font-size: 10px;
             white-space: nowrap;
             z-index: 1000;
             text-align: left;
+            line-height: 1.4;
         }
 
         .node .node-info::before {
@@ -1135,28 +1190,46 @@
             if (danteInfo && danteInfo.isTx) {
                 const txEl = document.createElement('div');
                 txEl.className = 'dante-info tx-info';
-                txEl.textContent = '→ ' + danteInfo.txTo.join('\n\n→ ');
+                const firstDest = danteInfo.txTo[0].split('\n')[0];
+                txEl.textContent = '→ ' + firstDest;
+                const detail = document.createElement('div');
+                detail.className = 'dante-detail';
+                detail.textContent = '→ ' + danteInfo.txTo.join('\n\n→ ');
+                txEl.appendChild(detail);
                 div.appendChild(txEl);
             }
 
             if (danteInfo && danteInfo.isRx) {
                 const rxEl = document.createElement('div');
                 rxEl.className = 'dante-info rx-info';
-                rxEl.textContent = '← ' + danteInfo.rxFrom.join('\n\n← ');
+                const firstSource = danteInfo.rxFrom[0].split('\n')[0];
+                rxEl.textContent = '← ' + firstSource;
+                const detail = document.createElement('div');
+                detail.className = 'dante-detail';
+                detail.textContent = '← ' + danteInfo.rxFrom.join('\n\n← ');
+                rxEl.appendChild(detail);
                 div.appendChild(rxEl);
             }
 
             if (artnetInfo && artnetInfo.isOut) {
                 const outEl = document.createElement('div');
                 outEl.className = 'artnet-info out-info';
-                outEl.textContent = '→ ' + artnetInfo.outputs.join('\n→ ');
+                outEl.textContent = '← ' + artnetInfo.outputs[0];
+                const detail = document.createElement('div');
+                detail.className = 'artnet-detail';
+                detail.textContent = '← ' + artnetInfo.outputs.join('\n← ');
+                outEl.appendChild(detail);
                 div.appendChild(outEl);
             }
 
             if (artnetInfo && artnetInfo.isIn) {
                 const inEl = document.createElement('div');
                 inEl.className = 'artnet-info in-info';
-                inEl.textContent = '← ' + artnetInfo.inputs.join('\n← ');
+                inEl.textContent = '→ ' + artnetInfo.inputs[0];
+                const detail = document.createElement('div');
+                detail.className = 'artnet-detail';
+                detail.textContent = '→ ' + artnetInfo.inputs.join('\n→ ');
+                inEl.appendChild(detail);
                 div.appendChild(inEl);
             }
 
