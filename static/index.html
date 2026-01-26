@@ -354,6 +354,84 @@
             bottom: -8px;
         }
 
+        body.artnet-mode .node {
+            opacity: 0.3;
+        }
+
+        body.artnet-mode .node.artnet-out {
+            opacity: 1;
+            background: #2a2;
+        }
+
+        body.artnet-mode .node.artnet-in {
+            opacity: 1;
+            background: #26d;
+        }
+
+        body.artnet-mode .node.artnet-out.artnet-in {
+            background: linear-gradient(135deg, #2a2 50%, #26d 50%);
+        }
+
+        body.artnet-mode .node .switch-port,
+        body.artnet-mode .node .uplink,
+        body.artnet-mode .node .root-label {
+            display: none;
+        }
+
+        .node .artnet-info {
+            display: none;
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            font-weight: normal;
+            padding: 1px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            z-index: 10;
+            cursor: default;
+        }
+
+        .node:has(.artnet-info:hover) {
+            z-index: 1000;
+        }
+
+        .node .artnet-info:hover {
+            white-space: pre;
+            max-width: none;
+            width: max-content;
+            z-index: 100;
+            padding: 4px 8px;
+        }
+
+        .node .artnet-info.out-info {
+            background: #375;
+            color: #fff;
+        }
+
+        .node .artnet-info.in-info {
+            background: #357;
+            color: #fff;
+        }
+
+        body.artnet-mode .node.artnet-out .artnet-info,
+        body.artnet-mode .node.artnet-in .artnet-info {
+            display: block;
+        }
+
+        body.artnet-mode .node.artnet-out.artnet-in .artnet-info.out-info {
+            top: -8px;
+        }
+
+        body.artnet-mode .node.artnet-out.artnet-in .artnet-info.in-info {
+            top: auto;
+            bottom: -8px;
+        }
+
         .node.has-error {
             box-shadow: 0 0 0 3px #f66;
         }
@@ -405,9 +483,14 @@
             display: none;
         }
 
+        body.artnet-mode .node:not(.artnet-out):not(.artnet-in):hover .node-info {
+            display: none;
+        }
+
         .node:has(.switch-port:hover) .node-info,
         .node:has(.uplink:hover) .node-info,
-        .node:has(.dante-info:hover) .node-info {
+        .node:has(.dante-info:hover) .node-info,
+        .node:has(.artnet-info:hover) .node-info {
             display: none;
         }
 
@@ -682,6 +765,7 @@
     <div id="mode-selector">
         <button id="mode-network" class="active">Network</button>
         <button id="mode-dante">Dante</button>
+        <button id="mode-artnet">Art-Net</button>
     </div>
     <div id="error-panel">
         <div id="error-header">
@@ -919,7 +1003,7 @@
             return null;
         }
 
-        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, hasError, isUnreachable) {
+        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, artnetInfo, hasError, isUnreachable) {
             const div = document.createElement('div');
             div.className = 'node' + (isSwitch(node) ? ' switch' : '');
             div.dataset.typeid = node.typeid;
@@ -929,6 +1013,11 @@
             if (danteInfo) {
                 if (danteInfo.isTx) div.classList.add('dante-tx');
                 if (danteInfo.isRx) div.classList.add('dante-rx');
+            }
+
+            if (artnetInfo) {
+                if (artnetInfo.isOut) div.classList.add('artnet-out');
+                if (artnetInfo.isIn) div.classList.add('artnet-in');
             }
 
             if (!isSwitch(node) && switchConnection) {
@@ -1057,6 +1146,20 @@
                 div.appendChild(rxEl);
             }
 
+            if (artnetInfo && artnetInfo.isOut) {
+                const outEl = document.createElement('div');
+                outEl.className = 'artnet-info out-info';
+                outEl.textContent = '→ ' + artnetInfo.outputs.join('\n→ ');
+                div.appendChild(outEl);
+            }
+
+            if (artnetInfo && artnetInfo.isIn) {
+                const inEl = document.createElement('div');
+                inEl.className = 'artnet-info in-info';
+                inEl.textContent = '← ' + artnetInfo.inputs.join('\n← ');
+                div.appendChild(inEl);
+            }
+
             div.addEventListener('click', () => {
                 const json = JSON.stringify(node, null, 2);
                 navigator.clipboard.writeText(json).then(() => {
@@ -1067,12 +1170,12 @@
             return div;
         }
 
-        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes, errorNodeIds, unreachableNodeIds) {
+        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes, artnetNodes, errorNodeIds, unreachableNodeIds) {
             const nodes = assignedNodes.get(loc) || [];
             const hasNodes = nodes.length > 0;
 
             const childElements = loc.children
-                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes, errorNodeIds, unreachableNodeIds))
+                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes, artnetNodes, errorNodeIds, unreachableNodeIds))
                 .filter(el => el !== null);
 
             if (!hasNodes && childElements.length === 0) {
@@ -1100,9 +1203,10 @@
                     switches.forEach(node => {
                         const uplink = switchUplinks.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
+                        const artnetInfo = artnetNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
                         const isUnreachable = unreachableNodeIds.has(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo, hasError, isUnreachable));
+                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo, artnetInfo, hasError, isUnreachable));
                     });
                     container.appendChild(switchRow);
                 }
@@ -1113,9 +1217,10 @@
                     nonSwitches.forEach(node => {
                         const conn = switchConnections.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
+                        const artnetInfo = artnetNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
                         const isUnreachable = unreachableNodeIds.has(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo, hasError, isUnreachable));
+                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo, artnetInfo, hasError, isUnreachable));
                     });
                     container.appendChild(nodeRow);
                 }
@@ -1389,6 +1494,31 @@
                 });
             });
 
+            const artnetData = data.artnet_nodes || [];
+            const artnetNodes = new Map();
+
+            artnetData.forEach(an => {
+                const nodeId = an.node?.typeid;
+                if (!nodeId) return;
+
+                const formatUniverse = (u) => {
+                    const net = (u >> 8) & 0x7f;
+                    const subnet = (u >> 4) & 0x0f;
+                    const universe = u & 0x0f;
+                    return net + ':' + subnet + ':' + universe;
+                };
+
+                const inputs = (an.inputs || []).map(formatUniverse);
+                const outputs = (an.outputs || []).map(formatUniverse);
+
+                artnetNodes.set(nodeId, {
+                    isOut: outputs.length > 0,
+                    isIn: inputs.length > 0,
+                    outputs: outputs,
+                    inputs: inputs
+                });
+            });
+
             const switchUplinks = new Map();
             if (allSwitches.length > 0 && switchLinks.length > 0) {
                 const adjacency = new Map();
@@ -1479,7 +1609,7 @@
             container.innerHTML = '';
 
             locationTree.forEach(loc => {
-                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes, errorNodeIds, unreachableNodeIds);
+                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes, artnetNodes, errorNodeIds, unreachableNodeIds);
                 if (el) container.appendChild(el);
             });
 
@@ -1501,9 +1631,10 @@
                     switches.forEach(node => {
                         const uplink = switchUplinks.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
+                        const artnetInfo = artnetNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
                         const isUnreachable = unreachableNodeIds.has(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo, hasError, isUnreachable));
+                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo, artnetInfo, hasError, isUnreachable));
                     });
                     unassignedLoc.appendChild(switchRow);
                 }
@@ -1514,9 +1645,10 @@
                     nonSwitches.forEach(node => {
                         const conn = switchConnections.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
+                        const artnetInfo = artnetNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
                         const isUnreachable = unreachableNodeIds.has(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo, hasError, isUnreachable));
+                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo, artnetInfo, hasError, isUnreachable));
                     });
                     unassignedLoc.appendChild(nodeRow);
                 }
@@ -1531,21 +1663,28 @@
         connectSSE();
 
         function setMode(mode) {
+            document.body.classList.remove('dante-mode', 'artnet-mode');
+            document.getElementById('mode-network').classList.remove('active');
+            document.getElementById('mode-dante').classList.remove('active');
+            document.getElementById('mode-artnet').classList.remove('active');
+
             if (mode === 'dante') {
                 document.body.classList.add('dante-mode');
                 document.getElementById('mode-dante').classList.add('active');
-                document.getElementById('mode-network').classList.remove('active');
                 window.location.hash = 'dante';
+            } else if (mode === 'artnet') {
+                document.body.classList.add('artnet-mode');
+                document.getElementById('mode-artnet').classList.add('active');
+                window.location.hash = 'artnet';
             } else {
-                document.body.classList.remove('dante-mode');
                 document.getElementById('mode-network').classList.add('active');
-                document.getElementById('mode-dante').classList.remove('active');
                 window.location.hash = '';
             }
         }
 
         document.getElementById('mode-network').addEventListener('click', () => setMode('network'));
         document.getElementById('mode-dante').addEventListener('click', () => setMode('dante'));
+        document.getElementById('mode-artnet').addEventListener('click', () => setMode('artnet'));
 
         document.getElementById('clear-all-errors').addEventListener('click', clearAllErrors);
         document.getElementById('toggle-errors').addEventListener('click', () => {
@@ -1563,6 +1702,8 @@
 
         if (window.location.hash === '#dante') {
             setMode('dante');
+        } else if (window.location.hash === '#artnet') {
+            setMode('artnet');
         }
     </script>
 </body>
