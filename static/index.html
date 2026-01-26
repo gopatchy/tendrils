@@ -55,6 +55,7 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
+            overflow: visible;
         }
 
         .location {
@@ -117,6 +118,7 @@
             overflow-wrap: break-word;
             white-space: pre-line;
             margin-top: 8px;
+            z-index: 1;
         }
 
         .node .switch-port {
@@ -367,6 +369,118 @@
 
         .node.has-error.unreachable {
             box-shadow: 0 0 0 3px #f66, 0 0 0 6px #f90;
+        }
+
+        .node:hover {
+            z-index: 100;
+        }
+
+        .node .node-info {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 4px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 10px;
+            white-space: nowrap;
+            z-index: 1000;
+            text-align: left;
+        }
+
+        .node .node-info::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            height: 8px;
+        }
+
+        .node:hover .node-info {
+            display: block;
+            will-change: transform;
+        }
+
+        .node:has(.switch-port:hover) .node-info,
+        .node:has(.uplink:hover) .node-info {
+            display: none;
+        }
+
+        .node .node-info .info-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 0;
+        }
+
+        .node .node-info .info-label {
+            color: #888;
+            min-width: 28px;
+        }
+
+        .node .node-info .info-value {
+            color: #eee;
+            font-family: monospace;
+        }
+
+        .node .node-info .copy-btn {
+            padding: 2px 4px;
+            border: none;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            width: 20px;
+            text-align: center;
+        }
+
+        .node .node-info .copy-btn:hover {
+            color: #ccc;
+        }
+
+        .node .node-info .copy-btn.copied {
+            color: #4f4;
+        }
+
+        .node .node-info .info-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 0;
+        }
+
+        .node .node-info .info-label {
+            color: #888;
+            min-width: 28px;
+        }
+
+        .node .node-info .info-value {
+            color: #eee;
+            font-family: monospace;
+        }
+
+        .node .node-info .copy-btn {
+            padding: 2px 4px;
+            border: none;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        .node .node-info .copy-btn:hover {
+            color: #ccc;
+        }
+
+        .node .node-info .copy-btn.copied {
+            color: #4f4;
         }
 
         #error-panel {
@@ -664,6 +778,7 @@
             return '??';
         }
 
+
         function getNodeIdentifiers(node) {
             const ids = [];
             if (node.names) {
@@ -812,6 +927,58 @@
             const labelEl = document.createElement('span');
             labelEl.textContent = getLabel(node);
             div.appendChild(labelEl);
+
+            const nodeInfo = document.createElement('div');
+            nodeInfo.className = 'node-info';
+            if (node.interfaces) {
+                const ips = [];
+                const macs = [];
+                node.interfaces.forEach(iface => {
+                    if (iface.ips) iface.ips.forEach(ip => { if (!ips.includes(ip)) ips.push(ip); });
+                    if (iface.mac && !macs.includes(iface.mac)) macs.push(iface.mac);
+                });
+                ips.sort();
+                macs.sort();
+                ips.forEach(ip => {
+                    const row = document.createElement('div');
+                    row.className = 'info-row';
+                    row.innerHTML = '<span class="info-label">IP</span><span class="info-value">' + ip + '</span>';
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.textContent = '⧉';
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(ip).then(() => {
+                            btn.classList.add('copied');
+                            btn.textContent = '✓';
+                            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '⧉'; }, 500);
+                        });
+                    });
+                    row.appendChild(btn);
+                    nodeInfo.appendChild(row);
+                });
+                macs.forEach(mac => {
+                    const row = document.createElement('div');
+                    row.className = 'info-row';
+                    row.innerHTML = '<span class="info-label">MAC</span><span class="info-value">' + mac + '</span>';
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.textContent = '⧉';
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(mac).then(() => {
+                            btn.classList.add('copied');
+                            btn.textContent = '✓';
+                            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '⧉'; }, 500);
+                        });
+                    });
+                    row.appendChild(btn);
+                    nodeInfo.appendChild(row);
+                });
+            }
+            if (nodeInfo.children.length > 0) {
+                div.appendChild(nodeInfo);
+            }
 
             if (isSwitch(node) && uplinkInfo === 'ROOT') {
                 const rootEl = document.createElement('div');
