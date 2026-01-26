@@ -173,6 +173,38 @@
             font-weight: bold;
         }
 
+        .node .switch-port.speed-10g {
+            border: 1px solid #4ff;
+        }
+
+        .node .switch-port.speed-1g {
+            border: 1px solid #4f4;
+        }
+
+        .node .switch-port.speed-100m {
+            border: 1px solid #fa0;
+        }
+
+        .node .switch-port.speed-slow {
+            border: 1px solid #f44;
+        }
+
+        .node .uplink.speed-10g {
+            border: 1px solid #4ff;
+        }
+
+        .node .uplink.speed-1g {
+            border: 1px solid #4f4;
+        }
+
+        .node .uplink.speed-100m {
+            border: 1px solid #fa0;
+        }
+
+        .node .uplink.speed-slow {
+            border: 1px solid #f44;
+        }
+
         .node.copied {
             outline: 2px solid #fff;
         }
@@ -592,6 +624,20 @@
             return !!(node.poe_budget);
         }
 
+        function getSpeedClass(speed) {
+            if (!speed || speed === 0) return '';
+            if (speed >= 10000000000) return 'speed-10g';
+            if (speed >= 1000000000) return 'speed-1g';
+            if (speed >= 100000000) return 'speed-100m';
+            return 'speed-slow';
+        }
+
+        function getInterfaceSpeed(node) {
+            if (!node.interfaces || node.interfaces.length === 0) return 0;
+            const iface = node.interfaces[0];
+            return iface.stats?.speed || 0;
+        }
+
         let anonCounter = 0;
 
         function buildLocationTree(locations, parent) {
@@ -685,6 +731,8 @@
                 } else {
                     portEl.textContent = switchConnection.port;
                 }
+                const speedClass = getSpeedClass(switchConnection.speed);
+                if (speedClass) portEl.classList.add(speedClass);
                 div.appendChild(portEl);
             }
 
@@ -701,6 +749,8 @@
                 const uplinkEl = document.createElement('div');
                 uplinkEl.className = 'uplink';
                 uplinkEl.textContent = uplinkInfo.localPort + ' → ' + uplinkInfo.parentName + ':' + uplinkInfo.remotePort;
+                const speedClass = getSpeedClass(uplinkInfo.speed);
+                if (speedClass) uplinkEl.classList.add(speedClass);
                 div.appendChild(uplinkEl);
             }
 
@@ -963,7 +1013,9 @@
                         switchA: nodeA,
                         switchB: nodeB,
                         portA: link.interface_a || '?',
-                        portB: link.interface_b || '?'
+                        portB: link.interface_b || '?',
+                        speedA: getInterfaceSpeed(link.node_a),
+                        speedB: getInterfaceSpeed(link.node_b)
                     });
                 } else if (aIsSwitch && !bIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeB.typeid);
@@ -971,7 +1023,8 @@
                     switchConnections.set(nodeB.typeid, {
                         port: link.interface_a || '?',
                         switchName: getLabel(nodeA),
-                        external: !effectiveSwitch || effectiveSwitch.typeid !== nodeA.typeid
+                        external: !effectiveSwitch || effectiveSwitch.typeid !== nodeA.typeid,
+                        speed: getInterfaceSpeed(link.node_a)
                     });
                 } else if (bIsSwitch && !aIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeA.typeid);
@@ -979,7 +1032,8 @@
                     switchConnections.set(nodeA.typeid, {
                         port: link.interface_b || '?',
                         switchName: getLabel(nodeB),
-                        external: !effectiveSwitch || effectiveSwitch.typeid !== nodeB.typeid
+                        external: !effectiveSwitch || effectiveSwitch.typeid !== nodeB.typeid,
+                        speed: getInterfaceSpeed(link.node_b)
                     });
                 }
             });
@@ -1033,12 +1087,14 @@
                     adjacency.get(link.switchA.typeid).push({
                         neighbor: link.switchB,
                         localPort: link.portA,
-                        remotePort: link.portB
+                        remotePort: link.portB,
+                        localSpeed: link.speedA
                     });
                     adjacency.get(link.switchB.typeid).push({
                         neighbor: link.switchA,
                         localPort: link.portB,
-                        remotePort: link.portA
+                        remotePort: link.portA,
+                        localSpeed: link.speedB
                     });
                 });
 
@@ -1091,7 +1147,8 @@
                             switchUplinks.set(edge.neighbor.typeid, {
                                 localPort: edge.localPort,
                                 remotePort: edge.remotePort,
-                                parentName: getLabel(current)
+                                parentName: getLabel(current),
+                                speed: edge.localSpeed
                             });
                             queue.push(edge.neighbor);
                         }
