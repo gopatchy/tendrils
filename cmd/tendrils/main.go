@@ -31,6 +31,7 @@ func main() {
 	debugBMD := flag.Bool("debug-bmd", false, "debug Blackmagic discovery")
 	debugShure := flag.Bool("debug-shure", false, "debug Shure discovery")
 	debugYamaha := flag.Bool("debug-yamaha", false, "debug Yamaha discovery")
+	debugBroadcast := flag.Bool("debug-broadcast", false, "debug broadcast traffic monitoring")
 	flag.Parse()
 
 	t := tendrils.New()
@@ -58,5 +59,6 @@ func main() {
 	t.DebugBMD = *debugBMD
 	t.DebugShure = *debugShure
 	t.DebugYamaha = *debugYamaha
+	t.DebugBroadcast = *debugBroadcast
 	t.Run()
 }

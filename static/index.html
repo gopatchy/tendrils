@@ -310,12 +310,14 @@
 
         .node.has-error {
             box-shadow: 0 0 0 3px #f66;
-            animation: error-pulse 2s infinite;
         }
 
-        @keyframes error-pulse {
-            0%, 100% { box-shadow: 0 0 0 3px #f66; }
-            50% { box-shadow: 0 0 0 3px #f00; }
+        .node.unreachable {
+            box-shadow: 0 0 0 3px #f90;
+        }
+
+        .node.has-error.unreachable {
+            box-shadow: 0 0 0 3px #f66, 0 0 0 6px #f90;
         }
 
         #error-panel {
@@ -427,12 +429,65 @@
         .node.scroll-highlight {
             outline: 3px solid white;
         }
+
+        #broadcast-stats {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1000;
+            padding: 8px 12px;
+            background: #222;
+            border-radius: 6px;
+            border: 1px solid #444;
+            font-size: 11px;
+        }
+
+        #broadcast-stats.warning {
+            border-color: #f90;
+            background: #332a1a;
+        }
+
+        #broadcast-stats.critical {
+            border-color: #f44;
+            background: #331a1a;
+        }
+
+        #broadcast-stats .label {
+            color: #888;
+            margin-right: 4px;
+        }
+
+        #broadcast-stats .value {
+            color: #eee;
+            font-weight: bold;
+        }
+
+        #broadcast-stats .rate-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        #broadcast-stats .rate-item {
+            display: flex;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
     <div id="connection-status" class="disconnected">
         <div class="dot"></div>
         <span class="text">Connecting...</span>
+    </div>
+    <div id="broadcast-stats">
+        <div class="rate-row">
+            <div class="rate-item">
+                <span class="label">Broadcast:</span>
+                <span class="value" id="broadcast-pps">0 pps</span>
+            </div>
+            <div class="rate-item">
+                <span class="value" id="broadcast-bps">0 B/s</span>
+            </div>
+        </div>
     </div>
     <div id="mode-selector">
         <button id="mode-network" class="active">Network</button>
@@ -450,6 +505,42 @@
     <div id="container"></div>
 
     <script>
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes.toFixed(0) + ' B/s';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB/s';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB/s';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB/s';
+        }
+
+        function formatPackets(pps) {
+            if (pps < 1000) return pps.toFixed(0) + ' pps';
+            if (pps < 1000000) return (pps / 1000).toFixed(1) + 'K pps';
+            return (pps / 1000000).toFixed(1) + 'M pps';
+        }
+
+        function updateBroadcastStats(stats) {
+            const panel = document.getElementById('broadcast-stats');
+            const ppsEl = document.getElementById('broadcast-pps');
+            const bpsEl = document.getElementById('broadcast-bps');
+
+            if (!stats) {
+                ppsEl.textContent = '0 pps';
+                bpsEl.textContent = '0 B/s';
+                panel.className = '';
+                return;
+            }
+
+            ppsEl.textContent = formatPackets(stats.packets_per_s);
+            bpsEl.textContent = formatBytes(stats.bytes_per_s);
+
+            panel.classList.remove('warning', 'critical');
+            if (stats.packets_per_s > 1000) {
+                panel.classList.add('critical');
+            } else if (stats.packets_per_s > 100) {
+                panel.classList.add('warning');
+            }
+        }
+
         function getLabel(node) {
             if (node.names && node.names.length > 0) return node.names.join('\n');
             if (node.interfaces && node.interfaces.length > 0) {
@@ -573,11 +664,12 @@
             return null;
         }
 
-        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, hasError) {
+        function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, hasError, isUnreachable) {
             const div = document.createElement('div');
             div.className = 'node' + (isSwitch(node) ? ' switch' : '');
             div.dataset.typeid = node.typeid;
             if (hasError) div.classList.add('has-error');
+            if (isUnreachable) div.classList.add('unreachable');
 
             if (danteInfo) {
                 if (danteInfo.isTx) div.classList.add('dante-tx');
@@ -636,12 +728,12 @@
             return div;
         }
 
-        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes, errorNodeIds) {
+        function renderLocation(loc, assignedNodes, isTopLevel, switchConnections, switchUplinks, danteNodes, errorNodeIds, unreachableNodeIds) {
             const nodes = assignedNodes.get(loc) || [];
             const hasNodes = nodes.length > 0;
 
             const childElements = loc.children
-                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes, errorNodeIds))
+                .map(child => renderLocation(child, assignedNodes, false, switchConnections, switchUplinks, danteNodes, errorNodeIds, unreachableNodeIds))
                 .filter(el => el !== null);
 
             if (!hasNodes && childElements.length === 0) {
@@ -670,7 +762,8 @@
                         const uplink = switchUplinks.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo, hasError));
+                        const isUnreachable = unreachableNodeIds.has(node.typeid);
+                        switchRow.appendChild(createNodeElement(node, null, loc, uplink, danteInfo, hasError, isUnreachable));
                     });
                     container.appendChild(switchRow);
                 }
@@ -682,7 +775,8 @@
                         const conn = switchConnections.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo, hasError));
+                        const isUnreachable = unreachableNodeIds.has(node.typeid);
+                        nodeRow.appendChild(createNodeElement(node, conn, loc, null, danteInfo, hasError, isUnreachable));
                     });
                     container.appendChild(nodeRow);
                 }
@@ -822,9 +916,8 @@
             const links = data.links || [];
 
             portErrors = data.port_errors || [];
-            const unreachableNodes = new Set(data.unreachable_nodes || []);
-            const errorNodeIds = new Set(portErrors.map(e => e.node_typeid));
-            unreachableNodes.forEach(id => errorNodeIds.add(id));
+            const unreachableNodeIds = new Set(data.unreachable_nodes || []);
+            const errorNodeIds = new Set(portErrors.filter(e => e.error_type !== 'unreachable').map(e => e.node_typeid));
 
 
             const locationTree = buildLocationTree(config.locations || [], null);
@@ -1011,7 +1104,7 @@
             container.innerHTML = '';
 
             locationTree.forEach(loc => {
-                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes, errorNodeIds);
+                const el = renderLocation(loc, assignedNodes, true, switchConnections, switchUplinks, danteNodes, errorNodeIds, unreachableNodeIds);
                 if (el) container.appendChild(el);
             });
 
@@ -1034,7 +1127,8 @@
                         const uplink = switchUplinks.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
-                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo, hasError));
+                        const isUnreachable = unreachableNodeIds.has(node.typeid);
+                        switchRow.appendChild(createNodeElement(node, null, null, uplink, danteInfo, hasError, isUnreachable));
                     });
                     unassignedLoc.appendChild(switchRow);
                 }
@@ -1046,7 +1140,8 @@
                         const conn = switchConnections.get(node.typeid);
                         const danteInfo = danteNodes.get(node.typeid);
                         const hasError = errorNodeIds.has(node.typeid);
-                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo, hasError));
+                        const isUnreachable = unreachableNodeIds.has(node.typeid);
+                        nodeRow.appendChild(createNodeElement(node, conn, null, null, danteInfo, hasError, isUnreachable));
                     });
                     unassignedLoc.appendChild(nodeRow);
                 }
@@ -1055,6 +1150,7 @@
             }
 
             updateErrorPanel();
+            updateBroadcastStats(data.broadcast_stats);
         }
 
         connectSSE();

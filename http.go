@@ -32,6 +32,7 @@ type StatusResponse struct {
 	DanteFlows       []*DanteFlow             `json:"dante_flows"`
 	PortErrors       []*PortError             `json:"port_errors"`
 	UnreachableNodes []string                 `json:"unreachable_nodes"`
+	BroadcastStats   *BroadcastStatsResponse  `json:"broadcast_stats,omitempty"`
 }
 
 func (t *Tendrils) startHTTPServer() {
@@ -132,6 +133,11 @@ func (t *Tendrils) handleAPIConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *Tendrils) GetStatus() *StatusResponse {
+	var broadcastStats *BroadcastStatsResponse
+	if t.broadcast != nil {
+		stats := t.broadcast.GetStats()
+		broadcastStats = &stats
+	}
 	return &StatusResponse{
 		Nodes:            t.getNodes(),
 		Links:            t.getLinks(),
@@ -140,6 +146,7 @@ func (t *Tendrils) GetStatus() *StatusResponse {
 		DanteFlows:       t.getDanteFlows(),
 		PortErrors:       t.errors.GetErrors(),
 		UnreachableNodes: t.errors.GetUnreachableNodes(),
+		BroadcastStats:   broadcastStats,
 	}
 }
 

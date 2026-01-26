@@ -206,14 +206,15 @@ func (e *ErrorTracker) GetUnreachableNodes() []string {
 	return nodes
 }
 
-func (e *ErrorTracker) SetUnreachable(node *Node, ip string) {
-	changed := e.setUnreachableLocked(node, ip)
+func (e *ErrorTracker) SetUnreachable(node *Node, ip string) bool {
+	changed, becameUnreachable := e.setUnreachableLocked(node, ip)
 	if changed {
 		e.t.NotifyUpdate()
 	}
+	return becameUnreachable
 }
 
-func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) bool {
+func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) (changed bool, becameUnreachable bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -221,13 +222,14 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) bool {
 
 	wasUnreachable := e.unreachableNodes[node.TypeID]
 	e.unreachableNodes[node.TypeID] = true
+	becameUnreachable = !wasUnreachable
 
 	if e.suppressedUnreachable[key] {
-		return !wasUnreachable
+		return becameUnreachable, becameUnreachable
 	}
 
 	if _, exists := e.errors[key]; exists {
-		return !wasUnreachable
+		return becameUnreachable, becameUnreachable
 	}
 
 	now := time.Now()
@@ -241,17 +243,18 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node, ip string) bool {
 		FirstSeen:   now,
 		LastUpdated: now,
 	}
-	return true
+	return true, becameUnreachable
 }
 
-func (e *ErrorTracker) ClearUnreachable(node *Node, ip string) {
-	changed := e.clearUnreachableLocked(node, ip)
+func (e *ErrorTracker) ClearUnreachable(node *Node, ip string) bool {
+	changed, becameReachable := e.clearUnreachableLocked(node, ip)
 	if changed {
 		e.t.NotifyUpdate()
 	}
+	return becameReachable
 }
 
-func (e *ErrorTracker) clearUnreachableLocked(node *Node, ip string) bool {
+func (e *ErrorTracker) clearUnreachableLocked(node *Node, ip string) (changed bool, becameReachable bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -261,10 +264,11 @@ func (e *ErrorTracker) clearUnreachableLocked(node *Node, ip string) bool {
 
 	wasUnreachable := e.unreachableNodes[node.TypeID]
 	delete(e.unreachableNodes, node.TypeID)
+	becameReachable = wasUnreachable
 
 	if _, exists := e.errors[key]; exists {
 		delete(e.errors, key)
-		return true
+		return true, becameReachable
 	}
-	return wasUnreachable
+	return becameReachable, becameReachable
 }

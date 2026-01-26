@@ -36,36 +36,39 @@ type Tendrils struct {
 	artnet           *ArtNetNodes
 	danteFlows       *DanteFlows
 	errors           *ErrorTracker
+	ping             *PingManager
+	broadcast        *BroadcastStats
 	config           *Config
 
 	sseSubsMu   sync.RWMutex
 	sseSubsNext int
 	sseSubs     map[int]chan struct{}
 
-	Interface     string
-	ConfigFile    string
-	DisableARP    bool
-	DisableLLDP   bool
-	DisableSNMP   bool
-	DisableIGMP   bool
-	DisableMDNS   bool
-	DisableArtNet bool
-	DisableDante  bool
-	DisableBMD    bool
-	DisableShure  bool
-	DisableYamaha bool
-	LogEvents     bool
-	LogNodes      bool
-	DebugARP      bool
-	DebugLLDP     bool
-	DebugSNMP     bool
-	DebugIGMP     bool
-	DebugMDNS     bool
-	DebugArtNet   bool
-	DebugDante    bool
-	DebugBMD      bool
-	DebugShure    bool
-	DebugYamaha   bool
+	Interface      string
+	ConfigFile     string
+	DisableARP     bool
+	DisableLLDP    bool
+	DisableSNMP    bool
+	DisableIGMP    bool
+	DisableMDNS    bool
+	DisableArtNet  bool
+	DisableDante   bool
+	DisableBMD     bool
+	DisableShure   bool
+	DisableYamaha  bool
+	LogEvents      bool
+	LogNodes       bool
+	DebugARP       bool
+	DebugLLDP      bool
+	DebugSNMP      bool
+	DebugIGMP      bool
+	DebugMDNS      bool
+	DebugArtNet    bool
+	DebugDante     bool
+	DebugBMD       bool
+	DebugShure     bool
+	DebugYamaha    bool
+	DebugBroadcast bool
 }
 
 func New() *Tendrils {
@@ -73,10 +76,12 @@ func New() *Tendrils {
 		activeInterfaces: map[string]context.CancelFunc{},
 		artnet:           NewArtNetNodes(),
 		danteFlows:       NewDanteFlows(),
+		ping:             NewPingManager(),
 		sseSubs:          map[int]chan struct{}{},
 	}
 	t.nodes = NewNodes(t)
 	t.errors = NewErrorTracker(t)
+	t.broadcast = NewBroadcastStats(t)
 	return t
 }
 
@@ -277,6 +282,7 @@ func (t *Tendrils) updateInterfaces(interfaces []net.Interface) {
 
 func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 	go t.pingBroadcast(ctx, iface)
+	go t.listenBroadcast(ctx, iface)
 
 	if !t.DisableLLDP {
 		go t.listenLLDP(ctx, iface)
