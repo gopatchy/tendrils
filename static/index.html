@@ -1576,8 +1576,19 @@
 
         function connectSSE() {
             const evtSource = new EventSource('/api/status/stream');
+            let heartbeatTimeout = null;
+
+            function resetHeartbeat() {
+                if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+                heartbeatTimeout = setTimeout(() => {
+                    setConnectionStatus(false);
+                    evtSource.close();
+                    setTimeout(connectSSE, 2000);
+                }, 10000);
+            }
 
             evtSource.addEventListener('status', async (event) => {
+                resetHeartbeat();
                 const data = JSON.parse(event.data);
                 if (!currentConfig) {
                     const configResp = await fetch('/api/config');
@@ -1588,9 +1599,11 @@
 
             evtSource.onopen = () => {
                 setConnectionStatus(true);
+                resetHeartbeat();
             };
 
             evtSource.onerror = () => {
+                if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
                 setConnectionStatus(false);
                 evtSource.close();
                 setTimeout(connectSSE, 2000);
