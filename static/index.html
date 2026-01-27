@@ -1741,6 +1741,11 @@
                 });
             });
 
+            danteNodes.forEach(info => {
+                info.txTo.sort((a, b) => a.split('\n')[0].localeCompare(b.split('\n')[0]));
+                info.rxFrom.sort((a, b) => a.split('\n')[0].localeCompare(b.split('\n')[0]));
+            });
+
             const artnetData = data.artnet_nodes || [];
             const artnetNodes = new Map();
 
@@ -1755,8 +1760,8 @@
                     return net + ':' + subnet + ':' + universe + ' (' + u + ')';
                 };
 
-                const inputs = (an.inputs || []).map(formatUniverse);
-                const outputs = (an.outputs || []).map(formatUniverse);
+                const inputs = (an.inputs || []).slice().sort((a, b) => a - b).map(formatUniverse);
+                const outputs = (an.outputs || []).slice().sort((a, b) => a - b).map(formatUniverse);
 
                 artnetNodes.set(nodeId, {
                     isOut: outputs.length > 0,
@@ -1773,7 +1778,7 @@
                 const nodeId = sn.node?.typeid;
                 if (!nodeId) return;
 
-                const universes = (sn.universes || []).map(u => String(u));
+                const universes = (sn.universes || []).slice().sort((a, b) => a - b).map(u => String(u));
 
                 sacnNodes.set(nodeId, {
                     isConsumer: universes.length > 0,
