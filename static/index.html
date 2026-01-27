@@ -644,6 +644,10 @@
             cursor: pointer;
         }
 
+        .clickable-value, .node-name {
+            cursor: pointer;
+        }
+
 
         .node:hover .node-info-wrapper {
             display: block;
@@ -1030,6 +1034,76 @@
             return Math.round(pps).toLocaleString() + ' pps';
         }
 
+        function addClickableValue(container, label, value, plainLines, plainFormat) {
+            const lbl = document.createElement('span');
+            lbl.className = 'lbl';
+            lbl.textContent = label;
+            container.appendChild(lbl);
+            container.appendChild(document.createTextNode(' '));
+            const val = document.createElement('span');
+            val.className = 'clickable-value';
+            val.textContent = value;
+            val.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(value);
+            });
+            container.appendChild(val);
+            plainLines.push(plainFormat ? plainFormat(label, value) : label + ': ' + value);
+        }
+
+        function buildClickableList(container, items, label, plainFormat) {
+            const plainLines = [];
+            items.forEach((item, idx) => {
+                if (idx > 0) container.appendChild(document.createTextNode('\n'));
+                addClickableValue(container, label, item, plainLines, plainFormat);
+            });
+            container.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(plainLines.join('\n'));
+            });
+        }
+
+        function buildLinkStats(container, speed, errIn, errOut, rates) {
+            const plainLines = [];
+            addClickableValue(container, 'LINK', formatLinkSpeed(speed), plainLines);
+            container.appendChild(document.createTextNode('\n'));
+            addClickableValue(container, 'ERR', 'RX ' + errIn + ' / TX ' + errOut, plainLines);
+            if (rates) {
+                container.appendChild(document.createTextNode('\n'));
+                addClickableValue(container, 'RX', formatMbps(rates.rxBytes) + ' (' + formatPps(rates.rxPkts) + ')', plainLines);
+                container.appendChild(document.createTextNode('\n'));
+                addClickableValue(container, 'TX', formatMbps(rates.txBytes) + ' (' + formatPps(rates.txPkts) + ')', plainLines);
+            }
+            container.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(plainLines.join('\n'));
+            });
+        }
+
+        function buildDanteDetail(container, entries, arrow) {
+            const plainLines = [];
+            entries.forEach((entry, entryIdx) => {
+                entry.split('\n').forEach((line, lineIdx) => {
+                    if (entryIdx > 0 && lineIdx === 0) {
+                        container.appendChild(document.createTextNode('\n\n'));
+                        plainLines.push('');
+                    } else if (container.childNodes.length > 0) {
+                        container.appendChild(document.createTextNode('\n'));
+                    }
+                    if (line.startsWith(' ')) {
+                        container.appendChild(document.createTextNode('      ' + line.trim()));
+                        plainLines.push('      ' + line.trim());
+                    } else {
+                        addClickableValue(container, arrow, line, plainLines, (l, v) => l + ' ' + v);
+                    }
+                });
+            });
+            container.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(plainLines.join('\n'));
+            });
+        }
+
         function formatLinkSpeed(bps) {
             if (!bps) return '?';
             const mbps = bps / 1000000;
@@ -1148,29 +1222,33 @@
                 statsWrapper.className = 'link-stats-wrapper';
                 const statsInfo = document.createElement('div');
                 statsInfo.className = 'link-stats';
-                let statsHtml = '<span class="lbl">LINK</span> ' + formatLinkSpeed(switchConnection.speed);
-                statsHtml += '\n<span class="lbl">ERR</span> RX ' + errIn + ' / TX ' + errOut;
-                let statsPlain = 'LINK: ' + formatLinkSpeed(switchConnection.speed);
-                statsPlain += '\nERR: RX ' + errIn + ' / TX ' + errOut;
-                if (switchConnection.rates) {
-                    const r = switchConnection.rates;
-                    statsHtml += '\n<span class="lbl">RX</span> ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
-                    statsHtml += '\n<span class="lbl">TX</span> ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
-                    statsPlain += '\nRX: ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
-                    statsPlain += '\nTX: ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
-                }
-                statsInfo.innerHTML = statsHtml;
-                statsInfo.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(statsPlain);
-                });
+                const r = switchConnection.rates;
+                buildLinkStats(statsInfo, switchConnection.speed, errIn, errOut,
+                    r ? {rxBytes: r.outBytes, rxPkts: r.outPkts, txBytes: r.inBytes, txPkts: r.inPkts} : null);
                 statsWrapper.appendChild(statsInfo);
                 portEl.appendChild(statsWrapper);
                 div.appendChild(portEl);
             }
 
             const labelEl = document.createElement('span');
-            labelEl.textContent = getLabel(node);
+            if (node.names && node.names.length > 0) {
+                node.names.forEach((name, idx) => {
+                    if (idx > 0) labelEl.appendChild(document.createTextNode('\n'));
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'node-name';
+                    nameSpan.textContent = name;
+                    nameSpan.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(name).then(() => {
+                            div.classList.add('copied');
+                            setTimeout(() => div.classList.remove('copied'), 300);
+                        });
+                    });
+                    labelEl.appendChild(nameSpan);
+                });
+            } else {
+                labelEl.textContent = getLabel(node);
+            }
             div.appendChild(labelEl);
 
             const nodeInfoWrapper = document.createElement('div');
@@ -1186,18 +1264,16 @@
                 });
                 ips.sort();
                 macs.sort();
-                const lines = [];
                 const plainLines = [];
-                ips.forEach(ip => {
-                    lines.push('<span class="lbl">IP</span> ' + ip);
-                    plainLines.push('IP: ' + ip);
+                ips.forEach((ip, idx) => {
+                    if (idx > 0) nodeInfo.appendChild(document.createTextNode('\n'));
+                    addClickableValue(nodeInfo, 'IP', ip, plainLines);
                 });
-                macs.forEach(mac => {
-                    lines.push('<span class="lbl">MAC</span> ' + mac);
-                    plainLines.push('MAC: ' + mac);
+                macs.forEach((mac, idx) => {
+                    if (ips.length > 0 || idx > 0) nodeInfo.appendChild(document.createTextNode('\n'));
+                    addClickableValue(nodeInfo, 'MAC', mac, plainLines);
                 });
-                if (lines.length > 0) {
-                    nodeInfo.innerHTML = lines.join('\n');
+                if (plainLines.length > 0) {
                     nodeInfo.addEventListener('click', (e) => {
                         e.stopPropagation();
                         navigator.clipboard.writeText(plainLines.join('\n'));
@@ -1226,22 +1302,9 @@
                 statsWrapper.className = 'link-stats-wrapper';
                 const statsInfo = document.createElement('div');
                 statsInfo.className = 'link-stats';
-                let statsHtml = '<span class="lbl">LINK</span> ' + formatLinkSpeed(uplinkInfo.speed);
-                statsHtml += '\n<span class="lbl">ERR</span> RX ' + errIn + ' / TX ' + errOut;
-                let statsPlain = 'LINK: ' + formatLinkSpeed(uplinkInfo.speed);
-                statsPlain += '\nERR: RX ' + errIn + ' / TX ' + errOut;
-                if (uplinkInfo.rates) {
-                    const r = uplinkInfo.rates;
-                    statsHtml += '\n<span class="lbl">RX</span> ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
-                    statsHtml += '\n<span class="lbl">TX</span> ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
-                    statsPlain += '\nRX: ' + formatMbps(r.inBytes) + ' (' + formatPps(r.inPkts) + ')';
-                    statsPlain += '\nTX: ' + formatMbps(r.outBytes) + ' (' + formatPps(r.outPkts) + ')';
-                }
-                statsInfo.innerHTML = statsHtml;
-                statsInfo.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(statsPlain);
-                });
+                const r = uplinkInfo.rates;
+                buildLinkStats(statsInfo, uplinkInfo.speed, errIn, errOut,
+                    r ? {rxBytes: r.inBytes, rxPkts: r.inPkts, txBytes: r.outBytes, txPkts: r.outPkts} : null);
                 statsWrapper.appendChild(statsInfo);
                 uplinkEl.appendChild(statsWrapper);
                 div.appendChild(uplinkEl);
@@ -1257,29 +1320,7 @@
                 detailWrapper.className = 'dante-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'dante-detail';
-                const txHtml = danteInfo.txTo.map(entry => {
-                    const lines = entry.split('\n');
-                    return lines.map(line => {
-                        if (line.startsWith(' ')) {
-                            return '      ' + line.trim();
-                        }
-                        return '<span class="lbl">→</span> ' + line;
-                    }).join('\n');
-                }).join('\n\n');
-                const txPlain = danteInfo.txTo.map(entry => {
-                    const lines = entry.split('\n');
-                    return lines.map(line => {
-                        if (line.startsWith(' ')) {
-                            return '      ' + line.trim();
-                        }
-                        return '→ ' + line;
-                    }).join('\n');
-                }).join('\n\n');
-                detail.innerHTML = txHtml;
-                detail.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(txPlain);
-                });
+                buildDanteDetail(detail, danteInfo.txTo, '→');
                 detailWrapper.appendChild(detail);
                 txEl.appendChild(detailWrapper);
                 div.appendChild(txEl);
@@ -1295,29 +1336,7 @@
                 detailWrapper.className = 'dante-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'dante-detail';
-                const rxHtml = danteInfo.rxFrom.map(entry => {
-                    const lines = entry.split('\n');
-                    return lines.map(line => {
-                        if (line.startsWith(' ')) {
-                            return '      ' + line.trim();
-                        }
-                        return '<span class="lbl">←</span> ' + line;
-                    }).join('\n');
-                }).join('\n\n');
-                const rxPlain = danteInfo.rxFrom.map(entry => {
-                    const lines = entry.split('\n');
-                    return lines.map(line => {
-                        if (line.startsWith(' ')) {
-                            return '      ' + line.trim();
-                        }
-                        return '← ' + line;
-                    }).join('\n');
-                }).join('\n\n');
-                detail.innerHTML = rxHtml;
-                detail.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(rxPlain);
-                });
+                buildDanteDetail(detail, danteInfo.rxFrom, '←');
                 detailWrapper.appendChild(detail);
                 rxEl.appendChild(detailWrapper);
                 div.appendChild(rxEl);
@@ -1332,12 +1351,7 @@
                 detailWrapper.className = 'artnet-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'artnet-detail';
-                detail.innerHTML = artnetInfo.outputs.map(u => '<span class="lbl">←</span> ' + u).join('\n');
-                const outPlain = artnetInfo.outputs.map(u => '← ' + u).join('\n');
-                detail.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(outPlain);
-                });
+                buildClickableList(detail, artnetInfo.outputs, '←', (l, v) => l + ' ' + v);
                 detailWrapper.appendChild(detail);
                 outEl.appendChild(detailWrapper);
                 div.appendChild(outEl);
@@ -1352,12 +1366,7 @@
                 detailWrapper.className = 'artnet-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'artnet-detail';
-                detail.innerHTML = artnetInfo.inputs.map(u => '<span class="lbl">→</span> ' + u).join('\n');
-                const inPlain = artnetInfo.inputs.map(u => '→ ' + u).join('\n');
-                detail.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(inPlain);
-                });
+                buildClickableList(detail, artnetInfo.inputs, '→', (l, v) => l + ' ' + v);
                 detailWrapper.appendChild(detail);
                 inEl.appendChild(detailWrapper);
                 div.appendChild(inEl);
@@ -1372,20 +1381,20 @@
                 detailWrapper.className = 'sacn-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'sacn-detail';
-                detail.innerHTML = sacnInfo.universes.map(u => '<span class="lbl">←</span> ' + u).join('\n');
-                const sacnPlain = sacnInfo.universes.map(u => '← ' + u).join('\n');
-                detail.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(sacnPlain);
-                });
+                buildClickableList(detail, sacnInfo.universes, '←', (l, v) => l + ' ' + v);
                 detailWrapper.appendChild(detail);
                 sacnEl.appendChild(detailWrapper);
                 div.appendChild(sacnEl);
             }
 
             div.addEventListener('click', () => {
-                const json = JSON.stringify(node, null, 2);
-                navigator.clipboard.writeText(json).then(() => {
+                let copyText;
+                if (node.names && node.names.length > 0) {
+                    copyText = node.names.join('\n');
+                } else {
+                    copyText = getLabel(node);
+                }
+                navigator.clipboard.writeText(copyText).then(() => {
                     div.classList.add('copied');
                     setTimeout(() => div.classList.remove('copied'), 300);
                 });
