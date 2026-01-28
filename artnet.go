@@ -30,20 +30,15 @@ type ArtNetNode struct {
 	LastSeen time.Time `json:"last_seen"`
 }
 
-func (t *Tendrils) listenArtNet(ctx context.Context, iface net.Interface) {
-	srcIP, _ := getInterfaceIPv4(iface)
-	if srcIP == nil {
-		return
-	}
-
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: srcIP, Port: artNetPort})
+func (t *Tendrils) startArtNetListener(ctx context.Context) {
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: artNetPort})
 	if err != nil {
-		log.Printf("[ERROR] failed to listen artnet on %s: %v", iface.Name, err)
+		log.Printf("[ERROR] failed to listen artnet: %v", err)
 		return
 	}
 	defer conn.Close()
 
-	go t.runArtNetPoller(ctx, iface, conn)
+	t.artnetConn = conn
 
 	buf := make([]byte, 65536)
 	for {
@@ -62,11 +57,39 @@ func (t *Tendrils) listenArtNet(ctx context.Context, iface net.Interface) {
 			continue
 		}
 
-		t.handleArtNetPacket(iface.Name, src.IP, buf[:n])
+		t.handleArtNetPacket(src.IP, buf[:n])
 	}
 }
 
-func (t *Tendrils) handleArtNetPacket(ifaceName string, srcIP net.IP, data []byte) {
+func (t *Tendrils) startArtNetPoller(ctx context.Context, iface net.Interface) {
+	srcIP, broadcast := getInterfaceIPv4(iface)
+	if srcIP == nil || broadcast == nil {
+		return
+	}
+
+	sendConn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: srcIP, Port: 0})
+	if err != nil {
+		log.Printf("[ERROR] failed to create artnet send socket on %s: %v", iface.Name, err)
+		return
+	}
+	defer sendConn.Close()
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	t.sendArtPoll(sendConn, broadcast, iface.Name)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t.sendArtPoll(sendConn, broadcast, iface.Name)
+		}
+	}
+}
+
+func (t *Tendrils) handleArtNetPacket(srcIP net.IP, data []byte) {
 	if len(data) < 12 {
 		return
 	}
@@ -79,11 +102,11 @@ func (t *Tendrils) handleArtNetPacket(ifaceName string, srcIP net.IP, data []byt
 
 	switch opcode {
 	case opPollReply:
-		t.handleArtPollReply(ifaceName, srcIP, data)
+		t.handleArtPollReply(srcIP, data)
 	}
 }
 
-func (t *Tendrils) handleArtPollReply(ifaceName string, srcIP net.IP, data []byte) {
+func (t *Tendrils) handleArtPollReply(srcIP net.IP, data []byte) {
 	if len(data) < 207 {
 		return
 	}
@@ -123,7 +146,7 @@ func (t *Tendrils) handleArtPollReply(ifaceName string, srcIP net.IP, data []byt
 	}
 
 	if t.DebugArtNet {
-		log.Printf("[artnet] %s: %s %s short=%q long=%q numPorts=%d portTypes=%v in=%v out=%v", ifaceName, ip, mac, shortName, longName, numPorts, data[174:178], inputs, outputs)
+		log.Printf("[artnet] %s %s short=%q long=%q numPorts=%d portTypes=%v in=%v out=%v", ip, mac, shortName, longName, numPorts, data[174:178], inputs, outputs)
 	}
 
 	name := longName
@@ -143,27 +166,6 @@ func (t *Tendrils) handleArtPollReply(ifaceName string, srcIP net.IP, data []byt
 	}
 	if node != nil {
 		t.nodes.UpdateArtNet(node, inputs, outputs)
-	}
-}
-
-func (t *Tendrils) runArtNetPoller(ctx context.Context, iface net.Interface, conn *net.UDPConn) {
-	_, broadcast := getInterfaceIPv4(iface)
-	if broadcast == nil {
-		return
-	}
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	t.sendArtPoll(conn, broadcast, iface.Name)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			t.sendArtPoll(conn, broadcast, iface.Name)
-		}
 	}
 }
 

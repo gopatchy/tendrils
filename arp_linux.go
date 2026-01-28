@@ -36,6 +36,11 @@ func (t *Tendrils) parseARPTable() []arpEntry {
 			continue
 		}
 
+		flags := fields[2]
+		if flags == "0x0" {
+			continue
+		}
+
 		macStr := fields[3]
 		if macStr == "00:00:00:00:00:00" {
 			continue

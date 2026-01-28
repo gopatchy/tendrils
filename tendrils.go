@@ -34,6 +34,7 @@ type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
 	nodes            *Nodes
 	artnet           *ArtNetNodes
+	artnetConn       *net.UDPConn
 	danteFlows       *DanteFlows
 	errors           *ErrorTracker
 	ping             *PingManager
@@ -156,6 +157,10 @@ func (t *Tendrils) Run() {
 	if !t.DisableARP {
 		t.readARPTable()
 		go t.pollARP(ctx)
+	}
+
+	if !t.DisableArtNet {
+		go t.startArtNetListener(ctx)
 	}
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -294,7 +299,7 @@ func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 		go t.listenMDNS(ctx, iface)
 	}
 	if !t.DisableArtNet {
-		go t.listenArtNet(ctx, iface)
+		go t.startArtNetPoller(ctx, iface)
 	}
 	if !t.DisableDante {
 		go t.listenDante(ctx, iface)
