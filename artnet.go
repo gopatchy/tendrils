@@ -2,7 +2,6 @@ package tendrils
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
@@ -12,14 +11,7 @@ import (
 	"time"
 
 	"github.com/fvbommel/sortorder"
-)
-
-const (
-	artNetPort      = 6454
-	artNetID        = "Art-Net\x00"
-	opPoll          = 0x2000
-	opPollReply     = 0x2100
-	protocolVersion = 14
+	"github.com/gopatchy/artnet"
 )
 
 type ArtNetNode struct {
@@ -31,7 +23,7 @@ type ArtNetNode struct {
 }
 
 func (t *Tendrils) startArtNetListener(ctx context.Context) {
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: artNetPort})
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: artnet.Port})
 	if err != nil {
 		log.Printf("[ERROR] failed to listen artnet: %v", err)
 		return
@@ -57,7 +49,7 @@ func (t *Tendrils) startArtNetListener(ctx context.Context) {
 			continue
 		}
 
-		t.handleArtNetPacket(src.IP, buf[:n])
+		t.handleArtNetPacket(src, buf[:n])
 	}
 }
 
@@ -74,6 +66,8 @@ func (t *Tendrils) startArtNetPoller(ctx context.Context, iface net.Interface) {
 	}
 	defer sendConn.Close()
 
+	go t.listenArtNetReplies(ctx, sendConn, iface.Name)
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -89,64 +83,63 @@ func (t *Tendrils) startArtNetPoller(ctx context.Context, iface net.Interface) {
 	}
 }
 
-func (t *Tendrils) handleArtNetPacket(srcIP net.IP, data []byte) {
-	if len(data) < 12 {
-		return
-	}
+func (t *Tendrils) listenArtNetReplies(ctx context.Context, conn *net.UDPConn, ifaceName string) {
+	buf := make([]byte, 1024)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 
-	if string(data[:8]) != artNetID {
-		return
-	}
+		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		n, src, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				continue
+			}
+		}
 
-	opcode := binary.LittleEndian.Uint16(data[8:10])
-
-	switch opcode {
-	case opPollReply:
-		t.handleArtPollReply(srcIP, data)
+		t.handleArtNetPacket(src, buf[:n])
 	}
 }
 
-func (t *Tendrils) handleArtPollReply(srcIP net.IP, data []byte) {
-	if len(data) < 207 {
+func (t *Tendrils) handleArtNetPacket(src *net.UDPAddr, data []byte) {
+	opCode, pkt, err := artnet.ParsePacket(data)
+	if err != nil {
 		return
 	}
 
-	ip := net.IPv4(data[10], data[11], data[12], data[13])
-
-	var mac net.HardwareAddr
-	if len(data) >= 207 {
-		mac = net.HardwareAddr(data[201:207])
+	switch opCode {
+	case artnet.OpPollReply:
+		if reply, ok := pkt.(*artnet.PollReplyPacket); ok {
+			t.handleArtPollReply(src.IP, reply)
+		}
 	}
+}
 
-	shortName := strings.TrimRight(string(data[26:44]), "\x00")
-	longName := strings.TrimRight(string(data[44:108]), "\x00")
-
-	netSwitch := int(data[18])
-	subSwitch := int(data[19])
-
-	numPorts := int(data[173])
-	if numPorts > 4 {
-		numPorts = 4
-	}
+func (t *Tendrils) handleArtPollReply(srcIP net.IP, pkt *artnet.PollReplyPacket) {
+	ip := pkt.IP()
+	mac := pkt.MACAddr()
+	shortName := pkt.GetShortName()
+	longName := pkt.GetLongName()
 
 	var inputs, outputs []int
-	for i := 0; i < numPorts; i++ {
-		portType := data[174+i]
-		swIn := int(data[186+i])
-		swOut := int(data[190+i])
-
-		universe := netSwitch<<8 | subSwitch<<4
-
-		if portType&0x40 != 0 {
-			inputs = append(inputs, universe|swIn)
-		}
-		if portType&0x80 != 0 {
-			outputs = append(outputs, universe|swOut)
-		}
+	for _, u := range pkt.InputUniverses() {
+		inputs = append(inputs, int(u))
+	}
+	for _, u := range pkt.OutputUniverses() {
+		outputs = append(outputs, int(u))
 	}
 
 	if t.DebugArtNet {
-		log.Printf("[artnet] %s %s short=%q long=%q numPorts=%d portTypes=%v in=%v out=%v", ip, mac, shortName, longName, numPorts, data[174:178], inputs, outputs)
+		log.Printf("[artnet] %s %s short=%q long=%q in=%v out=%v", ip, mac, shortName, longName, inputs, outputs)
 	}
 
 	name := longName
@@ -170,14 +163,9 @@ func (t *Tendrils) handleArtPollReply(srcIP net.IP, data []byte) {
 }
 
 func (t *Tendrils) sendArtPoll(conn *net.UDPConn, broadcast net.IP, ifaceName string) {
-	packet := make([]byte, 14)
-	copy(packet[0:8], artNetID)
-	binary.LittleEndian.PutUint16(packet[8:10], opPoll)
-	binary.LittleEndian.PutUint16(packet[10:12], protocolVersion)
-	packet[12] = 0x00
-	packet[13] = 0x00
+	packet := artnet.BuildPollPacket()
 
-	_, err := conn.WriteToUDP(packet, &net.UDPAddr{IP: broadcast, Port: artNetPort})
+	_, err := conn.WriteToUDP(packet, &net.UDPAddr{IP: broadcast, Port: artnet.Port})
 	if err != nil {
 		if t.DebugArtNet {
 			log.Printf("[artnet] %s: failed to send poll: %v", ifaceName, err)
@@ -346,10 +334,10 @@ func (a *ArtNetNodes) LogAll() {
 			sort.Slice(outs, func(i, j int) bool { return sortorder.NaturalLess(outs[i], outs[j]) })
 			parts = append(parts, fmt.Sprintf("out: %s", strings.Join(outs, ", ")))
 		}
-		net := (u >> 8) & 0x7f
+		netVal := (u >> 8) & 0x7f
 		subnet := (u >> 4) & 0x0f
 		universe := u & 0x0f
-		log.Printf("[sigusr1]   artnet:%d (%d/%d/%d) %s", u, net, subnet, universe, strings.Join(parts, "; "))
+		log.Printf("[sigusr1]   artnet:%d (%d/%d/%d) %s", u, netVal, subnet, universe, strings.Join(parts, "; "))
 	}
 }
 
