@@ -25,6 +25,7 @@ const (
 )
 
 type StatusResponse struct {
+	Config           *Config                  `json:"config"`
 	Nodes            []*Node                  `json:"nodes"`
 	Links            []*Link                  `json:"links"`
 	MulticastGroups  []*MulticastGroupMembers `json:"multicast_groups"`
@@ -45,7 +46,6 @@ func (t *Tendrils) startHTTPServer() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", t.handleAPIStatus)
 	mux.HandleFunc("/api/status/stream", t.handleAPIStatusStream)
-	mux.HandleFunc("/api/config", t.handleAPIConfig)
 	mux.HandleFunc("/api/errors/clear", t.handleClearError)
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
@@ -124,22 +124,18 @@ func (t *Tendrils) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
-func (t *Tendrils) handleAPIConfig(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	if t.config == nil {
-		json.NewEncoder(w).Encode(&Config{})
-		return
-	}
-	json.NewEncoder(w).Encode(t.config)
-}
-
 func (t *Tendrils) GetStatus() *StatusResponse {
 	var broadcastStats *BroadcastStatsResponse
 	if t.broadcast != nil {
 		stats := t.broadcast.GetStats()
 		broadcastStats = &stats
 	}
+	config := t.config
+	if config == nil {
+		config = &Config{}
+	}
 	return &StatusResponse{
+		Config:           config,
 		Nodes:            t.getNodes(),
 		Links:            t.getLinks(),
 		MulticastGroups:  t.getMulticastGroups(),

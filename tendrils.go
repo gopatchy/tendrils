@@ -142,6 +142,7 @@ func (t *Tendrils) Run() {
 			}
 			t.config = cfg
 			log.Printf("reloaded config from %s", t.ConfigFile)
+			t.NotifyUpdate()
 		}
 	}()
 

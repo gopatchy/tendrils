@@ -1725,13 +1725,10 @@
                 }, 10000);
             }
 
-            evtSource.addEventListener('status', async (event) => {
+            evtSource.addEventListener('status', (event) => {
                 resetHeartbeat();
                 const data = JSON.parse(event.data);
-                if (!currentConfig) {
-                    const configResp = await fetch('/api/config');
-                    currentConfig = await configResp.json();
-                }
+                currentConfig = data.config || {};
                 render(data, currentConfig);
             });
 
