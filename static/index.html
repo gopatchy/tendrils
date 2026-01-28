@@ -1345,13 +1345,15 @@
             if (artnetInfo && artnetInfo.isOut) {
                 const outEl = document.createElement('div');
                 outEl.className = 'artnet-info out-info';
+                const firstOut = artnetInfo.outputs[0];
+                const outLabel = firstOut.firstTarget || firstOut.display;
                 const outMore = artnetInfo.outputs.length > 1 ? ', ...' : '';
-                outEl.innerHTML = '<span class="lbl">←</span> ' + artnetInfo.outputs[0] + outMore;
+                outEl.innerHTML = '<span class="lbl">←</span> ' + outLabel + outMore;
                 const detailWrapper = document.createElement('div');
                 detailWrapper.className = 'artnet-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'artnet-detail';
-                buildClickableList(detail, artnetInfo.outputs, '←', (l, v) => l + ' ' + v);
+                buildClickableList(detail, artnetInfo.outputs.map(o => o.display), '←', (l, v) => l + ' ' + v);
                 detailWrapper.appendChild(detail);
                 outEl.appendChild(detailWrapper);
                 div.appendChild(outEl);
@@ -1360,13 +1362,15 @@
             if (artnetInfo && artnetInfo.isIn) {
                 const inEl = document.createElement('div');
                 inEl.className = 'artnet-info in-info';
+                const firstIn = artnetInfo.inputs[0];
+                const inLabel = firstIn.firstTarget || firstIn.display;
                 const inMore = artnetInfo.inputs.length > 1 ? ', ...' : '';
-                inEl.innerHTML = '<span class="lbl">→</span> ' + artnetInfo.inputs[0] + inMore;
+                inEl.innerHTML = '<span class="lbl">→</span> ' + inLabel + inMore;
                 const detailWrapper = document.createElement('div');
                 detailWrapper.className = 'artnet-detail-wrapper';
                 const detail = document.createElement('div');
                 detail.className = 'artnet-detail';
-                buildClickableList(detail, artnetInfo.inputs, '→', (l, v) => l + ' ' + v);
+                buildClickableList(detail, artnetInfo.inputs.map(i => i.display), '→', (l, v) => l + ' ' + v);
                 detailWrapper.appendChild(detail);
                 inEl.appendChild(detailWrapper);
                 div.appendChild(inEl);
@@ -1749,19 +1753,54 @@
             const artnetData = data.artnet_nodes || [];
             const artnetNodes = new Map();
 
+            const formatUniverse = (u) => {
+                const net = (u >> 8) & 0x7f;
+                const subnet = (u >> 4) & 0x0f;
+                const universe = u & 0x0f;
+                return net + ':' + subnet + ':' + universe + ' (' + u + ')';
+            };
+
+            const universeInputs = new Map();
+            const universeOutputs = new Map();
+
+            artnetData.forEach(an => {
+                const name = getShortLabel(an.node);
+                (an.inputs || []).forEach(u => {
+                    if (!universeInputs.has(u)) universeInputs.set(u, []);
+                    universeInputs.get(u).push(name);
+                });
+                (an.outputs || []).forEach(u => {
+                    if (!universeOutputs.has(u)) universeOutputs.set(u, []);
+                    universeOutputs.get(u).push(name);
+                });
+            });
+
+            const collapseNames = (names) => {
+                const counts = {};
+                names.forEach(n => counts[n] = (counts[n] || 0) + 1);
+                return Object.entries(counts).map(([name, count]) => count > 1 ? name + ' x' + count : name);
+            };
+
             artnetData.forEach(an => {
                 const nodeId = an.node?.typeid;
                 if (!nodeId) return;
 
-                const formatUniverse = (u) => {
-                    const net = (u >> 8) & 0x7f;
-                    const subnet = (u >> 4) & 0x0f;
-                    const universe = u & 0x0f;
-                    return net + ':' + subnet + ':' + universe + ' (' + u + ')';
-                };
-
-                const inputs = (an.inputs || []).slice().sort((a, b) => a - b).map(formatUniverse);
-                const outputs = (an.outputs || []).slice().sort((a, b) => a - b).map(formatUniverse);
+                const inputs = (an.inputs || []).slice().sort((a, b) => a - b).map(u => {
+                    const sources = collapseNames(universeOutputs.get(u) || []);
+                    const uniStr = formatUniverse(u);
+                    if (sources.length > 0) {
+                        return { display: sources[0] + ' [' + uniStr + ']', firstTarget: sources[0] };
+                    }
+                    return { display: uniStr, firstTarget: null };
+                });
+                const outputs = (an.outputs || []).slice().sort((a, b) => a - b).map(u => {
+                    const dests = collapseNames(universeInputs.get(u) || []);
+                    const uniStr = formatUniverse(u);
+                    if (dests.length > 0) {
+                        return { display: dests[0] + ' [' + uniStr + ']', firstTarget: dests[0] };
+                    }
+                    return { display: uniStr, firstTarget: null };
+                });
 
                 artnetNodes.set(nodeId, {
                     isOut: outputs.length > 0,
