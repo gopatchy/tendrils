@@ -55,7 +55,12 @@
       "Bash(git remote set-url:*)",
       "WebFetch(domain:iphostmonitor.com)",
       "WebFetch(domain:mibbrowser.online)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Bash(go work init:*)",
+      "Bash(git clone:*)",
+      "Bash(go work use:*)",
+      "Bash(go mod init:*)",
+      "Bash(git push:*)"
     ]
   }
 }
