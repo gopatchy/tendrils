@@ -4,168 +4,168 @@ locations:
   children:
   - name: LIGHTING-2 Rack
     nodes:
-    - name: lighting-2
-    - mac: "48:59:00:41:00:29" # Pixie Driver 8k Port 1
-    - mac: "48:59:00:28:00:27" # Pixie Driver 8k Port 2
-    - mac: "48:59:00:43:00:29" # Pixie Driver 8k Port 3
-    - mac: "48:59:00:42:00:29" # Pixie Driver 8k Port 4
-    - mac: "48:59:00:3c:00:3e" # Pixie Driver 8k Port 5
-    - mac: "48:59:00:3f:00:3e" # Pixie Driver 8k Port 6
-    - mac: "48:59:00:25:00:3e" # Pixie Driver 8k Port 7
-    - mac: "48:59:00:41:00:3e" # Pixie Driver 8k Port 8
-    - name: ART9 # Cyc
-    - name: ART10 # Cyc
-    - name: ART11 # Cyc
-    - name: ART12 # Cyc
-    - name: ART13 # Cyc
-    - name: ART14 # Cyc
+    - lighting-2
+    - "48:59:00:41:00:29" # Pixie Driver 8k Port 1
+    - "48:59:00:28:00:27" # Pixie Driver 8k Port 2
+    - "48:59:00:43:00:29" # Pixie Driver 8k Port 3
+    - "48:59:00:42:00:29" # Pixie Driver 8k Port 4
+    - "48:59:00:3c:00:3e" # Pixie Driver 8k Port 5
+    - "48:59:00:3f:00:3e" # Pixie Driver 8k Port 6
+    - "48:59:00:25:00:3e" # Pixie Driver 8k Port 7
+    - "48:59:00:41:00:3e" # Pixie Driver 8k Port 8
+    - ART9 # Cyc
+    - ART10 # Cyc
+    - ART11 # Cyc
+    - ART12 # Cyc
+    - ART13 # Cyc
+    - ART14 # Cyc
 
   - direction: horizontal
     children:
     - nodes:
-      - name: ART16 # R2X1
+      - ART16 # R2X1
 
     - nodes:
-      - name: ART20 # R2X2
+      - ART20 # R2X2
 
   - direction: horizontal
     children:
     - nodes:
-      - name: MON1-A
-      - name: MON1-B
+      - "MON1-A"
+      - "MON1-B"
 
 - name: Under Apron
   direction: horizontal
   children:
   - name: AUDIO Rack
     nodes:
-    - name: audio
-    - name: MICS-A
-    - mac: "00:0e:dd:a7:29:93" # MICS-A bridge interface
-    - name: MICS-B
-    - mac: "00:0e:dd:a8:3e:b3" # MICS-B bridge interface
-    - name: MICS-C
-    - mac: "00:0e:dd:a7:6f:55" # MICS-C bridge interface
-    - name: MICS-D
-    - mac: "00:0e:dd:64:3d:51" # MICS-D bridge interface
-    - name: MICS-E
-    - mac: "00:0e:dd:ac:fc:7d" # MICS-E bridge interface
+    - audio
+    - "MICS-A"
+    - "00:0e:dd:a7:29:93" # MICS-A bridge interface
+    - "MICS-B"
+    - "00:0e:dd:a8:3e:b3" # MICS-B bridge interface
+    - "MICS-C"
+    - "00:0e:dd:a7:6f:55" # MICS-C bridge interface
+    - "MICS-D"
+    - "00:0e:dd:64:3d:51" # MICS-D bridge interface
+    - "MICS-E"
+    - "00:0e:dd:ac:fc:7d" # MICS-E bridge interface
 
   - name: LIGHTING-1 Rack
     nodes:
-    - name: lighting-1
-    - mac: "48:59:00:27:00:27" # Pixie Driver 8k Port 1
-    - mac: "48:59:00:37:00:27" # Pixie Driver 8k Port 2
-    - mac: "48:59:00:3e:00:27" # Pixie Driver 8k Port 3
-    - mac: "48:59:00:3f:00:27" # Pixie Driver 8k Port 4
-    - mac: "48:59:00:47:00:1a" # Pixie Driver 8k Port 5
-    - mac: "48:59:00:44:00:1a" # Pixie Driver 8k Port 6
-    - mac: "48:59:00:42:00:19" # Pixie Driver 8k Port 7
-    - mac: "48:59:00:44:00:19" # Pixie Driver 8k Port 8
+    - lighting-1
+    - "48:59:00:27:00:27" # Pixie Driver 8k Port 1
+    - "48:59:00:37:00:27" # Pixie Driver 8k Port 2
+    - "48:59:00:3e:00:27" # Pixie Driver 8k Port 3
+    - "48:59:00:3f:00:27" # Pixie Driver 8k Port 4
+    - "48:59:00:47:00:1a" # Pixie Driver 8k Port 5
+    - "48:59:00:44:00:1a" # Pixie Driver 8k Port 6
+    - "48:59:00:42:00:19" # Pixie Driver 8k Port 7
+    - "48:59:00:44:00:19" # Pixie Driver 8k Port 8
 
   - name: VIDEO Rack
     nodes:
-    - name: video
-    - name: "ATEM 2 M/E Constellation 4K"
-    - name: HyperDeck-Studio-4K-Pro
-    - name: RX-QLAB-1
-    - name: RX-QLAB-2
-    - name: TX-PROJ-1
-    - name: TX-PROJ-2
-    - name: TX-M4
-    - name: TX-M16
-    - name: TX-MISC
-    - name: TX-PREVIEW
+    - video
+    - "ATEM 2 M/E Constellation 4K"
+    - "HyperDeck-Studio-4K-Pro"
+    - RX-QLAB-1
+    - RX-QLAB-2
+    - TX-PROJ-1
+    - TX-PROJ-2
+    - TX-M4
+    - TX-M16
+    - TX-MISC
+    - TX-PREVIEW
 
 - direction: horizontal
   children:
   - nodes:
-    - name: Y001-MAIN1-L-d1e155
-    - mac: "ac:44:f2:4e:84:d6" # MAIN1-L bridge interface
+    - "Y001-MAIN1-L-d1e155"
+    - "ac:44:f2:4e:84:d6" # MAIN1-L bridge interface
 
   - name: Stage 2
     nodes:
-    - name: MON2
+    - "MON2"
 
   - name: Stage 3
     nodes:
-    - name: MON3
+    - "MON3"
 
   - nodes:
-    - name: Y001-MAIN1-R-d1e194
-    - mac: "ac:44:f2:4e:84:d4" # MAIN1-R bridge interface
-
-- direction: horizontal
-  children:
-  - nodes:
-    - name: RX-PROJ-1
-
-  - nodes:
-    - name: RX-PROJ-2
+    - "Y001-MAIN1-R-d1e194"
+    - "ac:44:f2:4e:84:d4" # MAIN1-R bridge interface
 
 - direction: horizontal
   children:
   - nodes:
-    - name: satellite-2
-    - name: Y001-MAIN2-L-d1e298
-    - mac: "ac:44:f2:4e:87:2a" # MAIN2-L bridge interface
-    - name: ART3 # Wash
-    - name: ART4 # Wash
-    - name: ART5 # Wash
-    - name: ART17 # Focus
+    - "RX-PROJ-1"
 
   - nodes:
-    - name: ART15 # R3X
-    - name: ART18 # Focus
+    - "RX-PROJ-2"
+
+- direction: horizontal
+  children:
+  - nodes:
+    - satellite-2
+    - "Y001-MAIN2-L-d1e298"
+    - "ac:44:f2:4e:87:2a" # MAIN2-L bridge interface
+    - ART3 # Wash
+    - ART4 # Wash
+    - ART5 # Wash
+    - ART17 # Focus
 
   - nodes:
-    - name: satellite-3
-    - name: Y001-MAIN2-R-f0dd93
-    - mac: "ac:44:f2:4e:87:27" # MAIN2-R bridge interface
-    - name: ART6 # Wash
-    - name: ART7 # Wash
-    - name: DMX32 # Wash
-    - name: ART19 # Focus
+    - ART15 # R3X
+    - ART18 # Focus
+
+  - nodes:
+    - satellite-3
+    - "Y001-MAIN2-R-f0dd93"
+    - "ac:44:f2:4e:87:27" # MAIN2-R bridge interface
+    - ART6 # Wash
+    - ART7 # Wash
+    - DMX8 # Wash
+    - ART19 # Focus
 
 - name: Booth
   direction: vertical
   children:
   - nodes:
-    - name: satellite-1
+    - satellite-1
 
   - direction: horizontal
     children:
     - name: Lighting Control
       nodes:
-      - name: qlab
-      - name: TX-QLAB-1
-      - name: TX-QLAB-2
-      - name: "SK_PTZEXTREMEV2 [457081]"
-      - name: "SK_RACKPRO2 [452514]"
-      - name: pigeon
-      - name: showpi1
-      - mac: "d8:3a:dd:e3:5b:db" # showpi2/artmap
-
+      - qlab
+      - TX-QLAB-1
+      - TX-QLAB-2
+      - "SK_PTZEXTREMEV2 [457081]"
+      - "SK_RACKPRO2 [452514]"
+      - pigeon
+      - showpi1
+      - d8:3a:dd:e3:5b:db # showpi2/artmap
+  
     - name: Sound Control
       nodes:
-      - name: SQ-7
-      - mac: "00:04:c4:15:07:a4" # SQ-7 bridge port
-      - name: BT
+      - SQ-7
+      - "00:04:c4:15:07:a4" # SQ-7 bridge port
+      - BT
 
     - name: Camera Control
       nodes:
-      - name: RX-CC-PREVIEW
-      - name: RX-CC-M16
-      - name: AtemPanel-7c2e0da86d22
-      - name: AtemPanel-7c2e0da86d4c
+      - RX-CC-PREVIEW
+      - RX-CC-M16
+      - "AtemPanel-7c2e0da86d22"
+      - "AtemPanel-7c2e0da86d4c"
 
     - name: Video Control
       nodes:
-      - name: RX-VC-M4
-      - name: RX-VC-M16
-      - name: ATEM-2-ME-Advanced-Panel-20
+      - RX-VC-M4
+      - RX-VC-M16
+      - "ATEM-2-ME-Advanced-Panel-20"
 
     - name: Control
       nodes:
-      - name: sunset
-      - name: RX-CONTROL-1
+      - sunset
+      - RX-CONTROL-1

@@ -140,7 +140,6 @@ type Node struct {
 	PoEBudget          *PoEBudget        `json:"poe_budget,omitempty"`
 	IsDanteClockMaster bool              `json:"is_dante_clock_master,omitempty"`
 	DanteTxChannels    string            `json:"dante_tx_channels,omitempty"`
-	Missing            bool              `json:"missing,omitempty"`
 	pollTrigger        chan struct{}
 }
 
@@ -160,7 +159,6 @@ func (n *Node) WithInterface(ifaceKey string) *Node {
 		PoEBudget:          n.PoEBudget,
 		IsDanteClockMaster: n.IsDanteClockMaster,
 		DanteTxChannels:    n.DanteTxChannels,
-		Missing:            n.Missing,
 	}
 }
 
