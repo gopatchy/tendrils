@@ -129,6 +129,9 @@
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
+            max-width: 114px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .node .switch-port.external {
@@ -203,6 +206,9 @@
             padding: 1px 6px;
             border-radius: 8px;
             white-space: nowrap;
+            max-width: 114px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .node .root-label {
@@ -337,6 +343,9 @@
             border-radius: 8px;
             white-space: nowrap;
             color: #fff;
+            max-width: 114px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .node .dante-info.tx-info {
@@ -385,11 +394,11 @@
             width: 120px;
         }
 
-        .node .dante-hover:hover {
+        body.dante-mode .node .dante-hover:hover {
             z-index: 100;
         }
 
-        .node .dante-hover:hover .dante-detail-wrapper {
+        body.dante-mode .node .dante-hover:hover .dante-detail-wrapper {
             display: block;
             will-change: transform;
         }
@@ -444,6 +453,9 @@
             border-radius: 8px;
             white-space: nowrap;
             color: #fff;
+            max-width: 114px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .node .artnet-info.out-info {
@@ -492,11 +504,11 @@
             width: 120px;
         }
 
-        .node .artnet-hover:hover {
+        body.artnet-mode .node .artnet-hover:hover {
             z-index: 100;
         }
 
-        .node .artnet-hover:hover .artnet-detail-wrapper {
+        body.artnet-mode .node .artnet-hover:hover .artnet-detail-wrapper {
             display: block;
             will-change: transform;
         }
@@ -543,6 +555,9 @@
             white-space: nowrap;
             background: #468;
             color: #fff;
+            max-width: 114px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .node .sacn-hover {
@@ -583,11 +598,11 @@
             width: 120px;
         }
 
-        .node .sacn-hover:hover {
+        body.sacn-mode .node .sacn-hover:hover {
             z-index: 100;
         }
 
-        .node .sacn-hover:hover .sacn-detail-wrapper {
+        body.sacn-mode .node .sacn-hover:hover .sacn-detail-wrapper {
             display: block;
             will-change: transform;
         }
@@ -1059,8 +1074,12 @@
             });
         }
 
-        function buildLinkStats(container, speed, errIn, errOut, rates) {
+        function buildLinkStats(container, portLabel, speed, errIn, errOut, rates) {
             const plainLines = [];
+            if (portLabel) {
+                addClickableValue(container, 'PORT', portLabel, plainLines);
+                container.appendChild(document.createTextNode('\n'));
+            }
             addClickableValue(container, 'LINK', formatLinkSpeed(speed), plainLines);
             container.appendChild(document.createTextNode('\n'));
             addClickableValue(container, 'ERR', 'RX ' + errIn + ' / TX ' + errOut, plainLines);
@@ -1223,16 +1242,17 @@
                 if (switchConnection.external) portEl.classList.add('external');
                 const speedClass = getSpeedClass(switchConnection.speed);
                 if (speedClass) portEl.classList.add(speedClass);
-                portEl.textContent = switchConnection.showSwitchName
+                const portLabel = switchConnection.showSwitchName
                     ? switchConnection.switchName + ':' + switchConnection.port
                     : switchConnection.port;
+                portEl.textContent = portLabel;
 
                 const statsEl = container.querySelector('.link-stats');
                 statsEl.innerHTML = '';
                 const errIn = switchConnection.errors?.in || 0;
                 const errOut = switchConnection.errors?.out || 0;
                 const r = switchConnection.rates;
-                buildLinkStats(statsEl, switchConnection.speed, errIn, errOut,
+                buildLinkStats(statsEl, portLabel, switchConnection.speed, errIn, errOut,
                     r ? {rxBytes: r.outBytes, rxPkts: r.outPkts, txBytes: r.inBytes, txPkts: r.inPkts} : null);
             } else {
                 const container = div.querySelector(':scope > .port-hover');
@@ -1336,14 +1356,15 @@
                 uplinkEl.className = 'uplink';
                 const speedClass = getSpeedClass(uplinkInfo.speed);
                 if (speedClass) uplinkEl.classList.add(speedClass);
-                uplinkEl.textContent = uplinkInfo.localPort + ' → ' + uplinkInfo.parentName + ':' + uplinkInfo.remotePort;
+                const uplinkLabel = uplinkInfo.localPort + ' → ' + uplinkInfo.parentName + ':' + uplinkInfo.remotePort;
+                uplinkEl.textContent = uplinkLabel;
 
                 const statsEl = container.querySelector('.link-stats');
                 statsEl.innerHTML = '';
                 const errIn = uplinkInfo.errors?.in || 0;
                 const errOut = uplinkInfo.errors?.out || 0;
                 const r = uplinkInfo.rates;
-                buildLinkStats(statsEl, uplinkInfo.speed, errIn, errOut,
+                buildLinkStats(statsEl, uplinkLabel, uplinkInfo.speed, errIn, errOut,
                     r ? {rxBytes: r.inBytes, rxPkts: r.inPkts, txBytes: r.outBytes, txPkts: r.outPkts} : null);
             } else {
                 const rootEl = div.querySelector(':scope > .root-label');
