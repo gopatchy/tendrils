@@ -124,7 +124,7 @@ locations:
     - "ac:44:f2:4e:87:27" # MAIN2-R bridge interface
     - ART6 # Wash
     - ART7 # Wash
-    - DMX8 # Wash
+    - DMX32 # Wash
     - ART19 # Focus
 
 - name: Booth
