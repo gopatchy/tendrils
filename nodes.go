@@ -67,6 +67,11 @@ func (n *Nodes) updateLocked(target *Node, mac net.HardwareAddr, ips []net.IP, i
 
 	added := n.applyNodeUpdates(node, targetID, mac, ips, ifaceName, nodeName)
 
+	if node.Missing && source != "config" {
+		node.Missing = false
+		n.t.errors.ClearMissing(node)
+	}
+
 	n.logUpdates(node, added, isNew, source)
 
 	if hasNewIP(added) {

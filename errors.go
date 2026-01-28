@@ -9,10 +9,11 @@ import (
 type PortErrorType string
 
 const (
-	ErrorTypeStartup        PortErrorType = "startup"
-	ErrorTypeNew            PortErrorType = "new"
-	ErrorTypeUnreachable    PortErrorType = "unreachable"
+	ErrorTypeStartup         PortErrorType = "startup"
+	ErrorTypeNew             PortErrorType = "new"
+	ErrorTypeUnreachable     PortErrorType = "unreachable"
 	ErrorTypeHighUtilization PortErrorType = "high_utilization"
+	ErrorTypeMissing         PortErrorType = "missing"
 )
 
 type PortError struct {
@@ -326,4 +327,54 @@ func (e *ErrorTracker) clearUnreachableLocked(node *Node) (changed bool, becameR
 		return true, becameReachable
 	}
 	return becameReachable, becameReachable
+}
+
+func (e *ErrorTracker) SetMissing(node *Node) {
+	changed := e.setMissingLocked(node)
+	if changed {
+		e.t.NotifyUpdate()
+	}
+}
+
+func (e *ErrorTracker) setMissingLocked(node *Node) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := "missing:" + node.TypeID
+
+	if _, exists := e.errors[key]; exists {
+		return false
+	}
+
+	now := time.Now()
+	e.nextID++
+	e.errors[key] = &PortError{
+		ID:          fmt.Sprintf("err-%d", e.nextID),
+		NodeTypeID:  node.TypeID,
+		NodeName:    node.DisplayName(),
+		PortName:    "",
+		ErrorType:   ErrorTypeMissing,
+		FirstSeen:   now,
+		LastUpdated: now,
+	}
+	return true
+}
+
+func (e *ErrorTracker) ClearMissing(node *Node) {
+	changed := e.clearMissingLocked(node)
+	if changed {
+		e.t.NotifyUpdate()
+	}
+}
+
+func (e *ErrorTracker) clearMissingLocked(node *Node) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := "missing:" + node.TypeID
+	if _, exists := e.errors[key]; exists {
+		delete(e.errors, key)
+		return true
+	}
+	return false
 }

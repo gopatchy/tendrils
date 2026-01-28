@@ -119,6 +119,48 @@ func (t *Tendrils) unsubscribeSSE(id int) {
 	}
 }
 
+func (t *Tendrils) syncConfigNodes() {
+	if t.config == nil {
+		return
+	}
+
+	for _, ref := range t.config.AllNodeRefs() {
+		var node *Node
+		var created bool
+
+		if ref.Name != "" {
+			node = t.nodes.GetByName(ref.Name)
+			if node == nil {
+				node = t.nodes.GetOrCreateByName(ref.Name)
+				created = true
+			}
+		} else if mac := ref.ParseMAC(); mac != nil {
+			node = t.nodes.GetByMAC(mac)
+			if node == nil {
+				t.nodes.Update(nil, mac, nil, "", "", "config")
+				node = t.nodes.GetByMAC(mac)
+				created = true
+			}
+		} else if ip := ref.ParseIP(); ip != nil {
+			node = t.nodes.GetByIP(ip)
+			if node == nil {
+				t.nodes.Update(nil, nil, []net.IP{ip}, "", "", "config")
+				node = t.nodes.GetByIP(ip)
+				created = true
+			}
+		}
+
+		if node == nil {
+			continue
+		}
+
+		if created {
+			node.Missing = true
+			t.errors.SetMissing(node)
+		}
+	}
+}
+
 func (t *Tendrils) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -141,6 +183,7 @@ func (t *Tendrils) Run() {
 				continue
 			}
 			t.config = cfg
+			t.syncConfigNodes()
 			log.Printf("reloaded config from %s", t.ConfigFile)
 			t.NotifyUpdate()
 		}
@@ -153,6 +196,7 @@ func (t *Tendrils) Run() {
 	t.config = cfg
 
 	t.populateLocalAddresses()
+	t.syncConfigNodes()
 	t.startHTTPServer()
 
 	if !t.DisableARP {

@@ -991,6 +991,9 @@
             if (node.interfaces) {
                 node.interfaces.forEach(iface => {
                     if (iface.mac) ids.push(iface.mac.toLowerCase());
+                    if (iface.ips) {
+                        iface.ips.forEach(ip => ids.push(ip.toLowerCase()));
+                    }
                 });
             }
             return ids;
@@ -1147,7 +1150,7 @@
                     name: loc.name || '',
                     anonymous: anonymous,
                     direction: loc.direction || 'horizontal',
-                    nodeRefs: (loc.nodes || []).map(n => n.toLowerCase()),
+                    nodeRefs: (loc.nodes || []).map(n => (n.name || n.mac || n.ip || '').toLowerCase()),
                     parent: parent,
                     children: []
                 };
