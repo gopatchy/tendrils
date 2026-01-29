@@ -335,10 +335,11 @@
             background: #222;
             border-radius: 8px;
             overflow: hidden;
+            font-size: 11px;
         }
 
         .data-table th, .data-table td {
-            padding: 8px 12px;
+            padding: 6px 10px;
             text-align: left;
             border-bottom: 1px solid #333;
         }
@@ -2325,7 +2326,21 @@
 
         connectSSE();
 
+        let currentMode = 'network';
+        let currentView = 'map';
+        let tableData = null;
+        let tableSortColumn = null;
+        let tableSortAsc = true;
+
+        function updateHash() {
+            let hash = '';
+            if (currentMode !== 'network') hash = currentMode;
+            if (currentView === 'table') hash += (hash ? '-' : '') + 'table';
+            window.location.hash = hash;
+        }
+
         function setMode(mode) {
+            currentMode = mode;
             document.body.classList.remove('dante-mode', 'artnet-mode', 'sacn-mode');
             document.getElementById('mode-network').classList.remove('active');
             document.getElementById('mode-dante').classList.remove('active');
@@ -2335,23 +2350,31 @@
             if (mode === 'dante') {
                 document.body.classList.add('dante-mode');
                 document.getElementById('mode-dante').classList.add('active');
-                window.location.hash = 'dante';
             } else if (mode === 'artnet') {
                 document.body.classList.add('artnet-mode');
                 document.getElementById('mode-artnet').classList.add('active');
-                window.location.hash = 'artnet';
             } else if (mode === 'sacn') {
                 document.body.classList.add('sacn-mode');
                 document.getElementById('mode-sacn').classList.add('active');
-                window.location.hash = 'sacn';
             } else {
                 document.getElementById('mode-network').classList.add('active');
-                window.location.hash = '';
             }
 
+            updateHash();
             tableSortColumn = null;
             tableSortAsc = true;
             if (currentView === 'table') {
+                renderTable();
+            }
+        }
+
+        function setView(view) {
+            currentView = view;
+            document.getElementById('view-map').classList.toggle('active', view === 'map');
+            document.getElementById('view-table').classList.toggle('active', view === 'table');
+            document.body.classList.toggle('table-view', view === 'table');
+            updateHash();
+            if (view === 'table' && tableData) {
                 renderTable();
             }
         }
@@ -2360,22 +2383,6 @@
         document.getElementById('mode-dante').addEventListener('click', () => setMode('dante'));
         document.getElementById('mode-artnet').addEventListener('click', () => setMode('artnet'));
         document.getElementById('mode-sacn').addEventListener('click', () => setMode('sacn'));
-
-        let currentView = 'map';
-        let tableData = null;
-        let tableSortColumn = null;
-        let tableSortAsc = true;
-
-        function setView(view) {
-            currentView = view;
-            document.getElementById('view-map').classList.toggle('active', view === 'map');
-            document.getElementById('view-table').classList.toggle('active', view === 'table');
-            document.body.classList.toggle('table-view', view === 'table');
-            if (view === 'table' && tableData) {
-                renderTable();
-            }
-        }
-
         document.getElementById('view-map').addEventListener('click', () => setView('map'));
         document.getElementById('view-table').addEventListener('click', () => setView('table'));
 
@@ -2715,12 +2722,16 @@
             }
         });
 
-        if (window.location.hash === '#dante') {
-            setMode('dante');
-        } else if (window.location.hash === '#artnet') {
-            setMode('artnet');
-        } else if (window.location.hash === '#sacn') {
-            setMode('sacn');
+        const hash = window.location.hash.slice(1);
+        const hashParts = hash.split('-');
+        const hashMode = hashParts[0];
+        const hashView = hashParts.includes('table') ? 'table' : 'map';
+
+        if (hashMode === 'dante' || hashMode === 'artnet' || hashMode === 'sacn') {
+            setMode(hashMode);
+        }
+        if (hashView === 'table') {
+            setView('table');
         }
     </script>
 </body>
