@@ -2433,37 +2433,93 @@
 
         function renderNetworkTable() {
             const nodes = tableData.nodes || [];
+            const links = tableData.links || [];
+
+            const nodesByTypeId = new Map();
+            nodes.forEach(node => nodesByTypeId.set(node.id, node));
+
+            const upstreamConnections = new Map();
+            const allSwitches = nodes.filter(n => isSwitch(n));
+            const switchIds = new Set(allSwitches.map(s => s.id));
+
+            links.forEach(link => {
+                const nodeA = nodesByTypeId.get(link.node_a?.id);
+                const nodeB = nodesByTypeId.get(link.node_b?.id);
+                if (!nodeA || !nodeB) return;
+
+                const aIsSwitch = isSwitch(nodeA);
+                const bIsSwitch = isSwitch(nodeB);
+
+                if (aIsSwitch && !bIsSwitch) {
+                    upstreamConnections.set(nodeB.id, {
+                        switchName: getLabel(nodeA),
+                        port: link.interface_a || '?',
+                        speed: getInterfaceSpeed(link.node_a),
+                        errors: getInterfaceErrors(link.node_a),
+                        rates: getInterfaceRates(link.node_a)
+                    });
+                } else if (bIsSwitch && !aIsSwitch) {
+                    upstreamConnections.set(nodeA.id, {
+                        switchName: getLabel(nodeB),
+                        port: link.interface_b || '?',
+                        speed: getInterfaceSpeed(link.node_b),
+                        errors: getInterfaceErrors(link.node_b),
+                        rates: getInterfaceRates(link.node_b)
+                    });
+                } else if (aIsSwitch && bIsSwitch) {
+                    if (!upstreamConnections.has(nodeA.id)) {
+                        upstreamConnections.set(nodeA.id, {
+                            switchName: getLabel(nodeB),
+                            port: link.interface_b || '?',
+                            speed: getInterfaceSpeed(link.node_a),
+                            errors: getInterfaceErrors(link.node_a),
+                            rates: getInterfaceRates(link.node_a)
+                        });
+                    }
+                    if (!upstreamConnections.has(nodeB.id)) {
+                        upstreamConnections.set(nodeB.id, {
+                            switchName: getLabel(nodeA),
+                            port: link.interface_a || '?',
+                            speed: getInterfaceSpeed(link.node_b),
+                            errors: getInterfaceErrors(link.node_b),
+                            rates: getInterfaceRates(link.node_b)
+                        });
+                    }
+                }
+            });
+
+            const formatMbps = (bytesPerSec) => {
+                const mbps = (bytesPerSec * 8) / 1000000;
+                return mbps.toFixed(1);
+            };
+
             let rows = nodes.map(node => {
                 const name = getLabel(node);
                 const ips = [];
-                const macs = [];
-                let speed = 0;
-                let inErrors = 0, outErrors = 0;
-                let inRate = 0, outRate = 0;
                 (node.interfaces || []).forEach(iface => {
                     if (iface.ips) iface.ips.forEach(ip => ips.push(ip));
-                    if (iface.mac) macs.push(iface.mac);
-                    if (iface.stats) {
-                        speed = Math.max(speed, iface.stats.speed || 0);
-                        inErrors += iface.stats.in_errors || 0;
-                        outErrors += iface.stats.out_errors || 0;
-                        inRate += iface.stats.in_bytes_rate || 0;
-                        outRate += iface.stats.out_bytes_rate || 0;
-                    }
                 });
+
+                const conn = upstreamConnections.get(node.id);
+                const upstream = conn ? conn.switchName + ':' + conn.port : '';
+                const speed = conn?.speed || 0;
+                const errors = conn?.errors || { in: 0, out: 0 };
+                const rates = conn?.rates || { inBytes: 0, outBytes: 0 };
+
                 const isUnreachable = node.unreachable;
-                const speedStr = speed >= 1e9 ? (speed/1e9)+'G' : speed >= 1e6 ? (speed/1e6)+'M' : speed > 0 ? speed : '';
+                const speedStr = speed >= 1e9 ? (speed/1e9)+'G' : speed >= 1e6 ? (speed/1e6)+'M' : speed > 0 ? speed : '0';
+
                 return {
                     name,
                     ip: ips[0] || '',
-                    mac: macs[0] || '',
-                    speed: speed,
+                    upstream,
+                    speed,
                     speedStr,
-                    inErrors,
-                    outErrors,
-                    inRate: Math.round(inRate),
-                    outRate: Math.round(outRate),
-                    status: isUnreachable ? 'unreachable' : (inErrors + outErrors > 0 ? 'errors' : 'ok')
+                    inErrors: errors.in,
+                    outErrors: errors.out,
+                    inRate: rates.inBytes,
+                    outRate: rates.outBytes,
+                    status: isUnreachable ? 'unreachable' : (errors.in + errors.out > 0 ? 'errors' : 'ok')
                 };
             });
 
@@ -2474,12 +2530,12 @@
             let html = '<table class="data-table"><thead><tr>';
             html += '<th data-sort="name">Name</th>';
             html += '<th data-sort="ip">IP</th>';
-            html += '<th data-sort="mac">MAC</th>';
+            html += '<th data-sort="upstream">Upstream</th>';
             html += '<th data-sort="speed">Speed</th>';
             html += '<th data-sort="inErrors">In Err</th>';
             html += '<th data-sort="outErrors">Out Err</th>';
-            html += '<th data-sort="inRate">In Rate</th>';
-            html += '<th data-sort="outRate">Out Rate</th>';
+            html += '<th data-sort="inRate">In Mbit/s</th>';
+            html += '<th data-sort="outRate">Out Mbit/s</th>';
             html += '<th data-sort="status">Status</th>';
             html += '</tr></thead><tbody>';
 
@@ -2488,12 +2544,12 @@
                 html += '<tr>';
                 html += '<td>' + escapeHtml(r.name) + '</td>';
                 html += '<td>' + escapeHtml(r.ip) + '</td>';
-                html += '<td>' + escapeHtml(r.mac) + '</td>';
+                html += '<td>' + escapeHtml(r.upstream) + '</td>';
                 html += '<td class="numeric">' + r.speedStr + '</td>';
-                html += '<td class="numeric">' + (r.inErrors || '') + '</td>';
-                html += '<td class="numeric">' + (r.outErrors || '') + '</td>';
-                html += '<td class="numeric">' + formatBytes(r.inRate) + '</td>';
-                html += '<td class="numeric">' + formatBytes(r.outRate) + '</td>';
+                html += '<td class="numeric">' + r.inErrors + '</td>';
+                html += '<td class="numeric">' + r.outErrors + '</td>';
+                html += '<td class="numeric">' + formatMbps(r.inRate) + '</td>';
+                html += '<td class="numeric">' + formatMbps(r.outRate) + '</td>';
                 html += '<td class="' + statusClass + '">' + r.status + '</td>';
                 html += '</tr>';
             });
