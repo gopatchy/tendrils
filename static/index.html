@@ -279,11 +279,16 @@
             align-items: center;
         }
 
-        #mode-selector {
+        #top-bar {
             position: fixed;
             top: 10px;
             right: 10px;
             z-index: 1000;
+            display: flex;
+            gap: 10px;
+        }
+
+        .selector-group {
             display: flex;
             gap: 0;
             background: #333;
@@ -292,7 +297,7 @@
             border: 1px solid #555;
         }
 
-        #mode-selector button {
+        .selector-group button {
             padding: 8px 16px;
             border: none;
             background: #333;
@@ -302,13 +307,82 @@
             transition: all 0.2s;
         }
 
-        #mode-selector button:hover {
+        .selector-group button:hover {
             background: #444;
         }
 
-        #mode-selector button.active {
+        .selector-group button.active {
             background: #555;
             color: #fff;
+        }
+
+        #table-container {
+            display: none;
+            padding: 10px;
+        }
+
+        body.table-view #container {
+            display: none;
+        }
+
+        body.table-view #table-container {
+            display: block;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #222;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .data-table th, .data-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        .data-table th {
+            background: #333;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .data-table th:hover {
+            background: #444;
+        }
+
+        .data-table th.sorted-asc::after {
+            content: ' ▲';
+            font-size: 10px;
+        }
+
+        .data-table th.sorted-desc::after {
+            content: ' ▼';
+            font-size: 10px;
+        }
+
+        .data-table tr:hover {
+            background: #2a2a2a;
+        }
+
+        .data-table td.numeric {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .data-table .status-ok {
+            color: #4f4;
+        }
+
+        .data-table .status-warn {
+            color: #fa0;
+        }
+
+        .data-table .status-error {
+            color: #f44;
         }
 
         body.dante-mode .node {
@@ -910,11 +984,17 @@
         </div>
         <div class="buckets" id="broadcast-buckets"></div>
     </div>
-    <div id="mode-selector">
-        <button id="mode-network" class="active">Network</button>
-        <button id="mode-dante">Dante</button>
-        <button id="mode-artnet">Art-Net</button>
-        <button id="mode-sacn">sACN</button>
+    <div id="top-bar">
+        <div class="selector-group" id="mode-selector">
+            <button id="mode-network" class="active">Network</button>
+            <button id="mode-dante">Dante</button>
+            <button id="mode-artnet">Art-Net</button>
+            <button id="mode-sacn">sACN</button>
+        </div>
+        <div class="selector-group" id="view-selector">
+            <button id="view-map" class="active">Map</button>
+            <button id="view-table">Table</button>
+        </div>
     </div>
     <div id="error-panel">
         <div id="error-header">
@@ -925,6 +1005,7 @@
         <div id="error-list"></div>
     </div>
     <div id="error"></div>
+    <div id="table-container"></div>
     <div id="container"></div>
 
     <script>
@@ -2235,6 +2316,11 @@
 
             updateErrorPanel();
             updateBroadcastStats(data.broadcast_stats);
+
+            tableData = data;
+            if (currentView === 'table') {
+                renderTable();
+            }
         }
 
         connectSSE();
@@ -2262,12 +2348,302 @@
                 document.getElementById('mode-network').classList.add('active');
                 window.location.hash = '';
             }
+
+            tableSortColumn = null;
+            tableSortAsc = true;
+            if (currentView === 'table') {
+                renderTable();
+            }
         }
 
         document.getElementById('mode-network').addEventListener('click', () => setMode('network'));
         document.getElementById('mode-dante').addEventListener('click', () => setMode('dante'));
         document.getElementById('mode-artnet').addEventListener('click', () => setMode('artnet'));
         document.getElementById('mode-sacn').addEventListener('click', () => setMode('sacn'));
+
+        let currentView = 'map';
+        let tableData = null;
+        let tableSortColumn = null;
+        let tableSortAsc = true;
+
+        function setView(view) {
+            currentView = view;
+            document.getElementById('view-map').classList.toggle('active', view === 'map');
+            document.getElementById('view-table').classList.toggle('active', view === 'table');
+            document.body.classList.toggle('table-view', view === 'table');
+            if (view === 'table' && tableData) {
+                renderTable();
+            }
+        }
+
+        document.getElementById('view-map').addEventListener('click', () => setView('map'));
+        document.getElementById('view-table').addEventListener('click', () => setView('table'));
+
+        function sortTable(column) {
+            if (tableSortColumn === column) {
+                tableSortAsc = !tableSortAsc;
+            } else {
+                tableSortColumn = column;
+                tableSortAsc = true;
+            }
+            renderTable();
+        }
+
+        function renderTable() {
+            if (!tableData) return;
+            const container = document.getElementById('table-container');
+            const mode = document.body.classList.contains('dante-mode') ? 'dante' :
+                         document.body.classList.contains('artnet-mode') ? 'artnet' :
+                         document.body.classList.contains('sacn-mode') ? 'sacn' : 'network';
+
+            let html = '';
+            if (mode === 'network') {
+                html = renderNetworkTable();
+            } else if (mode === 'dante') {
+                html = renderDanteTable();
+            } else if (mode === 'artnet') {
+                html = renderArtnetTable();
+            } else if (mode === 'sacn') {
+                html = renderSacnTable();
+            }
+            container.innerHTML = html;
+
+            container.querySelectorAll('th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => sortTable(th.dataset.sort));
+                if (th.dataset.sort === tableSortColumn) {
+                    th.classList.add(tableSortAsc ? 'sorted-asc' : 'sorted-desc');
+                }
+            });
+        }
+
+        function sortRows(rows, column, asc) {
+            return rows.sort((a, b) => {
+                let va = a[column];
+                let vb = b[column];
+                if (va == null) va = '';
+                if (vb == null) vb = '';
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    return asc ? va - vb : vb - va;
+                }
+                va = String(va).toLowerCase();
+                vb = String(vb).toLowerCase();
+                return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+        }
+
+        function renderNetworkTable() {
+            const nodes = tableData.nodes || [];
+            let rows = nodes.map(node => {
+                const name = getLabel(node);
+                const ips = [];
+                const macs = [];
+                let speed = 0;
+                let inErrors = 0, outErrors = 0;
+                let inRate = 0, outRate = 0;
+                (node.interfaces || []).forEach(iface => {
+                    if (iface.ips) iface.ips.forEach(ip => ips.push(ip));
+                    if (iface.mac) macs.push(iface.mac);
+                    if (iface.stats) {
+                        speed = Math.max(speed, iface.stats.speed || 0);
+                        inErrors += iface.stats.in_errors || 0;
+                        outErrors += iface.stats.out_errors || 0;
+                        inRate += iface.stats.in_bytes_rate || 0;
+                        outRate += iface.stats.out_bytes_rate || 0;
+                    }
+                });
+                const isUnreachable = node.unreachable;
+                const speedStr = speed >= 1e9 ? (speed/1e9)+'G' : speed >= 1e6 ? (speed/1e6)+'M' : speed > 0 ? speed : '';
+                return {
+                    name,
+                    ip: ips[0] || '',
+                    mac: macs[0] || '',
+                    speed: speed,
+                    speedStr,
+                    inErrors,
+                    outErrors,
+                    inRate: Math.round(inRate),
+                    outRate: Math.round(outRate),
+                    status: isUnreachable ? 'unreachable' : (inErrors + outErrors > 0 ? 'errors' : 'ok')
+                };
+            });
+
+            if (tableSortColumn) {
+                rows = sortRows(rows, tableSortColumn, tableSortAsc);
+            }
+
+            let html = '<table class="data-table"><thead><tr>';
+            html += '<th data-sort="name">Name</th>';
+            html += '<th data-sort="ip">IP</th>';
+            html += '<th data-sort="mac">MAC</th>';
+            html += '<th data-sort="speed">Speed</th>';
+            html += '<th data-sort="inErrors">In Err</th>';
+            html += '<th data-sort="outErrors">Out Err</th>';
+            html += '<th data-sort="inRate">In Rate</th>';
+            html += '<th data-sort="outRate">Out Rate</th>';
+            html += '<th data-sort="status">Status</th>';
+            html += '</tr></thead><tbody>';
+
+            rows.forEach(r => {
+                const statusClass = r.status === 'unreachable' ? 'status-error' : r.status === 'errors' ? 'status-warn' : 'status-ok';
+                html += '<tr>';
+                html += '<td>' + escapeHtml(r.name) + '</td>';
+                html += '<td>' + escapeHtml(r.ip) + '</td>';
+                html += '<td>' + escapeHtml(r.mac) + '</td>';
+                html += '<td class="numeric">' + r.speedStr + '</td>';
+                html += '<td class="numeric">' + (r.inErrors || '') + '</td>';
+                html += '<td class="numeric">' + (r.outErrors || '') + '</td>';
+                html += '<td class="numeric">' + formatBytes(r.inRate) + '</td>';
+                html += '<td class="numeric">' + formatBytes(r.outRate) + '</td>';
+                html += '<td class="' + statusClass + '">' + r.status + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function renderDanteTable() {
+            const nodes = tableData.nodes || [];
+            let rows = [];
+            nodes.forEach(node => {
+                const name = getLabel(node);
+                const tx = node.dante_flows?.tx || [];
+                const rx = node.dante_flows?.rx || [];
+                tx.forEach(peer => {
+                    const peerName = getLabel(peer.node);
+                    (peer.channels || []).forEach(ch => {
+                        rows.push({
+                            source: name,
+                            dest: peerName,
+                            txChannel: ch.tx_channel,
+                            rxChannel: ch.rx_channel,
+                            type: ch.type || '',
+                            status: ch.status || 'active'
+                        });
+                    });
+                    if (!peer.channels || peer.channels.length === 0) {
+                        rows.push({ source: name, dest: peerName, txChannel: '', rxChannel: 0, type: '', status: 'active' });
+                    }
+                });
+            });
+
+            if (tableSortColumn) {
+                rows = sortRows(rows, tableSortColumn, tableSortAsc);
+            }
+
+            let html = '<table class="data-table"><thead><tr>';
+            html += '<th data-sort="source">Source</th>';
+            html += '<th data-sort="txChannel">TX Channel</th>';
+            html += '<th data-sort="dest">Destination</th>';
+            html += '<th data-sort="rxChannel">RX Channel</th>';
+            html += '<th data-sort="type">Type</th>';
+            html += '<th data-sort="status">Status</th>';
+            html += '</tr></thead><tbody>';
+
+            rows.forEach(r => {
+                const statusClass = r.status === 'no-source' ? 'status-warn' : 'status-ok';
+                html += '<tr>';
+                html += '<td>' + escapeHtml(r.source) + '</td>';
+                html += '<td>' + escapeHtml(r.txChannel) + '</td>';
+                html += '<td>' + escapeHtml(r.dest) + '</td>';
+                html += '<td class="numeric">' + (r.rxChannel || '') + '</td>';
+                html += '<td>' + escapeHtml(r.type) + '</td>';
+                html += '<td class="' + statusClass + '">' + escapeHtml(r.status) + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function renderArtnetTable() {
+            const nodes = tableData.nodes || [];
+            let rows = [];
+            nodes.forEach(node => {
+                const name = getLabel(node);
+                (node.artnet_inputs || []).forEach(u => {
+                    rows.push({ node: name, direction: 'Input', universe: u, universeStr: formatUniverse(u) });
+                });
+                (node.artnet_outputs || []).forEach(u => {
+                    rows.push({ node: name, direction: 'Output', universe: u, universeStr: formatUniverse(u) });
+                });
+            });
+
+            if (tableSortColumn) {
+                rows = sortRows(rows, tableSortColumn, tableSortAsc);
+            }
+
+            let html = '<table class="data-table"><thead><tr>';
+            html += '<th data-sort="node">Node</th>';
+            html += '<th data-sort="direction">Direction</th>';
+            html += '<th data-sort="universe">Universe</th>';
+            html += '</tr></thead><tbody>';
+
+            rows.forEach(r => {
+                html += '<tr>';
+                html += '<td>' + escapeHtml(r.node) + '</td>';
+                html += '<td>' + r.direction + '</td>';
+                html += '<td>' + r.universeStr + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function renderSacnTable() {
+            const nodes = tableData.nodes || [];
+            let rows = [];
+            nodes.forEach(node => {
+                const name = getLabel(node);
+                const inputs = [];
+                (node.multicast_groups || []).forEach(g => {
+                    if (typeof g === 'string' && g.startsWith('sacn:')) {
+                        const u = parseInt(g.substring(5), 10);
+                        if (!isNaN(u)) inputs.push(u);
+                    }
+                });
+                inputs.forEach(u => {
+                    rows.push({ node: name, direction: 'Input', universe: u });
+                });
+                (node.sacn_outputs || []).forEach(u => {
+                    rows.push({ node: name, direction: 'Output', universe: u });
+                });
+            });
+
+            if (tableSortColumn) {
+                rows = sortRows(rows, tableSortColumn, tableSortAsc);
+            }
+
+            let html = '<table class="data-table"><thead><tr>';
+            html += '<th data-sort="node">Node</th>';
+            html += '<th data-sort="direction">Direction</th>';
+            html += '<th data-sort="universe">Universe</th>';
+            html += '</tr></thead><tbody>';
+
+            rows.forEach(r => {
+                html += '<tr>';
+                html += '<td>' + escapeHtml(r.node) + '</td>';
+                html += '<td>' + r.direction + '</td>';
+                html += '<td class="numeric">' + r.universe + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function formatUniverse(u) {
+            const net = (u >> 8) & 0x7f;
+            const subnet = (u >> 4) & 0x0f;
+            const universe = u & 0x0f;
+            return net + ':' + subnet + ':' + universe + ' (' + u + ')';
+        }
 
         document.getElementById('clear-all-errors').addEventListener('click', clearAllErrors);
         document.getElementById('toggle-errors').addEventListener('click', () => {
