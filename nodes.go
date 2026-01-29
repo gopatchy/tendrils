@@ -487,12 +487,8 @@ func (n *Nodes) SetDanteClockMaster(ip net.IP) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	for _, node := range n.nodes {
-		node.IsDanteClockMaster = false
-	}
-
 	if node := n.ipIndex[ip.String()]; node != nil {
-		node.IsDanteClockMaster = true
+		node.DanteClockMasterSeen = time.Now()
 	}
 }
 
@@ -509,7 +505,7 @@ func (n *Nodes) logNode(node *Node) {
 	if node.PoEBudget != nil {
 		tags = append(tags, fmt.Sprintf("poe:%.0f/%.0fW", node.PoEBudget.Power, node.PoEBudget.MaxPower))
 	}
-	if node.IsDanteClockMaster {
+	if node.IsDanteClockMaster() {
 		tags = append(tags, "dante-clock-master")
 	}
 	if len(tags) > 0 {

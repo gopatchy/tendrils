@@ -87,7 +87,7 @@ func (t *Tendrils) handlePTPPacket(ifaceName string, srcIP net.IP, data []byte) 
 	t.nodes.SetDanteClockMaster(srcIP)
 }
 
-func (n *Nodes) UpdateDanteTxChannels(name string, ip net.IP, channels string) {
+func (n *Nodes) UpdateDanteTxChannels(name string, ip net.IP, channels int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -104,7 +104,7 @@ func (n *Nodes) GetDanteTxDeviceInGroup(groupIP net.IP) *Node {
 
 	group := ParseMulticastGroup(groupIP)
 	for _, node := range n.nodes {
-		if node.DanteTxChannels != "" && node.MulticastGroups != nil {
+		if node.DanteTxChannels > 0 && node.MulticastGroups != nil {
 			if _, exists := node.MulticastGroups[group]; exists {
 				return node
 			}
@@ -188,16 +188,24 @@ func (n *Nodes) UpdateDanteFlow(source, subscriber *Node, channelInfo string, fl
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	n.updateDanteTx(source, subscriber, channelInfo, flowStatus)
-	n.updateDanteRx(subscriber, source, channelInfo, flowStatus)
-
-	source.danteLastSeen = time.Now()
-	subscriber.danteLastSeen = time.Now()
+	now := time.Now()
+	n.updateDanteTx(source, subscriber, channelInfo, flowStatus, now)
+	n.updateDanteRx(subscriber, source, channelInfo, flowStatus, now)
 }
 
-func (n *Nodes) updateDanteTx(source, subscriber *Node, channelInfo string, flowStatus DanteFlowStatus) {
+func (n *Nodes) ensureDanteFlows(node *Node) *DanteFlows {
+	if node.DanteFlows == nil {
+		node.DanteFlows = &DanteFlows{}
+	}
+	return node.DanteFlows
+}
+
+func (n *Nodes) updateDanteTx(source, subscriber *Node, channelInfo string, flowStatus DanteFlowStatus, now time.Time) {
+	flows := n.ensureDanteFlows(source)
+	flows.lastSeen = now
+
 	var peer *DantePeer
-	for _, p := range source.DanteTx {
+	for _, p := range flows.Tx {
 		if p.Node == subscriber {
 			peer = p
 			break
@@ -208,7 +216,7 @@ func (n *Nodes) updateDanteTx(source, subscriber *Node, channelInfo string, flow
 			Node:   subscriber,
 			Status: map[string]string{},
 		}
-		source.DanteTx = append(source.DanteTx, peer)
+		flows.Tx = append(flows.Tx, peer)
 	}
 
 	if channelInfo != "" && !containsString(peer.Channels, channelInfo) {
@@ -219,14 +227,17 @@ func (n *Nodes) updateDanteTx(source, subscriber *Node, channelInfo string, flow
 		peer.Status[channelInfo] = flowStatus.String()
 	}
 
-	sort.Slice(source.DanteTx, func(i, j int) bool {
-		return sortorder.NaturalLess(source.DanteTx[i].Node.DisplayName(), source.DanteTx[j].Node.DisplayName())
+	sort.Slice(flows.Tx, func(i, j int) bool {
+		return sortorder.NaturalLess(flows.Tx[i].Node.DisplayName(), flows.Tx[j].Node.DisplayName())
 	})
 }
 
-func (n *Nodes) updateDanteRx(subscriber, source *Node, channelInfo string, flowStatus DanteFlowStatus) {
+func (n *Nodes) updateDanteRx(subscriber, source *Node, channelInfo string, flowStatus DanteFlowStatus, now time.Time) {
+	flows := n.ensureDanteFlows(subscriber)
+	flows.lastSeen = now
+
 	var peer *DantePeer
-	for _, p := range subscriber.DanteRx {
+	for _, p := range flows.Rx {
 		if p.Node == source {
 			peer = p
 			break
@@ -237,7 +248,7 @@ func (n *Nodes) updateDanteRx(subscriber, source *Node, channelInfo string, flow
 			Node:   source,
 			Status: map[string]string{},
 		}
-		subscriber.DanteRx = append(subscriber.DanteRx, peer)
+		flows.Rx = append(flows.Rx, peer)
 	}
 
 	if channelInfo != "" && !containsString(peer.Channels, channelInfo) {
@@ -248,78 +259,86 @@ func (n *Nodes) updateDanteRx(subscriber, source *Node, channelInfo string, flow
 		peer.Status[channelInfo] = flowStatus.String()
 	}
 
-	sort.Slice(subscriber.DanteRx, func(i, j int) bool {
-		return sortorder.NaturalLess(subscriber.DanteRx[i].Node.DisplayName(), subscriber.DanteRx[j].Node.DisplayName())
+	sort.Slice(flows.Rx, func(i, j int) bool {
+		return sortorder.NaturalLess(flows.Rx[i].Node.DisplayName(), flows.Rx[j].Node.DisplayName())
 	})
 }
 
 func (n *Nodes) expireDante() {
-	expireTime := time.Now().Add(-5 * time.Minute)
 	for _, node := range n.nodes {
-		if !node.danteLastSeen.IsZero() && node.danteLastSeen.Before(expireTime) {
-			node.DanteTx = nil
-			node.DanteRx = nil
-			node.danteLastSeen = time.Time{}
+		if node.DanteFlows != nil && node.DanteFlows.Expire(5*time.Minute) {
+			node.DanteFlows = nil
 		}
 	}
 }
 
 func (n *Nodes) mergeDante(keep, merge *Node) {
-	for _, peer := range merge.DanteTx {
-		var existing *DantePeer
-		for _, p := range keep.DanteTx {
-			if p.Node == peer.Node {
-				existing = p
-				break
-			}
-		}
-		if existing == nil {
-			keep.DanteTx = append(keep.DanteTx, peer)
-		} else {
-			for _, ch := range peer.Channels {
-				if !containsString(existing.Channels, ch) {
-					existing.Channels = append(existing.Channels, ch)
-				}
-			}
-			for ch, status := range peer.Status {
-				existing.Status[ch] = status
-			}
-		}
+	if merge.DanteFlows == nil {
+		return
 	}
 
-	for _, peer := range merge.DanteRx {
-		var existing *DantePeer
-		for _, p := range keep.DanteRx {
-			if p.Node == peer.Node {
-				existing = p
-				break
-			}
-		}
-		if existing == nil {
-			keep.DanteRx = append(keep.DanteRx, peer)
-		} else {
-			for _, ch := range peer.Channels {
-				if !containsString(existing.Channels, ch) {
-					existing.Channels = append(existing.Channels, ch)
+	if keep.DanteFlows == nil {
+		keep.DanteFlows = merge.DanteFlows
+	} else {
+		for _, peer := range merge.DanteFlows.Tx {
+			var existing *DantePeer
+			for _, p := range keep.DanteFlows.Tx {
+				if p.Node == peer.Node {
+					existing = p
+					break
 				}
 			}
-			for ch, status := range peer.Status {
-				existing.Status[ch] = status
+			if existing == nil {
+				keep.DanteFlows.Tx = append(keep.DanteFlows.Tx, peer)
+			} else {
+				for _, ch := range peer.Channels {
+					if !containsString(existing.Channels, ch) {
+						existing.Channels = append(existing.Channels, ch)
+					}
+				}
+				for ch, status := range peer.Status {
+					existing.Status[ch] = status
+				}
 			}
 		}
-	}
 
-	if merge.danteLastSeen.After(keep.danteLastSeen) {
-		keep.danteLastSeen = merge.danteLastSeen
+		for _, peer := range merge.DanteFlows.Rx {
+			var existing *DantePeer
+			for _, p := range keep.DanteFlows.Rx {
+				if p.Node == peer.Node {
+					existing = p
+					break
+				}
+			}
+			if existing == nil {
+				keep.DanteFlows.Rx = append(keep.DanteFlows.Rx, peer)
+			} else {
+				for _, ch := range peer.Channels {
+					if !containsString(existing.Channels, ch) {
+						existing.Channels = append(existing.Channels, ch)
+					}
+				}
+				for ch, status := range peer.Status {
+					existing.Status[ch] = status
+				}
+			}
+		}
+
+		if merge.DanteFlows.lastSeen.After(keep.DanteFlows.lastSeen) {
+			keep.DanteFlows.lastSeen = merge.DanteFlows.lastSeen
+		}
 	}
 
 	for _, node := range n.nodes {
-		for _, peer := range node.DanteTx {
+		if node.DanteFlows == nil {
+			continue
+		}
+		for _, peer := range node.DanteFlows.Tx {
 			if peer.Node == merge {
 				peer.Node = keep
 			}
 		}
-		for _, peer := range node.DanteRx {
+		for _, peer := range node.DanteFlows.Rx {
 			if peer.Node == merge {
 				peer.Node = keep
 			}
@@ -340,7 +359,7 @@ func (n *Nodes) logDante() {
 	var allNoChannelFlows []string
 
 	for _, node := range n.nodes {
-		if len(node.DanteTx) == 0 {
+		if node.DanteFlows == nil || len(node.DanteFlows.Tx) == 0 {
 			continue
 		}
 		sourceName := node.DisplayName()
@@ -348,7 +367,7 @@ func (n *Nodes) logDante() {
 			sourceName = "??"
 		}
 
-		for _, peer := range node.DanteTx {
+		for _, peer := range node.DanteFlows.Tx {
 			subName := peer.Node.DisplayName()
 			if subName == "" {
 				subName = "??"
@@ -459,7 +478,7 @@ func (t *Tendrils) queryDanteDeviceWithPort(ip net.IP, port int) *DanteDeviceInf
 
 	if info.TxChannelCount > 0 {
 		t.queryDanteTxChannels(conn, ip, info.TxChannelCount)
-		t.nodes.UpdateDanteTxChannels(info.Name, ip, fmt.Sprintf("%d", info.TxChannelCount))
+		t.nodes.UpdateDanteTxChannels(info.Name, ip, info.TxChannelCount)
 	}
 
 	return info

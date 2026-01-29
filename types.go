@@ -378,25 +378,40 @@ type PoEBudget struct {
 	MaxPower float64 `json:"max_power"`
 }
 
+type DanteFlows struct {
+	Tx       []*DantePeer `json:"tx,omitempty"`
+	Rx       []*DantePeer `json:"rx,omitempty"`
+	lastSeen time.Time
+}
+
+func (f *DanteFlows) Expire(maxAge time.Duration) bool {
+	if f.lastSeen.IsZero() {
+		return false
+	}
+	return time.Since(f.lastSeen) > maxAge
+}
+
 type Node struct {
-	ID                 string                 `json:"id"`
-	Names              NameSet                `json:"names"`
-	Interfaces         InterfaceMap           `json:"interfaces"`
-	MACTable           map[string]string      `json:"-"`
-	PoEBudget          *PoEBudget             `json:"poe_budget,omitempty"`
-	IsDanteClockMaster bool                   `json:"is_dante_clock_master,omitempty"`
-	DanteTxChannels    string                 `json:"dante_tx_channels,omitempty"`
-	MulticastGroups    MulticastMembershipSet `json:"multicast_groups,omitempty"`
-	ArtNetInputs       ArtNetUniverseSet      `json:"artnet_inputs,omitempty"`
-	ArtNetOutputs      ArtNetUniverseSet      `json:"artnet_outputs,omitempty"`
-	SACNOutputs        SACNUniverseSet        `json:"sacn_outputs,omitempty"`
-	DanteTx            []*DantePeer           `json:"dante_tx,omitempty"`
-	DanteRx            []*DantePeer           `json:"dante_rx,omitempty"`
-	Unreachable        bool                   `json:"unreachable,omitempty"`
-	errors             *ErrorTracker
-	pollTrigger        chan struct{}
-	cancelFunc         context.CancelFunc
-	danteLastSeen      time.Time
+	ID                    string                 `json:"id"`
+	Names                 NameSet                `json:"names"`
+	Interfaces            InterfaceMap           `json:"interfaces"`
+	MACTable              map[string]string      `json:"-"`
+	PoEBudget             *PoEBudget             `json:"poe_budget,omitempty"`
+	DanteTxChannels       int                    `json:"dante_tx_channels,omitempty"`
+	DanteClockMasterSeen  time.Time              `json:"-"`
+	DanteFlows            *DanteFlows            `json:"dante_flows,omitempty"`
+	MulticastGroups       MulticastMembershipSet `json:"multicast_groups,omitempty"`
+	ArtNetInputs          ArtNetUniverseSet      `json:"artnet_inputs,omitempty"`
+	ArtNetOutputs         ArtNetUniverseSet      `json:"artnet_outputs,omitempty"`
+	SACNOutputs           SACNUniverseSet        `json:"sacn_outputs,omitempty"`
+	Unreachable           bool                   `json:"unreachable,omitempty"`
+	errors                *ErrorTracker
+	pollTrigger           chan struct{}
+	cancelFunc            context.CancelFunc
+}
+
+func (n *Node) IsDanteClockMaster() bool {
+	return !n.DanteClockMasterSeen.IsZero() && time.Since(n.DanteClockMasterSeen) < 5*time.Minute
 }
 
 func (n *Node) SetUnreachable(unreachable bool) bool {
@@ -507,13 +522,13 @@ func (n *Node) WithInterface(ifaceKey string) *Node {
 		return n
 	}
 	return &Node{
-		ID:                 n.ID,
-		Names:              n.Names,
-		Interfaces:         InterfaceMap{ifaceKey: iface},
-		MACTable:           n.MACTable,
-		PoEBudget:          n.PoEBudget,
-		IsDanteClockMaster: n.IsDanteClockMaster,
-		DanteTxChannels:    n.DanteTxChannels,
+		ID:                   n.ID,
+		Names:                n.Names,
+		Interfaces:           InterfaceMap{ifaceKey: iface},
+		MACTable:             n.MACTable,
+		PoEBudget:            n.PoEBudget,
+		DanteClockMasterSeen: n.DanteClockMasterSeen,
+		DanteTxChannels:      n.DanteTxChannels,
 	}
 }
 

@@ -1895,8 +1895,8 @@
 
             nodes.forEach(node => {
                 const nodeId = node.id;
-                const danteTx = node.dante_tx || [];
-                const danteRx = node.dante_rx || [];
+                const danteTx = node.dante_flows?.tx || [];
+                const danteRx = node.dante_flows?.rx || [];
 
                 if (danteTx.length === 0 && danteRx.length === 0) return;
 
