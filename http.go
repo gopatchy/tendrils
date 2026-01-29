@@ -31,6 +31,7 @@ type StatusResponse struct {
 	MulticastGroups  []*MulticastGroupMembers `json:"multicast_groups"`
 	ArtNetNodes      []*ArtNetNode            `json:"artnet_nodes"`
 	SACNNodes        []*SACNNode              `json:"sacn_nodes"`
+	SACNSources      []*SACNSource            `json:"sacn_sources"`
 	DanteFlows       []*DanteFlow             `json:"dante_flows"`
 	PortErrors       []*PortError             `json:"port_errors"`
 	UnreachableNodes []string                 `json:"unreachable_nodes"`
@@ -141,6 +142,7 @@ func (t *Tendrils) GetStatus() *StatusResponse {
 		MulticastGroups:  t.getMulticastGroups(),
 		ArtNetNodes:      t.getArtNetNodes(),
 		SACNNodes:        t.getSACNNodes(),
+		SACNSources:      t.getSACNSources(),
 		DanteFlows:       t.getDanteFlows(),
 		PortErrors:       t.errors.GetErrors(),
 		UnreachableNodes: t.errors.GetUnreachableNodes(),
