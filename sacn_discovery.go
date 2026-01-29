@@ -2,28 +2,13 @@ package tendrils
 
 import (
 	"context"
-	"encoding/binary"
 	"log"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
-	"golang.org/x/net/ipv4"
+	"github.com/gopatchy/sacn"
 )
-
-const (
-	sacnPort                    = 5568
-	vectorRootE131Extended      = 0x00000008
-	vectorE131Discovery         = 0x00000002
-	vectorUniverseDiscovery     = 0x00000001
-)
-
-var sacnDiscoveryAddr = net.IPv4(239, 255, 250, 214)
-
-var sacnPacketIdentifier = [12]byte{
-	0x41, 0x53, 0x43, 0x2d, 0x45, 0x31, 0x2e, 0x31, 0x37, 0x00, 0x00, 0x00,
-}
 
 type SACNSource struct {
 	CID        string
@@ -44,38 +29,31 @@ func NewSACNSources() *SACNSources {
 	}
 }
 
-func (s *SACNSources) Update(cid [16]byte, sourceName string, universes []int, srcIP net.IP) {
+func (s *SACNSources) Update(cid [16]byte, sourceName string, universes []uint16, srcIP net.IP) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cidStr := formatCID(cid)
+	cidStr := sacn.FormatCID(cid)
+	intUniverses := make([]int, len(universes))
+	for i, u := range universes {
+		intUniverses[i] = int(u)
+	}
+
 	existing, exists := s.sources[cidStr]
 	if exists {
 		existing.SourceName = sourceName
-		existing.Universes = universes
+		existing.Universes = intUniverses
 		existing.SrcIP = srcIP
 		existing.LastSeen = time.Now()
 	} else {
 		s.sources[cidStr] = &SACNSource{
 			CID:        cidStr,
 			SourceName: sourceName,
-			Universes:  universes,
+			Universes:  intUniverses,
 			SrcIP:      srcIP,
 			LastSeen:   time.Now(),
 		}
 	}
-}
-
-func (s *SACNSources) GetByIP(ip net.IP) *SACNSource {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	for _, source := range s.sources {
-		if source.SrcIP != nil && source.SrcIP.Equal(ip) {
-			return source
-		}
-	}
-	return nil
 }
 
 func (s *SACNSources) Expire() {
@@ -90,54 +68,15 @@ func (s *SACNSources) Expire() {
 	}
 }
 
-func (s *SACNSources) GetAll() []*SACNSource {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	result := make([]*SACNSource, 0, len(s.sources))
-	for _, source := range s.sources {
-		result = append(result, source)
-	}
-	return result
-}
-
-func formatCID(cid [16]byte) string {
-	return strings.ToLower(formatUUID(cid))
-}
-
-func formatUUID(b [16]byte) string {
-	return strings.ToUpper(
-		strings.Join([]string{
-			encodeHex(b[0:4]),
-			encodeHex(b[4:6]),
-			encodeHex(b[6:8]),
-			encodeHex(b[8:10]),
-			encodeHex(b[10:16]),
-		}, "-"),
-	)
-}
-
-func encodeHex(b []byte) string {
-	const hexChars = "0123456789ABCDEF"
-	result := make([]byte, len(b)*2)
-	for i, v := range b {
-		result[i*2] = hexChars[v>>4]
-		result[i*2+1] = hexChars[v&0x0f]
-	}
-	return string(result)
-}
-
 func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Interface) {
-	c, err := net.ListenPacket("udp4", ":5568")
+	receiver, err := sacn.NewReceiver("")
 	if err != nil {
-		log.Printf("[ERROR] failed to listen sacn discovery: %v", err)
+		log.Printf("[ERROR] failed to create sacn receiver: %v", err)
 		return
 	}
-	defer c.Close()
+	defer receiver.Stop()
 
-	p := ipv4.NewPacketConn(c)
-
-	if err := p.JoinGroup(&iface, &net.UDPAddr{IP: sacnDiscoveryAddr}); err != nil {
+	if err := receiver.JoinDiscovery(&iface); err != nil {
 		log.Printf("[ERROR] failed to join sacn discovery multicast on %s: %v", iface.Name, err)
 		return
 	}
@@ -146,80 +85,25 @@ func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Int
 		log.Printf("[sacn] listening for discovery on %s", iface.Name)
 	}
 
-	buf := make([]byte, 1500)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
+	receiver.SetHandler(func(src *net.UDPAddr, pkt interface{}) {
+		if disc, ok := pkt.(*sacn.DiscoveryPacket); ok {
+			t.handleSACNDiscoveryPacket(src.IP, disc)
 		}
+	})
 
-		c.SetReadDeadline(time.Now().Add(1 * time.Second))
-		n, src, err := c.ReadFrom(buf)
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				continue
-			}
-			continue
-		}
-
-		var srcIP net.IP
-		if udpAddr, ok := src.(*net.UDPAddr); ok {
-			srcIP = udpAddr.IP
-		}
-
-		t.handleSACNDiscoveryPacket(buf[:n], srcIP)
-	}
+	receiver.Start()
+	<-ctx.Done()
 }
 
-func (t *Tendrils) handleSACNDiscoveryPacket(data []byte, srcIP net.IP) {
-	if len(data) < 120 {
-		return
-	}
-
-	if data[4] != sacnPacketIdentifier[0] || data[5] != sacnPacketIdentifier[1] ||
-		data[6] != sacnPacketIdentifier[2] || data[7] != sacnPacketIdentifier[3] {
-		return
-	}
-
-	rootVector := binary.BigEndian.Uint32(data[18:22])
-	if rootVector != vectorRootE131Extended {
-		return
-	}
-
-	framingVector := binary.BigEndian.Uint32(data[40:44])
-	if framingVector != vectorE131Discovery {
-		return
-	}
-
-	var cid [16]byte
-	copy(cid[:], data[22:38])
-
-	sourceName := strings.TrimRight(string(data[44:108]), "\x00")
-
-	discoveryVector := binary.BigEndian.Uint32(data[114:118])
-	if discoveryVector != vectorUniverseDiscovery {
-		return
-	}
-
-	universeCount := (len(data) - 120) / 2
-	universes := make([]int, 0, universeCount)
-	for i := 0; i < universeCount; i++ {
-		u := binary.BigEndian.Uint16(data[120+i*2 : 122+i*2])
-		if u >= 1 && u <= 63999 {
-			universes = append(universes, int(u))
-		}
-	}
-
+func (t *Tendrils) handleSACNDiscoveryPacket(srcIP net.IP, pkt *sacn.DiscoveryPacket) {
 	if t.DebugSACN {
-		log.Printf("[sacn] discovery from %q cid=%s ip=%s universes=%v", sourceName, formatCID(cid), srcIP, universes)
+		log.Printf("[sacn] discovery from %q cid=%s ip=%s universes=%v", pkt.SourceName, sacn.FormatCID(pkt.CID), srcIP, pkt.Universes)
 	}
 
-	if srcIP != nil && sourceName != "" {
-		t.nodes.Update(nil, nil, []net.IP{srcIP}, "", sourceName, "sacn")
+	if srcIP != nil && pkt.SourceName != "" {
+		t.nodes.Update(nil, nil, []net.IP{srcIP}, "", pkt.SourceName, "sacn")
 	}
 
-	t.sacnSources.Update(cid, sourceName, universes, srcIP)
+	t.sacnSources.Update(pkt.CID, pkt.SourceName, pkt.Universes, srcIP)
 	t.NotifyUpdate()
 }
-
