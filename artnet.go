@@ -7,20 +7,11 @@ import (
 	"net"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fvbommel/sortorder"
 	"github.com/gopatchy/artnet"
 )
-
-type ArtNetNode struct {
-	TypeID   string    `json:"typeid"`
-	Node     *Node     `json:"node"`
-	Inputs   []int     `json:"inputs,omitempty"`
-	Outputs  []int     `json:"outputs,omitempty"`
-	LastSeen time.Time `json:"last_seen"`
-}
 
 func (t *Tendrils) startArtNetListener(ctx context.Context) {
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: artnet.Port})
@@ -178,45 +169,6 @@ func (t *Tendrils) sendArtPoll(conn *net.UDPConn, broadcast net.IP, ifaceName st
 	}
 }
 
-type ArtNetNodes struct {
-	mu    sync.RWMutex
-	nodes map[*Node]*ArtNetNode
-}
-
-func NewArtNetNodes() *ArtNetNodes {
-	return &ArtNetNodes{
-		nodes: map[*Node]*ArtNetNode{},
-	}
-}
-
-func (a *ArtNetNodes) Update(node *Node, inputs, outputs []int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	existing, exists := a.nodes[node]
-	if exists {
-		for _, u := range inputs {
-			if !containsInt(existing.Inputs, u) {
-				existing.Inputs = append(existing.Inputs, u)
-			}
-		}
-		for _, u := range outputs {
-			if !containsInt(existing.Outputs, u) {
-				existing.Outputs = append(existing.Outputs, u)
-			}
-		}
-		existing.LastSeen = time.Now()
-	} else {
-		a.nodes[node] = &ArtNetNode{
-			TypeID:   newTypeID("artnetnode"),
-			Node:     node,
-			Inputs:   inputs,
-			Outputs:  outputs,
-			LastSeen: time.Now(),
-		}
-	}
-}
-
 func containsInt(slice []int, val int) bool {
 	for _, v := range slice {
 		if v == val {
@@ -226,83 +178,76 @@ func containsInt(slice []int, val int) bool {
 	return false
 }
 
-func (a *ArtNetNodes) ReplaceNode(oldNode, newNode *Node) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+func (n *Nodes) UpdateArtNet(node *Node, inputs, outputs []int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
-	if artNode, exists := a.nodes[oldNode]; exists {
-		delete(a.nodes, oldNode)
-		if existing, hasNew := a.nodes[newNode]; hasNew {
-			for _, u := range artNode.Inputs {
-				if !containsInt(existing.Inputs, u) {
-					existing.Inputs = append(existing.Inputs, u)
-				}
-			}
-			for _, u := range artNode.Outputs {
-				if !containsInt(existing.Outputs, u) {
-					existing.Outputs = append(existing.Outputs, u)
-				}
-			}
-		} else {
-			artNode.Node = newNode
-			a.nodes[newNode] = artNode
+	for _, u := range inputs {
+		if !containsInt(node.ArtNetInputs, u) {
+			node.ArtNetInputs = append(node.ArtNetInputs, u)
 		}
 	}
+	for _, u := range outputs {
+		if !containsInt(node.ArtNetOutputs, u) {
+			node.ArtNetOutputs = append(node.ArtNetOutputs, u)
+		}
+	}
+	sort.Ints(node.ArtNetInputs)
+	sort.Ints(node.ArtNetOutputs)
+	node.artnetLastSeen = time.Now()
 }
 
-func (a *ArtNetNodes) Expire() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+func (n *Nodes) expireArtNet() {
 	expireTime := time.Now().Add(-60 * time.Second)
-	for nodePtr, artNode := range a.nodes {
-		if artNode.LastSeen.Before(expireTime) {
-			delete(a.nodes, nodePtr)
+	for _, node := range n.nodes {
+		if !node.artnetLastSeen.IsZero() && node.artnetLastSeen.Before(expireTime) {
+			node.ArtNetInputs = nil
+			node.ArtNetOutputs = nil
+			node.artnetLastSeen = time.Time{}
 		}
 	}
 }
 
-func (a *ArtNetNodes) GetAll() []*ArtNetNode {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	result := make([]*ArtNetNode, 0, len(a.nodes))
-	for _, node := range a.nodes {
-		result = append(result, node)
+func (n *Nodes) mergeArtNet(keep, merge *Node) {
+	for _, u := range merge.ArtNetInputs {
+		if !containsInt(keep.ArtNetInputs, u) {
+			keep.ArtNetInputs = append(keep.ArtNetInputs, u)
+		}
 	}
-	return result
+	for _, u := range merge.ArtNetOutputs {
+		if !containsInt(keep.ArtNetOutputs, u) {
+			keep.ArtNetOutputs = append(keep.ArtNetOutputs, u)
+		}
+	}
+	if merge.artnetLastSeen.After(keep.artnetLastSeen) {
+		keep.artnetLastSeen = merge.artnetLastSeen
+	}
+	sort.Ints(keep.ArtNetInputs)
+	sort.Ints(keep.ArtNetOutputs)
 }
 
-func (a *ArtNetNodes) LogAll() {
-	a.Expire()
-
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	if len(a.nodes) == 0 {
-		return
-	}
-
-	var artNodes []*ArtNetNode
-	for _, artNode := range a.nodes {
-		artNodes = append(artNodes, artNode)
-	}
-	sort.Slice(artNodes, func(i, j int) bool {
-		return sortorder.NaturalLess(artNodes[i].Node.DisplayName(), artNodes[j].Node.DisplayName())
-	})
-
+func (n *Nodes) logArtNet() {
 	inputUniverses := map[int][]string{}
 	outputUniverses := map[int][]string{}
 
-	for _, artNode := range artNodes {
-		name := artNode.Node.DisplayName()
+	for _, node := range n.nodes {
+		if len(node.ArtNetInputs) == 0 && len(node.ArtNetOutputs) == 0 {
+			continue
+		}
+		name := node.DisplayName()
 		if name == "" {
 			name = "??"
 		}
-		for _, u := range artNode.Inputs {
+		for _, u := range node.ArtNetInputs {
 			inputUniverses[u] = append(inputUniverses[u], name)
 		}
-		for _, u := range artNode.Outputs {
+		for _, u := range node.ArtNetOutputs {
 			outputUniverses[u] = append(outputUniverses[u], name)
 		}
+	}
+
+	if len(inputUniverses) == 0 && len(outputUniverses) == 0 {
+		return
 	}
 
 	var allUniverses []int
@@ -339,8 +284,4 @@ func (a *ArtNetNodes) LogAll() {
 		universe := u & 0x0f
 		log.Printf("[sigusr1]   artnet:%d (%d/%d/%d) %s", u, netVal, subnet, universe, strings.Join(parts, "; "))
 	}
-}
-
-func (n *Nodes) UpdateArtNet(node *Node, inputs, outputs []int) {
-	n.t.artnet.Update(node, inputs, outputs)
 }

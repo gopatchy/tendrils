@@ -1,51 +1,15 @@
 package tendrils
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"sort"
 	"time"
-
-	"github.com/fvbommel/sortorder"
 )
 
 type MulticastGroup struct {
 	Name string `json:"name"`
 	IP   string `json:"ip"`
-}
-
-type MulticastMembership struct {
-	SourceIP string    `json:"source_ip"`
-	Node     *Node     `json:"node,omitempty"`
-	LastSeen time.Time `json:"last_seen"`
-}
-
-type MulticastMembershipMap map[string]*MulticastMembership
-
-func (m MulticastMembershipMap) MarshalJSON() ([]byte, error) {
-	members := make([]*MulticastMembership, 0, len(m))
-	for _, membership := range m {
-		members = append(members, membership)
-	}
-	sort.Slice(members, func(i, j int) bool {
-		nameI := members[i].SourceIP
-		if members[i].Node != nil && members[i].Node.DisplayName() != "" {
-			nameI = members[i].Node.DisplayName()
-		}
-		nameJ := members[j].SourceIP
-		if members[j].Node != nil && members[j].Node.DisplayName() != "" {
-			nameJ = members[j].Node.DisplayName()
-		}
-		return sortorder.NaturalLess(nameI, nameJ)
-	})
-	return json.Marshal(members)
-}
-
-type MulticastGroupMembers struct {
-	TypeID  string                 `json:"typeid"`
-	Group   *MulticastGroup        `json:"group"`
-	Members MulticastMembershipMap `json:"members"`
 }
 
 func (g *MulticastGroup) IsDante() bool {
@@ -116,62 +80,71 @@ func (n *Nodes) UpdateMulticastMembership(sourceIP, groupIP net.IP) {
 	defer n.mu.Unlock()
 
 	node := n.getNodeByIPLocked(sourceIP)
-
-	groupKey := groupIP.String()
-	sourceKey := sourceIP.String()
-
-	gm := n.multicastGroups[groupKey]
-	if gm == nil {
-		gm = &MulticastGroupMembers{
-			TypeID: newTypeID("mcastgroup"),
-			Group: &MulticastGroup{
-				Name: multicastGroupName(groupIP),
-				IP:   groupKey,
-			},
-			Members: MulticastMembershipMap{},
-		}
-		n.multicastGroups[groupKey] = gm
+	if node == nil {
+		return
 	}
 
-	membership := gm.Members[sourceKey]
-	if membership == nil {
-		membership = &MulticastMembership{
-			SourceIP: sourceKey,
-		}
-		gm.Members[sourceKey] = membership
+	groupName := multicastGroupName(groupIP)
+
+	if node.multicastLastSeen == nil {
+		node.multicastLastSeen = map[string]time.Time{}
 	}
-	membership.Node = node
-	membership.LastSeen = time.Now()
+	node.multicastLastSeen[groupName] = time.Now()
+
+	if !containsString(node.MulticastGroups, groupName) {
+		node.MulticastGroups = append(node.MulticastGroups, groupName)
+		sort.Strings(node.MulticastGroups)
+	}
+
+	if len(groupName) > 5 && groupName[:5] == "sacn:" {
+		var universe int
+		if _, err := fmt.Sscanf(groupName, "sacn:%d", &universe); err == nil {
+			if !containsInt(node.SACNInputs, universe) {
+				node.SACNInputs = append(node.SACNInputs, universe)
+				sort.Ints(node.SACNInputs)
+			}
+		}
+	}
 }
 
 func (n *Nodes) RemoveMulticastMembership(sourceIP, groupIP net.IP) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	groupKey := groupIP.String()
-	sourceKey := sourceIP.String()
+	node := n.getNodeByIPLocked(sourceIP)
+	if node == nil {
+		return
+	}
 
-	if gm := n.multicastGroups[groupKey]; gm != nil {
-		delete(gm.Members, sourceKey)
-		if len(gm.Members) == 0 {
-			delete(n.multicastGroups, groupKey)
+	groupName := multicastGroupName(groupIP)
+	delete(node.multicastLastSeen, groupName)
+
+	var groups []string
+	for _, g := range node.MulticastGroups {
+		if g != groupName {
+			groups = append(groups, g)
 		}
 	}
+	node.MulticastGroups = groups
 }
 
 func (n *Nodes) GetDanteMulticastGroups(deviceIP net.IP) []net.IP {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	deviceKey := deviceIP.String()
-	var groups []net.IP
+	node := n.getNodeByIPLocked(deviceIP)
+	if node == nil {
+		return nil
+	}
 
-	for _, gm := range n.multicastGroups {
-		if !gm.Group.IsDante() {
-			continue
-		}
-		if _, exists := gm.Members[deviceKey]; exists {
-			groups = append(groups, net.ParseIP(gm.Group.IP))
+	var groups []net.IP
+	for _, groupName := range node.MulticastGroups {
+		g := &MulticastGroup{Name: groupName}
+		if g.IsDante() {
+			ip := net.ParseIP(groupName)
+			if ip != nil {
+				groups = append(groups, ip)
+			}
 		}
 	}
 	return groups
@@ -181,16 +154,11 @@ func (n *Nodes) GetMulticastGroupMembers(groupIP net.IP) []*Node {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	groupKey := groupIP.String()
-	gm := n.multicastGroups[groupKey]
-	if gm == nil {
-		return nil
-	}
-
+	groupName := multicastGroupName(groupIP)
 	var members []*Node
-	for _, membership := range gm.Members {
-		if membership.Node != nil {
-			members = append(members, membership.Node)
+	for _, node := range n.nodes {
+		if containsString(node.MulticastGroups, groupName) {
+			members = append(members, node)
 		}
 	}
 	return members
@@ -198,14 +166,54 @@ func (n *Nodes) GetMulticastGroupMembers(groupIP net.IP) []*Node {
 
 func (n *Nodes) expireMulticastMemberships() {
 	expireTime := time.Now().Add(-5 * time.Minute)
-	for groupKey, gm := range n.multicastGroups {
-		for sourceKey, membership := range gm.Members {
-			if membership.LastSeen.Before(expireTime) {
-				delete(gm.Members, sourceKey)
+	for _, node := range n.nodes {
+		if node.multicastLastSeen == nil {
+			continue
+		}
+		var keepGroups []string
+		var keepSACNInputs []int
+		for _, groupName := range node.MulticastGroups {
+			if lastSeen, ok := node.multicastLastSeen[groupName]; ok && !lastSeen.Before(expireTime) {
+				keepGroups = append(keepGroups, groupName)
+				if len(groupName) > 5 && groupName[:5] == "sacn:" {
+					var universe int
+					if _, err := fmt.Sscanf(groupName, "sacn:%d", &universe); err == nil {
+						keepSACNInputs = append(keepSACNInputs, universe)
+					}
+				}
+			} else {
+				delete(node.multicastLastSeen, groupName)
 			}
 		}
-		if len(gm.Members) == 0 {
-			delete(n.multicastGroups, groupKey)
+		node.MulticastGroups = keepGroups
+		sort.Ints(keepSACNInputs)
+		node.SACNInputs = keepSACNInputs
+	}
+}
+
+func (n *Nodes) mergeMulticast(keep, merge *Node) {
+	if merge.multicastLastSeen == nil {
+		return
+	}
+	if keep.multicastLastSeen == nil {
+		keep.multicastLastSeen = map[string]time.Time{}
+	}
+	for groupName, lastSeen := range merge.multicastLastSeen {
+		if existing, ok := keep.multicastLastSeen[groupName]; !ok || lastSeen.After(existing) {
+			keep.multicastLastSeen[groupName] = lastSeen
+		}
+		if !containsString(keep.MulticastGroups, groupName) {
+			keep.MulticastGroups = append(keep.MulticastGroups, groupName)
+		}
+		if len(groupName) > 5 && groupName[:5] == "sacn:" {
+			var universe int
+			if _, err := fmt.Sscanf(groupName, "sacn:%d", &universe); err == nil {
+				if !containsInt(keep.SACNInputs, universe) {
+					keep.SACNInputs = append(keep.SACNInputs, universe)
+				}
+			}
 		}
 	}
+	sort.Strings(keep.MulticastGroups)
+	sort.Ints(keep.SACNInputs)
 }

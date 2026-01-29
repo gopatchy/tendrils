@@ -14,32 +14,30 @@ import (
 )
 
 type Nodes struct {
-	mu              sync.RWMutex
-	nodes           map[int]*Node
-	ipIndex         map[string]int
-	macIndex        map[string]int
-	nameIndex       map[string]int
-	nodeCancel      map[int]context.CancelFunc
-	multicastGroups map[string]*MulticastGroupMembers
-	nextID          int
-	t               *Tendrils
-	ctx             context.Context
-	cancelAll       context.CancelFunc
+	mu         sync.RWMutex
+	nodes      map[int]*Node
+	ipIndex    map[string]int
+	macIndex   map[string]int
+	nameIndex  map[string]int
+	nodeCancel map[int]context.CancelFunc
+	nextID     int
+	t          *Tendrils
+	ctx        context.Context
+	cancelAll  context.CancelFunc
 }
 
 func NewNodes(t *Tendrils) *Nodes {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Nodes{
-		nodes:           map[int]*Node{},
-		ipIndex:         map[string]int{},
-		macIndex:        map[string]int{},
-		nameIndex:       map[string]int{},
-		nodeCancel:      map[int]context.CancelFunc{},
-		multicastGroups: map[string]*MulticastGroupMembers{},
-		nextID:          1,
-		t:               t,
-		ctx:             ctx,
-		cancelAll:       cancel,
+		nodes:      map[int]*Node{},
+		ipIndex:    map[string]int{},
+		macIndex:   map[string]int{},
+		nameIndex:  map[string]int{},
+		nodeCancel: map[int]context.CancelFunc{},
+		nextID:     1,
+		t:          t,
+		ctx:        ctx,
+		cancelAll:  cancel,
 	}
 }
 
@@ -422,16 +420,10 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 		keep.MACTable[peerMAC] = ifaceName
 	}
 
-	n.t.danteFlows.ReplaceNode(merge, keep)
-	n.t.artnet.ReplaceNode(merge, keep)
-
-	for _, gm := range n.multicastGroups {
-		for _, membership := range gm.Members {
-			if membership.Node == merge {
-				membership.Node = keep
-			}
-		}
-	}
+	n.mergeArtNet(keep, merge)
+	n.mergeSACN(keep, merge)
+	n.mergeMulticast(keep, merge)
+	n.mergeDante(keep, merge)
 
 	if cancel, exists := n.nodeCancel[mergeID]; exists {
 		cancel()
@@ -626,37 +618,36 @@ func (n *Nodes) LogAll() {
 
 	n.expireMulticastMemberships()
 
-	if len(n.multicastGroups) > 0 {
-		var groups []*MulticastGroupMembers
-		for _, gm := range n.multicastGroups {
-			groups = append(groups, gm)
-		}
-		sort.Slice(groups, func(i, j int) bool {
-			return sortorder.NaturalLess(groups[i].Group.Name, groups[j].Group.Name)
-		})
-
-		log.Printf("[sigusr1] ================ %d multicast groups ================", len(groups))
-		for _, gm := range groups {
-			var memberNames []string
-			for sourceIP, membership := range gm.Members {
-				var name string
-				if membership.Node != nil {
-					name = membership.Node.DisplayName()
-					if name == "" {
-						name = sourceIP
-					}
-				} else {
-					name = sourceIP
-				}
-				memberNames = append(memberNames, name)
+	groupMembers := map[string][]string{}
+	for _, node := range n.nodes {
+		for _, groupName := range node.MulticastGroups {
+			name := node.DisplayName()
+			if name == "" {
+				name = "??"
 			}
-			sort.Slice(memberNames, func(i, j int) bool {
-				return sortorder.NaturalLess(memberNames[i], memberNames[j])
-			})
-			log.Printf("[sigusr1]   %s: %s", gm.Group.Name, strings.Join(memberNames, ", "))
+			groupMembers[groupName] = append(groupMembers[groupName], name)
 		}
 	}
 
-	n.t.artnet.LogAll()
-	n.t.danteFlows.LogAll()
+	if len(groupMembers) > 0 {
+		var groupNames []string
+		for name := range groupMembers {
+			groupNames = append(groupNames, name)
+		}
+		sort.Slice(groupNames, func(i, j int) bool {
+			return sortorder.NaturalLess(groupNames[i], groupNames[j])
+		})
+
+		log.Printf("[sigusr1] ================ %d multicast groups ================", len(groupNames))
+		for _, groupName := range groupNames {
+			members := groupMembers[groupName]
+			sort.Slice(members, func(i, j int) bool {
+				return sortorder.NaturalLess(members[i], members[j])
+			})
+			log.Printf("[sigusr1]   %s: %s", groupName, strings.Join(members, ", "))
+		}
+	}
+
+	n.logArtNet()
+	n.logDante()
 }

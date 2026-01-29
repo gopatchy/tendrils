@@ -33,10 +33,7 @@ func getInterfaceIPv4(iface net.Interface) (srcIP, broadcast net.IP) {
 type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
 	nodes            *Nodes
-	artnet           *ArtNetNodes
 	artnetConn       *net.UDPConn
-	sacnSources      *SACNSources
-	danteFlows       *DanteFlows
 	errors           *ErrorTracker
 	ping             *PingManager
 	broadcast        *BroadcastStats
@@ -78,9 +75,6 @@ type Tendrils struct {
 func New() *Tendrils {
 	t := &Tendrils{
 		activeInterfaces: map[string]context.CancelFunc{},
-		artnet:           NewArtNetNodes(),
-		sacnSources:      NewSACNSources(),
-		danteFlows:       NewDanteFlows(),
 		ping:             NewPingManager(),
 		sseSubs:          map[int]chan struct{}{},
 	}

@@ -6,6 +6,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/fvbommel/sortorder"
 	"go.jetify.com/typeid"
@@ -149,12 +150,35 @@ type Node struct {
 	DanteRx            []*DantePeer      `json:"dante_rx,omitempty"`
 	Unreachable        bool              `json:"unreachable,omitempty"`
 	pollTrigger        chan struct{}
+
+	multicastLastSeen map[string]time.Time
+	artnetLastSeen    time.Time
+	sacnLastSeen      time.Time
+	danteLastSeen     time.Time
 }
 
 type DantePeer struct {
 	Node     *Node             `json:"node"`
 	Channels []string          `json:"channels,omitempty"`
 	Status   map[string]string `json:"status,omitempty"`
+}
+
+func (p *DantePeer) MarshalJSON() ([]byte, error) {
+	type peerJSON struct {
+		Node     *Node             `json:"node"`
+		Channels []string          `json:"channels,omitempty"`
+		Status   map[string]string `json:"status,omitempty"`
+	}
+	nodeRef := &Node{
+		TypeID:     p.Node.TypeID,
+		Names:      p.Node.Names,
+		Interfaces: p.Node.Interfaces,
+	}
+	return json.Marshal(peerJSON{
+		Node:     nodeRef,
+		Channels: p.Channels,
+		Status:   p.Status,
+	})
 }
 
 func (n *Node) WithInterface(ifaceKey string) *Node {

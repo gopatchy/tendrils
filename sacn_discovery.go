@@ -4,69 +4,11 @@ import (
 	"context"
 	"log"
 	"net"
-	"sync"
+	"sort"
 	"time"
 
 	"github.com/gopatchy/sacn"
 )
-
-type SACNSource struct {
-	CID        string
-	SourceName string
-	Universes  []int
-	SrcIP      net.IP
-	LastSeen   time.Time
-}
-
-type SACNSources struct {
-	mu      sync.RWMutex
-	sources map[string]*SACNSource
-}
-
-func NewSACNSources() *SACNSources {
-	return &SACNSources{
-		sources: map[string]*SACNSource{},
-	}
-}
-
-func (s *SACNSources) Update(cid [16]byte, sourceName string, universes []uint16, srcIP net.IP) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cidStr := sacn.FormatCID(cid)
-	intUniverses := make([]int, len(universes))
-	for i, u := range universes {
-		intUniverses[i] = int(u)
-	}
-
-	existing, exists := s.sources[cidStr]
-	if exists {
-		existing.SourceName = sourceName
-		existing.Universes = intUniverses
-		existing.SrcIP = srcIP
-		existing.LastSeen = time.Now()
-	} else {
-		s.sources[cidStr] = &SACNSource{
-			CID:        cidStr,
-			SourceName: sourceName,
-			Universes:  intUniverses,
-			SrcIP:      srcIP,
-			LastSeen:   time.Now(),
-		}
-	}
-}
-
-func (s *SACNSources) Expire() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	expireTime := time.Now().Add(-60 * time.Second)
-	for cid, source := range s.sources {
-		if source.LastSeen.Before(expireTime) {
-			delete(s.sources, cid)
-		}
-	}
-}
 
 func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Interface) {
 	receiver, err := sacn.NewReceiver("")
@@ -104,6 +46,44 @@ func (t *Tendrils) handleSACNDiscoveryPacket(srcIP net.IP, pkt *sacn.DiscoveryPa
 		t.nodes.Update(nil, nil, []net.IP{srcIP}, "", pkt.SourceName, "sacn")
 	}
 
-	t.sacnSources.Update(pkt.CID, pkt.SourceName, pkt.Universes, srcIP)
+	node := t.nodes.GetByIP(srcIP)
+	if node != nil {
+		intUniverses := make([]int, len(pkt.Universes))
+		for i, u := range pkt.Universes {
+			intUniverses[i] = int(u)
+		}
+		t.nodes.UpdateSACN(node, intUniverses)
+	}
 	t.NotifyUpdate()
+}
+
+func (n *Nodes) UpdateSACN(node *Node, outputs []int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	node.SACNOutputs = outputs
+	sort.Ints(node.SACNOutputs)
+	node.sacnLastSeen = time.Now()
+}
+
+func (n *Nodes) expireSACN() {
+	expireTime := time.Now().Add(-60 * time.Second)
+	for _, node := range n.nodes {
+		if !node.sacnLastSeen.IsZero() && node.sacnLastSeen.Before(expireTime) {
+			node.SACNOutputs = nil
+			node.sacnLastSeen = time.Time{}
+		}
+	}
+}
+
+func (n *Nodes) mergeSACN(keep, merge *Node) {
+	for _, u := range merge.SACNOutputs {
+		if !containsInt(keep.SACNOutputs, u) {
+			keep.SACNOutputs = append(keep.SACNOutputs, u)
+		}
+	}
+	if merge.sacnLastSeen.After(keep.sacnLastSeen) {
+		keep.sacnLastSeen = merge.sacnLastSeen
+	}
+	sort.Ints(keep.SACNOutputs)
 }
