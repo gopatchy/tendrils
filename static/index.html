@@ -1152,6 +1152,96 @@
             return Math.round(mbps).toLocaleString() + ' Mbit/s';
         }
 
+        function buildSwitchUplinks(allSwitches, switchLinks) {
+            const uplinks = new Map();
+            if (allSwitches.length === 0 || switchLinks.length === 0) return uplinks;
+
+            const adjacency = new Map();
+            allSwitches.forEach(sw => adjacency.set(sw.id, []));
+
+            switchLinks.forEach(link => {
+                adjacency.get(link.switchA.id).push({
+                    neighbor: link.switchB,
+                    localPort: link.portA,
+                    remotePort: link.portB,
+                    localSpeed: link.speedA,
+                    localErrors: link.errorsA,
+                    localRates: link.ratesA
+                });
+                adjacency.get(link.switchB.id).push({
+                    neighbor: link.switchA,
+                    localPort: link.portB,
+                    remotePort: link.portA,
+                    localSpeed: link.speedB,
+                    localErrors: link.errorsB,
+                    localRates: link.ratesB
+                });
+            });
+
+            for (const edges of adjacency.values()) {
+                edges.sort((a, b) => getLabel(a.neighbor).localeCompare(getLabel(b.neighbor)));
+            }
+
+            const sortedSwitches = [...allSwitches].sort((a, b) =>
+                getLabel(a).localeCompare(getLabel(b)));
+
+            let bestRoot = sortedSwitches[0];
+            let bestReachable = 0;
+            let bestMaxDepth = Infinity;
+
+            for (const candidate of sortedSwitches) {
+                const visited = new Set([candidate.id]);
+                const queue = [{ sw: candidate, depth: 0 }];
+                let maxDepth = 0;
+
+                while (queue.length > 0) {
+                    const { sw, depth } = queue.shift();
+                    maxDepth = Math.max(maxDepth, depth);
+                    for (const edge of adjacency.get(sw.id) || []) {
+                        if (!visited.has(edge.neighbor.id)) {
+                            visited.add(edge.neighbor.id);
+                            queue.push({ sw: edge.neighbor, depth: depth + 1 });
+                        }
+                    }
+                }
+
+                const reachable = visited.size;
+                if (reachable > bestReachable ||
+                    (reachable === bestReachable && maxDepth < bestMaxDepth)) {
+                    bestReachable = reachable;
+                    bestMaxDepth = maxDepth;
+                    bestRoot = candidate;
+                }
+            }
+
+            uplinks.set(bestRoot.id, 'ROOT');
+
+            const visited = new Set([bestRoot.id]);
+            const queue = [bestRoot];
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+                for (const edge of adjacency.get(current.id) || []) {
+                    if (!visited.has(edge.neighbor.id)) {
+                        visited.add(edge.neighbor.id);
+                        const reverseEdge = adjacency.get(edge.neighbor.id).find(e => e.neighbor.id === current.id);
+                        uplinks.set(edge.neighbor.id, {
+                            localPort: reverseEdge?.localPort || '?',
+                            remotePort: reverseEdge?.remotePort || '?',
+                            parentNode: current,
+                            parentName: getLabel(current),
+                            speed: reverseEdge?.localSpeed || 0,
+                            errors: reverseEdge?.localErrors || null,
+                            rates: reverseEdge?.localRates || null
+                        });
+                        queue.push(edge.neighbor);
+                    }
+                }
+            }
+
+            return uplinks;
+        }
+
         function formatPps(pps) {
             return Math.round(pps).toLocaleString() + ' pps';
         }
@@ -2141,91 +2231,7 @@
                 });
             });
 
-            const switchUplinks = new Map();
-            if (allSwitches.length > 0 && switchLinks.length > 0) {
-                const adjacency = new Map();
-                allSwitches.forEach(sw => adjacency.set(sw.id, []));
-
-                switchLinks.forEach(link => {
-                    adjacency.get(link.switchA.id).push({
-                        neighbor: link.switchB,
-                        localPort: link.portA,
-                        remotePort: link.portB,
-                        localSpeed: link.speedA,
-                        localErrors: link.errorsA,
-                        localRates: link.ratesA
-                    });
-                    adjacency.get(link.switchB.id).push({
-                        neighbor: link.switchA,
-                        localPort: link.portB,
-                        remotePort: link.portA,
-                        localSpeed: link.speedB,
-                        localErrors: link.errorsB,
-                        localRates: link.ratesB
-                    });
-                });
-
-                for (const edges of adjacency.values()) {
-                    edges.sort((a, b) => getLabel(a.neighbor).localeCompare(getLabel(b.neighbor)));
-                }
-
-                const sortedSwitches = [...allSwitches].sort((a, b) =>
-                    getLabel(a).localeCompare(getLabel(b)));
-
-                let bestRoot = sortedSwitches[0];
-                let bestReachable = 0;
-                let bestMaxDepth = Infinity;
-
-                for (const candidate of sortedSwitches) {
-                    const visited = new Set([candidate.id]);
-                    const queue = [{ sw: candidate, depth: 0 }];
-                    let maxDepth = 0;
-
-                    while (queue.length > 0) {
-                        const { sw, depth } = queue.shift();
-                        maxDepth = Math.max(maxDepth, depth);
-                        for (const edge of adjacency.get(sw.id) || []) {
-                            if (!visited.has(edge.neighbor.id)) {
-                                visited.add(edge.neighbor.id);
-                                queue.push({ sw: edge.neighbor, depth: depth + 1 });
-                            }
-                        }
-                    }
-
-                    const reachable = visited.size;
-                    if (reachable > bestReachable ||
-                        (reachable === bestReachable && maxDepth < bestMaxDepth)) {
-                        bestReachable = reachable;
-                        bestMaxDepth = maxDepth;
-                        bestRoot = candidate;
-                    }
-                }
-
-                switchUplinks.set(bestRoot.id, 'ROOT');
-
-                const visited = new Set([bestRoot.id]);
-                const queue = [bestRoot];
-
-                while (queue.length > 0) {
-                    const current = queue.shift();
-                    for (const edge of adjacency.get(current.id) || []) {
-                        if (!visited.has(edge.neighbor.id)) {
-                            visited.add(edge.neighbor.id);
-                            const reverseEdge = adjacency.get(edge.neighbor.id).find(e => e.neighbor.id === current.id);
-                            switchUplinks.set(edge.neighbor.id, {
-                                localPort: edge.remotePort,
-                                remotePort: edge.localPort,
-                                parentName: getLabel(current),
-                                speed: reverseEdge?.localSpeed || 0,
-                                errors: reverseEdge?.localErrors || null,
-                                rates: reverseEdge?.localRates || null
-                            });
-                            queue.push(edge.neighbor);
-                        }
-                    }
-                }
-
-            }
+            const switchUplinks = buildSwitchUplinks(allSwitches, switchLinks);
 
             const container = document.getElementById('container');
             usedNodeIds = new Set();
@@ -2329,8 +2335,7 @@
         let currentMode = 'network';
         let currentView = 'map';
         let tableData = null;
-        let tableSortColumn = null;
-        let tableSortAsc = true;
+        let tableSortKeys = [];
 
         function updateHash() {
             let hash = '';
@@ -2361,8 +2366,7 @@
             }
 
             updateHash();
-            tableSortColumn = null;
-            tableSortAsc = true;
+            tableSortKeys = [];
             if (currentView === 'table') {
                 renderTable();
             }
@@ -2387,11 +2391,14 @@
         document.getElementById('view-table').addEventListener('click', () => setView('table'));
 
         function sortTable(column) {
-            if (tableSortColumn === column) {
-                tableSortAsc = !tableSortAsc;
+            const existingIdx = tableSortKeys.findIndex(k => k.column === column);
+            if (existingIdx === 0) {
+                tableSortKeys[0].asc = !tableSortKeys[0].asc;
             } else {
-                tableSortColumn = column;
-                tableSortAsc = true;
+                if (existingIdx > 0) {
+                    tableSortKeys.splice(existingIdx, 1);
+                }
+                tableSortKeys.unshift({ column, asc: true });
             }
             renderTable();
         }
@@ -2417,26 +2424,35 @@
 
             container.querySelectorAll('th[data-sort]').forEach(th => {
                 th.addEventListener('click', () => sortTable(th.dataset.sort));
-                if (th.dataset.sort === tableSortColumn) {
-                    th.classList.add(tableSortAsc ? 'sorted-asc' : 'sorted-desc');
+                const sortKey = tableSortKeys.find(k => k.column === th.dataset.sort);
+                if (sortKey) {
+                    th.classList.add(sortKey.asc ? 'sorted-asc' : 'sorted-desc');
                 }
             });
         }
 
-        function sortRows(rows, column, asc) {
-            return rows.sort((a, b) => {
-                let va = a[column];
-                let vb = b[column];
-                if (va == null) va = '';
-                if (vb == null) vb = '';
-                if (typeof va === 'number' && typeof vb === 'number') {
-                    return asc ? va - vb : vb - va;
+        function sortRows(rows, sortKeys) {
+            if (!sortKeys || sortKeys.length === 0) return rows;
+            const indexed = rows.map((r, i) => ({ r, i }));
+            indexed.sort((a, b) => {
+                for (const { column, asc } of sortKeys) {
+                    let va = a.r[column];
+                    let vb = b.r[column];
+                    if (va == null) va = '';
+                    if (vb == null) vb = '';
+                    let cmp;
+                    if (typeof va === 'number' && typeof vb === 'number') {
+                        cmp = va - vb;
+                    } else {
+                        va = String(va).toLowerCase();
+                        vb = String(vb).toLowerCase();
+                        cmp = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+                    }
+                    if (cmp !== 0) return asc ? cmp : -cmp;
                 }
-                va = String(va).toLowerCase();
-                vb = String(vb).toLowerCase();
-                const cmp = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
-                return asc ? cmp : -cmp;
+                return a.i - b.i;
             });
+            return indexed.map(x => x.r);
         }
 
         function renderNetworkTable() {
@@ -2448,7 +2464,7 @@
 
             const upstreamConnections = new Map();
             const allSwitches = nodes.filter(n => isSwitch(n));
-            const switchIds = new Set(allSwitches.map(s => s.id));
+            const switchLinks = [];
 
             links.forEach(link => {
                 const nodeA = nodesByTypeId.get(link.node_a?.id);
@@ -2464,7 +2480,8 @@
                         port: link.interface_a || '?',
                         speed: getInterfaceSpeed(link.node_a),
                         errors: getInterfaceErrors(link.node_a),
-                        rates: getInterfaceRates(link.node_a)
+                        rates: getInterfaceRates(link.node_a),
+                        isLocalPort: false
                     });
                 } else if (bIsSwitch && !aIsSwitch) {
                     upstreamConnections.set(nodeA.id, {
@@ -2472,29 +2489,40 @@
                         port: link.interface_b || '?',
                         speed: getInterfaceSpeed(link.node_b),
                         errors: getInterfaceErrors(link.node_b),
-                        rates: getInterfaceRates(link.node_b)
+                        rates: getInterfaceRates(link.node_b),
+                        isLocalPort: false
                     });
                 } else if (aIsSwitch && bIsSwitch) {
-                    if (!upstreamConnections.has(nodeA.id)) {
-                        upstreamConnections.set(nodeA.id, {
-                            switchName: getLabel(nodeB),
-                            port: link.interface_b || '?',
-                            speed: getInterfaceSpeed(link.node_a),
-                            errors: getInterfaceErrors(link.node_a),
-                            rates: getInterfaceRates(link.node_a)
-                        });
-                    }
-                    if (!upstreamConnections.has(nodeB.id)) {
-                        upstreamConnections.set(nodeB.id, {
-                            switchName: getLabel(nodeA),
-                            port: link.interface_a || '?',
-                            speed: getInterfaceSpeed(link.node_b),
-                            errors: getInterfaceErrors(link.node_b),
-                            rates: getInterfaceRates(link.node_b)
-                        });
-                    }
+                    switchLinks.push({
+                        switchA: nodeA,
+                        switchB: nodeB,
+                        portA: link.interface_a || '?',
+                        portB: link.interface_b || '?',
+                        speedA: getInterfaceSpeed(link.node_a),
+                        speedB: getInterfaceSpeed(link.node_b),
+                        errorsA: getInterfaceErrors(link.node_a),
+                        errorsB: getInterfaceErrors(link.node_b),
+                        ratesA: getInterfaceRates(link.node_a),
+                        ratesB: getInterfaceRates(link.node_b)
+                    });
                 }
             });
+
+            const switchUplinks = buildSwitchUplinks(allSwitches, switchLinks);
+            for (const [switchId, uplink] of switchUplinks) {
+                if (uplink === 'ROOT') {
+                    upstreamConnections.set(switchId, 'ROOT');
+                } else {
+                    upstreamConnections.set(switchId, {
+                        switchName: uplink.parentName,
+                        port: uplink.localPort,
+                        speed: uplink.speed,
+                        errors: uplink.errors,
+                        rates: uplink.rates,
+                        isLocalPort: true
+                    });
+                }
+            }
 
             const formatMbps = (bytesPerSec) => {
                 const mbps = (bytesPerSec * 8) / 1000000;
@@ -2509,13 +2537,15 @@
                 });
 
                 const conn = upstreamConnections.get(node.id);
-                const upstream = conn ? conn.switchName + ':' + conn.port : '';
-                const speed = conn?.speed || 0;
-                const errors = conn?.errors || { in: 0, out: 0 };
-                const rates = conn?.rates || { inBytes: 0, outBytes: 0 };
+                const isRoot = conn === 'ROOT';
+                const upstream = isRoot ? 'ROOT' : (conn ? conn.switchName + ':' + conn.port : '');
+                const speed = isRoot ? null : (conn?.speed || 0);
+                const errors = isRoot ? null : (conn?.errors || { in: 0, out: 0 });
+                const rates = isRoot ? null : (conn?.rates || { inBytes: 0, outBytes: 0 });
+                const useLocalPerspective = isRoot || conn?.isLocalPort;
 
                 const isUnreachable = node.unreachable;
-                const speedStr = speed >= 1e9 ? (speed/1e9)+'G' : speed >= 1e6 ? (speed/1e6)+'M' : speed > 0 ? speed : '0';
+                const speedStr = speed == null ? '' : (speed >= 1e9 ? (speed/1e9)+'G' : speed >= 1e6 ? (speed/1e6)+'M' : speed > 0 ? speed : '0');
 
                 return {
                     name,
@@ -2523,17 +2553,15 @@
                     upstream,
                     speed,
                     speedStr,
-                    inErrors: errors.out,
-                    outErrors: errors.in,
-                    inRate: rates.outBytes,
-                    outRate: rates.inBytes,
-                    status: isUnreachable ? 'unreachable' : (errors.in + errors.out > 0 ? 'errors' : 'ok')
+                    inErrors: errors == null ? null : (useLocalPerspective ? errors.in : errors.out),
+                    outErrors: errors == null ? null : (useLocalPerspective ? errors.out : errors.in),
+                    inRate: rates == null ? null : (useLocalPerspective ? rates.inBytes : rates.outBytes),
+                    outRate: rates == null ? null : (useLocalPerspective ? rates.outBytes : rates.inBytes),
+                    status: isUnreachable ? 'unreachable' : (errors && (errors.in + errors.out) > 0 ? 'errors' : 'ok')
                 };
             });
 
-            if (tableSortColumn) {
-                rows = sortRows(rows, tableSortColumn, tableSortAsc);
-            }
+            rows = sortRows(rows, tableSortKeys);
 
             let html = '<table class="data-table"><thead><tr>';
             html += '<th data-sort="name">Name</th>';
@@ -2554,10 +2582,10 @@
                 html += '<td>' + escapeHtml(r.ip) + '</td>';
                 html += '<td>' + escapeHtml(r.upstream) + '</td>';
                 html += '<td class="numeric">' + r.speedStr + '</td>';
-                html += '<td class="numeric">' + r.inErrors + '</td>';
-                html += '<td class="numeric">' + r.outErrors + '</td>';
-                html += '<td class="numeric">' + formatMbps(r.inRate) + '</td>';
-                html += '<td class="numeric">' + formatMbps(r.outRate) + '</td>';
+                html += '<td class="numeric">' + (r.inErrors == null ? '' : r.inErrors) + '</td>';
+                html += '<td class="numeric">' + (r.outErrors == null ? '' : r.outErrors) + '</td>';
+                html += '<td class="numeric">' + (r.inRate == null ? '' : formatMbps(r.inRate)) + '</td>';
+                html += '<td class="numeric">' + (r.outRate == null ? '' : formatMbps(r.outRate)) + '</td>';
                 html += '<td class="' + statusClass + '">' + r.status + '</td>';
                 html += '</tr>';
             });
@@ -2591,9 +2619,7 @@
                 });
             });
 
-            if (tableSortColumn) {
-                rows = sortRows(rows, tableSortColumn, tableSortAsc);
-            }
+            rows = sortRows(rows, tableSortKeys);
 
             let html = '<table class="data-table"><thead><tr>';
             html += '<th data-sort="source">Source</th>';
@@ -2653,9 +2679,7 @@
                 }
             });
 
-            if (tableSortColumn) {
-                rows = sortRows(rows, tableSortColumn, tableSortAsc);
-            }
+            rows = sortRows(rows, tableSortKeys);
 
             let html = '<table class="data-table"><thead><tr>';
             html += '<th data-sort="tx">TX</th>';
@@ -2712,9 +2736,7 @@
                 }
             });
 
-            if (tableSortColumn) {
-                rows = sortRows(rows, tableSortColumn, tableSortAsc);
-            }
+            rows = sortRows(rows, tableSortKeys);
 
             let html = '<table class="data-table"><thead><tr>';
             html += '<th data-sort="tx">TX</th>';
