@@ -489,17 +489,77 @@ func (n *Node) SACNInputs() []SACNUniverse {
 	return n.MulticastGroups.SACNInputs()
 }
 
+type DanteFlowStatus uint8
+
+const (
+	DanteFlowUnsubscribed DanteFlowStatus = 0x00
+	DanteFlowNoSource     DanteFlowStatus = 0x01
+	DanteFlowActive       DanteFlowStatus = 0x09
+)
+
+func (s DanteFlowStatus) String() string {
+	switch s {
+	case DanteFlowActive:
+		return "active"
+	case DanteFlowNoSource:
+		return "no-source"
+	default:
+		return ""
+	}
+}
+
+func (s DanteFlowStatus) MarshalJSON() ([]byte, error) {
+	str := s.String()
+	if str == "" {
+		return []byte("null"), nil
+	}
+	return json.Marshal(str)
+}
+
+type DanteChannelType uint16
+
+const (
+	DanteChannelUnknown DanteChannelType = 0
+	DanteChannelAudio   DanteChannelType = 0x000f
+	DanteChannelAudio2  DanteChannelType = 0x0006
+	DanteChannelVideo   DanteChannelType = 0x000e
+)
+
+func (t DanteChannelType) String() string {
+	switch t {
+	case DanteChannelAudio, DanteChannelAudio2:
+		return "audio"
+	case DanteChannelVideo:
+		return "video"
+	default:
+		return ""
+	}
+}
+
+func (t DanteChannelType) MarshalJSON() ([]byte, error) {
+	str := t.String()
+	if str == "" {
+		return []byte("null"), nil
+	}
+	return json.Marshal(str)
+}
+
+type DanteChannel struct {
+	TxChannel string           `json:"tx_channel"`
+	RxChannel int              `json:"rx_channel"`
+	Type      DanteChannelType `json:"type,omitempty"`
+	Status    DanteFlowStatus  `json:"status,omitempty"`
+}
+
 type DantePeer struct {
-	Node     *Node             `json:"node"`
-	Channels []string          `json:"channels,omitempty"`
-	Status   map[string]string `json:"status,omitempty"`
+	Node     *Node           `json:"node"`
+	Channels []*DanteChannel `json:"channels,omitempty"`
 }
 
 func (p *DantePeer) MarshalJSON() ([]byte, error) {
 	type peerJSON struct {
-		Node     *Node             `json:"node"`
-		Channels []string          `json:"channels,omitempty"`
-		Status   map[string]string `json:"status,omitempty"`
+		Node     *Node           `json:"node"`
+		Channels []*DanteChannel `json:"channels,omitempty"`
 	}
 	nodeRef := &Node{
 		ID:         p.Node.ID,
@@ -509,7 +569,6 @@ func (p *DantePeer) MarshalJSON() ([]byte, error) {
 	return json.Marshal(peerJSON{
 		Node:     nodeRef,
 		Channels: p.Channels,
-		Status:   p.Status,
 	})
 }
 

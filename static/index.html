@@ -1893,6 +1893,13 @@
 
             const danteNodes = new Map();
 
+            const formatDanteChannel = (ch) => {
+                let str = ch.tx_channel + ' → ' + String(ch.rx_channel).padStart(2, '0');
+                if (ch.type) str += ' [' + ch.type + ']';
+                if (ch.status === 'no-source') str += ' ⚠';
+                return str;
+            };
+
             nodes.forEach(node => {
                 const nodeId = node.id;
                 const danteTx = node.dante_flows?.tx || [];
@@ -1902,14 +1909,14 @@
 
                 const txTo = danteTx.map(peer => {
                     const peerName = getShortLabel(peer.node);
-                    const channels = peer.channels || [];
+                    const channels = (peer.channels || []).map(formatDanteChannel);
                     const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
                     return peerName + channelSummary;
                 });
 
                 const rxFrom = danteRx.map(peer => {
                     const peerName = getShortLabel(peer.node);
-                    const channels = peer.channels || [];
+                    const channels = (peer.channels || []).map(formatDanteChannel);
                     const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
                     return peerName + channelSummary;
                 });
