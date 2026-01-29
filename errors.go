@@ -239,26 +239,37 @@ func (e *ErrorTracker) clearAllErrorsLocked() bool {
 	return had
 }
 
-func (e *ErrorTracker) GetErrors() []*PortError {
+func (e *ErrorTracker) GetErrors() []*Error {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	errors := make([]*PortError, 0, len(e.errors))
+	errors := make([]*Error, 0, len(e.errors))
 	for _, err := range e.errors {
-		errors = append(errors, err)
+		errors = append(errors, &Error{
+			ID:          err.ID,
+			NodeTypeID:  err.NodeTypeID,
+			NodeName:    err.NodeName,
+			Type:        string(err.ErrorType),
+			Port:        err.PortName,
+			InErrors:    err.InErrors,
+			OutErrors:   err.OutErrors,
+			InDelta:     err.InDelta,
+			OutDelta:    err.OutDelta,
+			Utilization: err.Utilization,
+		})
 	}
 	return errors
 }
 
-func (e *ErrorTracker) GetUnreachableNodes() []string {
+func (e *ErrorTracker) GetUnreachableNodeSet() map[string]bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	nodes := make([]string, 0, len(e.unreachableNodes))
+	result := map[string]bool{}
 	for nodeTypeID := range e.unreachableNodes {
-		nodes = append(nodes, nodeTypeID)
+		result[nodeTypeID] = true
 	}
-	return nodes
+	return result
 }
 
 func (e *ErrorTracker) SetUnreachable(node *Node) bool {

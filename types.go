@@ -140,7 +140,21 @@ type Node struct {
 	PoEBudget          *PoEBudget        `json:"poe_budget,omitempty"`
 	IsDanteClockMaster bool              `json:"is_dante_clock_master,omitempty"`
 	DanteTxChannels    string            `json:"dante_tx_channels,omitempty"`
+	MulticastGroups    []string          `json:"multicast_groups,omitempty"`
+	ArtNetInputs       []int             `json:"artnet_inputs,omitempty"`
+	ArtNetOutputs      []int             `json:"artnet_outputs,omitempty"`
+	SACNInputs         []int             `json:"sacn_inputs,omitempty"`
+	SACNOutputs        []int             `json:"sacn_outputs,omitempty"`
+	DanteTx            []*DantePeer      `json:"dante_tx,omitempty"`
+	DanteRx            []*DantePeer      `json:"dante_rx,omitempty"`
+	Unreachable        bool              `json:"unreachable,omitempty"`
 	pollTrigger        chan struct{}
+}
+
+type DantePeer struct {
+	Node     *Node             `json:"node"`
+	Channels []string          `json:"channels,omitempty"`
+	Status   map[string]string `json:"status,omitempty"`
 }
 
 func (n *Node) WithInterface(ifaceKey string) *Node {

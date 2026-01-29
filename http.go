@@ -25,16 +25,24 @@ const (
 )
 
 type StatusResponse struct {
-	Config           *Config                  `json:"config"`
-	Nodes            []*Node                  `json:"nodes"`
-	Links            []*Link                  `json:"links"`
-	MulticastGroups  []*MulticastGroupMembers `json:"multicast_groups"`
-	ArtNetNodes      []*ArtNetNode            `json:"artnet_nodes"`
-	SACNNodes        []*SACNNode              `json:"sacn_nodes"`
-	DanteFlows       []*DanteFlow             `json:"dante_flows"`
-	PortErrors       []*PortError             `json:"port_errors"`
-	UnreachableNodes []string                 `json:"unreachable_nodes"`
-	BroadcastStats   *BroadcastStatsResponse  `json:"broadcast_stats,omitempty"`
+	Config         *Config                 `json:"config"`
+	Nodes          []*Node                 `json:"nodes"`
+	Links          []*Link                 `json:"links"`
+	Errors         []*Error                `json:"errors,omitempty"`
+	BroadcastStats *BroadcastStatsResponse `json:"broadcast_stats,omitempty"`
+}
+
+type Error struct {
+	ID          string  `json:"id"`
+	NodeTypeID  string  `json:"node_typeid"`
+	NodeName    string  `json:"node_name"`
+	Type        string  `json:"type"`
+	Port        string  `json:"port,omitempty"`
+	InErrors    uint64  `json:"in_errors,omitempty"`
+	OutErrors   uint64  `json:"out_errors,omitempty"`
+	InDelta     uint64  `json:"in_delta,omitempty"`
+	OutDelta    uint64  `json:"out_delta,omitempty"`
+	Utilization float64 `json:"utilization,omitempty"`
 }
 
 func (t *Tendrils) startHTTPServer() {
@@ -135,16 +143,11 @@ func (t *Tendrils) GetStatus() *StatusResponse {
 		config = &Config{}
 	}
 	return &StatusResponse{
-		Config:           config,
-		Nodes:            t.getNodes(),
-		Links:            t.getLinks(),
-		MulticastGroups:  t.getMulticastGroups(),
-		ArtNetNodes:      t.getArtNetNodes(),
-		SACNNodes:        t.getSACNNodes(),
-		DanteFlows:       t.getDanteFlows(),
-		PortErrors:       t.errors.GetErrors(),
-		UnreachableNodes: t.errors.GetUnreachableNodes(),
-		BroadcastStats:   broadcastStats,
+		Config:         config,
+		Nodes:          t.getNodes(),
+		Links:          t.getLinks(),
+		Errors:         t.errors.GetErrors(),
+		BroadcastStats: broadcastStats,
 	}
 }
 
@@ -220,13 +223,41 @@ func (t *Tendrils) handleAPIStatusStream(w http.ResponseWriter, r *http.Request)
 }
 
 func (t *Tendrils) getNodes() []*Node {
+	t.nodes.mu.Lock()
+	t.nodes.expireMulticastMemberships()
+	t.nodes.mu.Unlock()
+
+	t.artnet.Expire()
+	t.sacnSources.Expire()
+	t.danteFlows.Expire()
+
 	t.nodes.mu.RLock()
 	defer t.nodes.mu.RUnlock()
 
+	multicastByNode := t.buildMulticastByNode()
+	artnetByNode := t.buildArtNetByNode()
+	sacnByNode := t.buildSACNByNode()
+	danteTxByNode, danteRxByNode := t.buildDanteByNode()
+	unreachableNodes := t.errors.GetUnreachableNodeSet()
+
 	nodes := make([]*Node, 0, len(t.nodes.nodes))
 	for _, node := range t.nodes.nodes {
-		nodes = append(nodes, node)
+		nodeCopy := *node
+		nodeCopy.MulticastGroups = multicastByNode[node]
+		if artnet := artnetByNode[node]; artnet != nil {
+			nodeCopy.ArtNetInputs = artnet.Inputs
+			nodeCopy.ArtNetOutputs = artnet.Outputs
+		}
+		if sacn := sacnByNode[node]; sacn != nil {
+			nodeCopy.SACNInputs = sacn.Inputs
+			nodeCopy.SACNOutputs = sacn.Outputs
+		}
+		nodeCopy.DanteTx = danteTxByNode[node]
+		nodeCopy.DanteRx = danteRxByNode[node]
+		nodeCopy.Unreachable = unreachableNodes[node.TypeID]
+		nodes = append(nodes, &nodeCopy)
 	}
+
 	sort.Slice(nodes, func(i, j int) bool {
 		if nodes[i].DisplayName() != nodes[j].DisplayName() {
 			return sortorder.NaturalLess(nodes[i].DisplayName(), nodes[j].DisplayName())
@@ -238,6 +269,151 @@ func (t *Tendrils) getNodes() []*Node {
 	})
 
 	return nodes
+}
+
+func (t *Tendrils) buildMulticastByNode() map[*Node][]string {
+	result := map[*Node][]string{}
+	for _, gm := range t.nodes.multicastGroups {
+		for _, membership := range gm.Members {
+			if membership.Node != nil {
+				result[membership.Node] = append(result[membership.Node], gm.Group.Name)
+			}
+		}
+	}
+	for node, groups := range result {
+		sort.Strings(groups)
+		result[node] = groups
+	}
+	return result
+}
+
+type artnetNodeData struct {
+	Inputs  []int
+	Outputs []int
+}
+
+func (t *Tendrils) buildArtNetByNode() map[*Node]*artnetNodeData {
+	t.artnet.mu.RLock()
+	defer t.artnet.mu.RUnlock()
+
+	result := map[*Node]*artnetNodeData{}
+	for _, an := range t.artnet.nodes {
+		inputs := make([]int, len(an.Inputs))
+		for i, u := range an.Inputs {
+			inputs[i] = int(u)
+		}
+		outputs := make([]int, len(an.Outputs))
+		for i, u := range an.Outputs {
+			outputs[i] = int(u)
+		}
+		sort.Ints(inputs)
+		sort.Ints(outputs)
+		result[an.Node] = &artnetNodeData{Inputs: inputs, Outputs: outputs}
+	}
+	return result
+}
+
+type sacnNodeData struct {
+	Inputs  []int
+	Outputs []int
+}
+
+func (t *Tendrils) buildSACNByNode() map[*Node]*sacnNodeData {
+	result := map[*Node]*sacnNodeData{}
+
+	for _, gm := range t.nodes.multicastGroups {
+		if len(gm.Group.Name) < 5 || gm.Group.Name[:5] != "sacn:" {
+			continue
+		}
+		var universe int
+		if _, err := fmt.Sscanf(gm.Group.Name, "sacn:%d", &universe); err != nil {
+			continue
+		}
+		for _, membership := range gm.Members {
+			if membership.Node == nil {
+				continue
+			}
+			data := result[membership.Node]
+			if data == nil {
+				data = &sacnNodeData{}
+				result[membership.Node] = data
+			}
+			if !containsInt(data.Inputs, universe) {
+				data.Inputs = append(data.Inputs, universe)
+			}
+		}
+	}
+
+	t.sacnSources.mu.RLock()
+	for _, source := range t.sacnSources.sources {
+		if source.SrcIP == nil {
+			continue
+		}
+		node := t.nodes.getByIPLocked(source.SrcIP)
+		if node == nil {
+			continue
+		}
+		data := result[node]
+		if data == nil {
+			data = &sacnNodeData{}
+			result[node] = data
+		}
+		for _, u := range source.Universes {
+			if !containsInt(data.Outputs, u) {
+				data.Outputs = append(data.Outputs, u)
+			}
+		}
+	}
+	t.sacnSources.mu.RUnlock()
+
+	for _, data := range result {
+		sort.Ints(data.Inputs)
+		sort.Ints(data.Outputs)
+	}
+
+	return result
+}
+
+func (t *Tendrils) buildDanteByNode() (map[*Node][]*DantePeer, map[*Node][]*DantePeer) {
+	t.danteFlows.mu.RLock()
+	defer t.danteFlows.mu.RUnlock()
+
+	txByNode := map[*Node][]*DantePeer{}
+	rxByNode := map[*Node][]*DantePeer{}
+
+	for source, flow := range t.danteFlows.flows {
+		for subNode, sub := range flow.Subscribers {
+			status := map[string]string{}
+			for ch, st := range sub.ChannelStatus {
+				status[ch] = st.String()
+			}
+			txByNode[source] = append(txByNode[source], &DantePeer{
+				Node:     subNode,
+				Channels: sub.Channels,
+				Status:   status,
+			})
+			rxByNode[subNode] = append(rxByNode[subNode], &DantePeer{
+				Node:     source,
+				Channels: sub.Channels,
+				Status:   status,
+			})
+		}
+	}
+
+	for node, peers := range txByNode {
+		sort.Slice(peers, func(i, j int) bool {
+			return sortorder.NaturalLess(peers[i].Node.DisplayName(), peers[j].Node.DisplayName())
+		})
+		txByNode[node] = peers
+	}
+	for node, peers := range rxByNode {
+		sort.Slice(peers, func(i, j int) bool {
+			return sortorder.NaturalLess(peers[i].Node.DisplayName(), peers[j].Node.DisplayName())
+		})
+		rxByNode[node] = peers
+	}
+
+	return txByNode, rxByNode
 }
 
 func (t *Tendrils) getLinks() []*Link {
@@ -259,57 +435,4 @@ func (t *Tendrils) getLinks() []*Link {
 	})
 
 	return links
-}
-
-func (t *Tendrils) getMulticastGroups() []*MulticastGroupMembers {
-	t.nodes.mu.Lock()
-	t.nodes.expireMulticastMemberships()
-	t.nodes.mu.Unlock()
-
-	t.nodes.mu.RLock()
-	defer t.nodes.mu.RUnlock()
-
-	groups := make([]*MulticastGroupMembers, 0, len(t.nodes.multicastGroups))
-	for _, gm := range t.nodes.multicastGroups {
-		groups = append(groups, gm)
-	}
-	sort.Slice(groups, func(i, j int) bool {
-		return sortorder.NaturalLess(groups[i].Group.Name, groups[j].Group.Name)
-	})
-
-	return groups
-}
-
-func (t *Tendrils) getArtNetNodes() []*ArtNetNode {
-	t.artnet.Expire()
-
-	t.artnet.mu.RLock()
-	defer t.artnet.mu.RUnlock()
-
-	nodes := make([]*ArtNetNode, 0, len(t.artnet.nodes))
-	for _, node := range t.artnet.nodes {
-		nodes = append(nodes, node)
-	}
-	sort.Slice(nodes, func(i, j int) bool {
-		return sortorder.NaturalLess(nodes[i].Node.DisplayName(), nodes[j].Node.DisplayName())
-	})
-
-	return nodes
-}
-
-func (t *Tendrils) getDanteFlows() []*DanteFlow {
-	t.danteFlows.Expire()
-
-	t.danteFlows.mu.RLock()
-	defer t.danteFlows.mu.RUnlock()
-
-	flows := make([]*DanteFlow, 0, len(t.danteFlows.flows))
-	for _, flow := range t.danteFlows.flows {
-		flows = append(flows, flow)
-	}
-	sort.Slice(flows, func(i, j int) bool {
-		return sortorder.NaturalLess(flows[i].Source.DisplayName(), flows[j].Source.DisplayName())
-	})
-
-	return flows
 }

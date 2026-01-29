@@ -1690,15 +1690,15 @@
                 nodeEl.addEventListener('click', () => scrollToNode(err.node_typeid));
                 item.appendChild(nodeEl);
 
-                if (err.error_type === 'unreachable') {
+                if (err.type === 'unreachable') {
                     const typeEl = document.createElement('div');
                     typeEl.className = 'error-type';
                     typeEl.textContent = 'Unreachable';
                     item.appendChild(typeEl);
-                } else if (err.error_type === 'high_utilization') {
+                } else if (err.type === 'high_utilization') {
                     const portEl = document.createElement('div');
                     portEl.className = 'error-port';
-                    portEl.textContent = 'Port: ' + err.port_name;
+                    portEl.textContent = 'Port: ' + err.port;
                     item.appendChild(portEl);
 
                     const countsEl = document.createElement('div');
@@ -1713,7 +1713,7 @@
                 } else {
                     const portEl = document.createElement('div');
                     portEl.className = 'error-port';
-                    portEl.textContent = 'Port: ' + err.port_name;
+                    portEl.textContent = 'Port: ' + err.port;
                     item.appendChild(portEl);
 
                     const countsEl = document.createElement('div');
@@ -1723,7 +1723,7 @@
 
                     const typeEl = document.createElement('div');
                     typeEl.className = 'error-type';
-                    typeEl.textContent = err.error_type === 'startup' ? 'Present at startup' : 'New errors detected';
+                    typeEl.textContent = err.type === 'startup' ? 'Present at startup' : 'New errors detected';
                     item.appendChild(typeEl);
                 }
 
@@ -1806,9 +1806,9 @@
             const nodes = data.nodes || [];
             const links = data.links || [];
 
-            portErrors = data.port_errors || [];
-            const unreachableNodeIds = new Set(data.unreachable_nodes || []);
-            const errorNodeIds = new Set(portErrors.filter(e => e.error_type !== 'unreachable').map(e => e.node_typeid));
+            portErrors = data.errors || [];
+            const unreachableNodeIds = new Set(nodes.filter(n => n.unreachable).map(n => n.typeid));
+            const errorNodeIds = new Set(portErrors.filter(e => e.type !== 'unreachable').map(e => e.node_typeid));
 
 
             const locationTree = buildLocationTree(config.locations || [], null);
@@ -1891,52 +1891,40 @@
                 }
             });
 
-            const danteFlows = data.dante_flows || [];
             const danteNodes = new Map();
 
-            danteFlows.forEach(flow => {
-                const sourceId = flow.source?.typeid;
-                if (!sourceId) return;
+            nodes.forEach(node => {
+                const nodeId = node.typeid;
+                const danteTx = node.dante_tx || [];
+                const danteRx = node.dante_rx || [];
 
-                if (!danteNodes.has(sourceId)) {
-                    danteNodes.set(sourceId, { isTx: false, isRx: false, txTo: [], rxFrom: [] });
-                }
-                const sourceInfo = danteNodes.get(sourceId);
-                sourceInfo.isTx = true;
+                if (danteTx.length === 0 && danteRx.length === 0) return;
 
-                (flow.subscribers || []).forEach(sub => {
-                    const subId = sub.node?.typeid;
-                    if (!subId) return;
-
-                    const subName = getShortLabel(sub.node);
-                    const channels = sub.channels || [];
+                const txTo = danteTx.map(peer => {
+                    const peerName = getShortLabel(peer.node);
+                    const channels = peer.channels || [];
                     const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
-                    const txEntry = subName + channelSummary;
-                    if (!sourceInfo.txTo.some(e => e.startsWith(subName))) {
-                        sourceInfo.txTo.push(txEntry);
-                    }
+                    return peerName + channelSummary;
+                });
 
-                    if (!danteNodes.has(subId)) {
-                        danteNodes.set(subId, { isTx: false, isRx: false, txTo: [], rxFrom: [] });
-                    }
-                    const subInfo = danteNodes.get(subId);
-                    subInfo.isRx = true;
+                const rxFrom = danteRx.map(peer => {
+                    const peerName = getShortLabel(peer.node);
+                    const channels = peer.channels || [];
+                    const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
+                    return peerName + channelSummary;
+                });
 
-                    const sourceName = getShortLabel(flow.source);
-                    const rxChannelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
-                    const rxEntry = sourceName + rxChannelSummary;
-                    if (!subInfo.rxFrom.some(e => e.startsWith(sourceName))) {
-                        subInfo.rxFrom.push(rxEntry);
-                    }
+                txTo.sort((a, b) => a.split('\n')[0].localeCompare(b.split('\n')[0]));
+                rxFrom.sort((a, b) => a.split('\n')[0].localeCompare(b.split('\n')[0]));
+
+                danteNodes.set(nodeId, {
+                    isTx: danteTx.length > 0,
+                    isRx: danteRx.length > 0,
+                    txTo: txTo,
+                    rxFrom: rxFrom
                 });
             });
 
-            danteNodes.forEach(info => {
-                info.txTo.sort((a, b) => a.split('\n')[0].localeCompare(b.split('\n')[0]));
-                info.rxFrom.sort((a, b) => a.split('\n')[0].localeCompare(b.split('\n')[0]));
-            });
-
-            const artnetData = data.artnet_nodes || [];
             const artnetNodes = new Map();
 
             const formatUniverse = (u) => {
@@ -1949,13 +1937,13 @@
             const universeInputs = new Map();
             const universeOutputs = new Map();
 
-            artnetData.forEach(an => {
-                const name = getShortLabel(an.node);
-                (an.inputs || []).forEach(u => {
+            nodes.forEach(node => {
+                const name = getShortLabel(node);
+                (node.artnet_inputs || []).forEach(u => {
                     if (!universeInputs.has(u)) universeInputs.set(u, []);
                     universeInputs.get(u).push(name);
                 });
-                (an.outputs || []).forEach(u => {
+                (node.artnet_outputs || []).forEach(u => {
                     if (!universeOutputs.has(u)) universeOutputs.set(u, []);
                     universeOutputs.get(u).push(name);
                 });
@@ -1967,11 +1955,14 @@
                 return Object.entries(counts).map(([name, count]) => count > 1 ? name + ' x' + count : name);
             };
 
-            artnetData.forEach(an => {
-                const nodeId = an.node?.typeid;
-                if (!nodeId) return;
+            nodes.forEach(node => {
+                const nodeId = node.typeid;
+                const artnetInputs = node.artnet_inputs || [];
+                const artnetOutputs = node.artnet_outputs || [];
 
-                const inputs = (an.inputs || []).slice().sort((a, b) => a - b).map(u => {
+                if (artnetInputs.length === 0 && artnetOutputs.length === 0) return;
+
+                const inputs = artnetInputs.slice().sort((a, b) => a - b).map(u => {
                     const sources = collapseNames(universeOutputs.get(u) || []);
                     const uniStr = formatUniverse(u);
                     if (sources.length > 0) {
@@ -1979,7 +1970,7 @@
                     }
                     return { display: uniStr, firstTarget: null };
                 });
-                const outputs = (an.outputs || []).slice().sort((a, b) => a - b).map(u => {
+                const outputs = artnetOutputs.slice().sort((a, b) => a - b).map(u => {
                     const dests = collapseNames(universeInputs.get(u) || []);
                     const uniStr = formatUniverse(u);
                     if (dests.length > 0) {
@@ -1996,19 +1987,18 @@
                 });
             });
 
-            const sacnData = data.sacn_nodes || [];
             const sacnNodes = new Map();
 
             const sacnUniverseInputs = new Map();
             const sacnUniverseOutputs = new Map();
 
-            sacnData.forEach(sn => {
-                const name = getShortLabel(sn.node);
-                (sn.inputs || []).forEach(u => {
+            nodes.forEach(node => {
+                const name = getShortLabel(node);
+                (node.sacn_inputs || []).forEach(u => {
                     if (!sacnUniverseInputs.has(u)) sacnUniverseInputs.set(u, []);
                     sacnUniverseInputs.get(u).push(name);
                 });
-                (sn.outputs || []).forEach(u => {
+                (node.sacn_outputs || []).forEach(u => {
                     if (!sacnUniverseOutputs.has(u)) sacnUniverseOutputs.set(u, []);
                     sacnUniverseOutputs.get(u).push(name);
                 });
@@ -2020,18 +2010,21 @@
                 return Object.entries(counts).map(([name, count]) => count > 1 ? name + ' x' + count : name);
             };
 
-            sacnData.forEach(sn => {
-                const nodeId = sn.node?.typeid;
-                if (!nodeId) return;
+            nodes.forEach(node => {
+                const nodeId = node.typeid;
+                const sacnInputs = node.sacn_inputs || [];
+                const sacnOutputs = node.sacn_outputs || [];
 
-                const inputs = (sn.inputs || []).slice().sort((a, b) => a - b).map(u => {
+                if (sacnInputs.length === 0 && sacnOutputs.length === 0) return;
+
+                const inputs = sacnInputs.slice().sort((a, b) => a - b).map(u => {
                     const sources = sacnCollapseNames(sacnUniverseOutputs.get(u) || []);
                     if (sources.length > 0) {
                         return { display: sources[0] + ' [' + u + ']', firstTarget: sources[0] };
                     }
                     return { display: String(u), firstTarget: null };
                 });
-                const outputs = (sn.outputs || []).slice().sort((a, b) => a - b).map(u => {
+                const outputs = sacnOutputs.slice().sort((a, b) => a - b).map(u => {
                     const dests = sacnCollapseNames(sacnUniverseInputs.get(u) || []);
                     if (dests.length > 0) {
                         return { display: dests[0] + ' [' + u + ']', firstTarget: dests[0] };
