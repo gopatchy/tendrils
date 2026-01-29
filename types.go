@@ -266,5 +266,14 @@ func (n *Node) FirstMAC() string {
 			return string(iface.MAC)
 		}
 	}
-	return "??"
+	return ""
+}
+
+func (n *Node) FirstIP() string {
+	for _, iface := range n.Interfaces {
+		for ip := range iface.IPs {
+			return ip
+		}
+	}
+	return ""
 }

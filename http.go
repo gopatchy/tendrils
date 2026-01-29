@@ -228,7 +228,13 @@ func (t *Tendrils) getNodes() []*Node {
 		nodes = append(nodes, node)
 	}
 	sort.Slice(nodes, func(i, j int) bool {
-		return sortorder.NaturalLess(nodes[i].DisplayName(), nodes[j].DisplayName())
+		if nodes[i].DisplayName() != nodes[j].DisplayName() {
+			return sortorder.NaturalLess(nodes[i].DisplayName(), nodes[j].DisplayName())
+		}
+		if nodes[i].FirstIP() != nodes[j].FirstIP() {
+			return sortorder.NaturalLess(nodes[i].FirstIP(), nodes[j].FirstIP())
+		}
+		return sortorder.NaturalLess(nodes[i].FirstMAC(), nodes[j].FirstMAC())
 	})
 
 	return nodes
