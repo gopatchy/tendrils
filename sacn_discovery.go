@@ -5,12 +5,10 @@ import (
 	"encoding/binary"
 	"log"
 	"net"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/fvbommel/sortorder"
 	"golang.org/x/net/ipv4"
 )
 
@@ -28,12 +26,11 @@ var sacnPacketIdentifier = [12]byte{
 }
 
 type SACNSource struct {
-	TypeID     string    `json:"typeid"`
-	Node       *Node     `json:"node"`
-	SourceName string    `json:"source_name"`
-	CID        string    `json:"cid"`
-	Universes  []int     `json:"universes"`
-	LastSeen   time.Time `json:"last_seen"`
+	CID        string
+	SourceName string
+	Universes  []int
+	SrcIP      net.IP
+	LastSeen   time.Time
 }
 
 type SACNSources struct {
@@ -56,25 +53,29 @@ func (s *SACNSources) Update(cid [16]byte, sourceName string, universes []int, s
 	if exists {
 		existing.SourceName = sourceName
 		existing.Universes = universes
+		existing.SrcIP = srcIP
 		existing.LastSeen = time.Now()
 	} else {
 		s.sources[cidStr] = &SACNSource{
-			TypeID:     newTypeID("sacnsource"),
-			SourceName: sourceName,
 			CID:        cidStr,
+			SourceName: sourceName,
 			Universes:  universes,
+			SrcIP:      srcIP,
 			LastSeen:   time.Now(),
 		}
 	}
 }
 
-func (s *SACNSources) SetNode(cid string, node *Node) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *SACNSources) GetByIP(ip net.IP) *SACNSource {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	if source, exists := s.sources[cid]; exists {
-		source.Node = node
+	for _, source := range s.sources {
+		if source.SrcIP != nil && source.SrcIP.Equal(ip) {
+			return source
+		}
 	}
+	return nil
 }
 
 func (s *SACNSources) Expire() {
@@ -154,7 +155,7 @@ func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Int
 		}
 
 		c.SetReadDeadline(time.Now().Add(1 * time.Second))
-		n, _, err := c.ReadFrom(buf)
+		n, src, err := c.ReadFrom(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
@@ -162,11 +163,16 @@ func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Int
 			continue
 		}
 
-		t.handleSACNDiscoveryPacket(buf[:n])
+		var srcIP net.IP
+		if udpAddr, ok := src.(*net.UDPAddr); ok {
+			srcIP = udpAddr.IP
+		}
+
+		t.handleSACNDiscoveryPacket(buf[:n], srcIP)
 	}
 }
 
-func (t *Tendrils) handleSACNDiscoveryPacket(data []byte) {
+func (t *Tendrils) handleSACNDiscoveryPacket(data []byte, srcIP net.IP) {
 	if len(data) < 120 {
 		return
 	}
@@ -206,20 +212,14 @@ func (t *Tendrils) handleSACNDiscoveryPacket(data []byte) {
 	}
 
 	if t.DebugSACN {
-		log.Printf("[sacn] discovery from %q cid=%s universes=%v", sourceName, formatCID(cid), universes)
+		log.Printf("[sacn] discovery from %q cid=%s ip=%s universes=%v", sourceName, formatCID(cid), srcIP, universes)
 	}
 
-	t.sacnSources.Update(cid, sourceName, universes, nil)
+	if srcIP != nil && sourceName != "" {
+		t.nodes.Update(nil, nil, []net.IP{srcIP}, "", sourceName, "sacn")
+	}
+
+	t.sacnSources.Update(cid, sourceName, universes, srcIP)
 	t.NotifyUpdate()
 }
 
-func (t *Tendrils) getSACNSources() []*SACNSource {
-	t.sacnSources.Expire()
-
-	sources := t.sacnSources.GetAll()
-	sort.Slice(sources, func(i, j int) bool {
-		return sortorder.NaturalLess(sources[i].SourceName, sources[j].SourceName)
-	})
-
-	return sources
-}

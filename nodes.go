@@ -445,6 +445,10 @@ func (n *Nodes) GetByIP(ip net.IP) *Node {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
+	return n.getByIPLocked(ip)
+}
+
+func (n *Nodes) getByIPLocked(ip net.IP) *Node {
 	if id, exists := n.ipIndex[ip.String()]; exists {
 		return n.nodes[id]
 	}

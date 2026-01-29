@@ -9,9 +9,10 @@ import (
 )
 
 type SACNNode struct {
-	TypeID    string `json:"typeid"`
-	Node      *Node  `json:"node"`
-	Universes []int  `json:"universes"`
+	TypeID  string `json:"typeid"`
+	Node    *Node  `json:"node"`
+	Inputs  []int  `json:"inputs,omitempty"`
+	Outputs []int  `json:"outputs,omitempty"`
 }
 
 func (t *Tendrils) getSACNNodes() []*SACNNode {
@@ -19,10 +20,13 @@ func (t *Tendrils) getSACNNodes() []*SACNNode {
 	t.nodes.expireMulticastMemberships()
 	t.nodes.mu.Unlock()
 
+	t.sacnSources.Expire()
+
 	t.nodes.mu.RLock()
 	defer t.nodes.mu.RUnlock()
 
-	nodeUniverses := map[*Node][]int{}
+	nodeInputs := map[*Node][]int{}
+	nodeOutputs := map[*Node][]int{}
 
 	for _, gm := range t.nodes.multicastGroups {
 		if !strings.HasPrefix(gm.Group.Name, "sacn:") {
@@ -38,20 +42,50 @@ func (t *Tendrils) getSACNNodes() []*SACNNode {
 			if membership.Node == nil {
 				continue
 			}
-			universes := nodeUniverses[membership.Node]
-			if !containsInt(universes, universe) {
-				nodeUniverses[membership.Node] = append(universes, universe)
+			inputs := nodeInputs[membership.Node]
+			if !containsInt(inputs, universe) {
+				nodeInputs[membership.Node] = append(inputs, universe)
 			}
 		}
 	}
 
-	result := make([]*SACNNode, 0, len(nodeUniverses))
-	for node, universes := range nodeUniverses {
-		sort.Ints(universes)
+	t.sacnSources.mu.RLock()
+	for _, source := range t.sacnSources.sources {
+		if source.SrcIP == nil {
+			continue
+		}
+		node := t.nodes.getByIPLocked(source.SrcIP)
+		if node == nil {
+			continue
+		}
+		for _, u := range source.Universes {
+			outputs := nodeOutputs[node]
+			if !containsInt(outputs, u) {
+				nodeOutputs[node] = append(outputs, u)
+			}
+		}
+	}
+	t.sacnSources.mu.RUnlock()
+
+	allNodes := map[*Node]bool{}
+	for node := range nodeInputs {
+		allNodes[node] = true
+	}
+	for node := range nodeOutputs {
+		allNodes[node] = true
+	}
+
+	result := make([]*SACNNode, 0, len(allNodes))
+	for node := range allNodes {
+		inputs := nodeInputs[node]
+		outputs := nodeOutputs[node]
+		sort.Ints(inputs)
+		sort.Ints(outputs)
 		result = append(result, &SACNNode{
-			TypeID:    newTypeID("sacnnode"),
-			Node:      node,
-			Universes: universes,
+			TypeID:  newTypeID("sacnnode"),
+			Node:    node,
+			Inputs:  inputs,
+			Outputs: outputs,
 		})
 	}
 
