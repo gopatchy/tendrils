@@ -2522,10 +2522,10 @@
                     upstream,
                     speed,
                     speedStr,
-                    inErrors: errors.in,
-                    outErrors: errors.out,
-                    inRate: rates.inBytes,
-                    outRate: rates.outBytes,
+                    inErrors: errors.out,
+                    outErrors: errors.in,
+                    inRate: rates.outBytes,
+                    outRate: rates.inBytes,
                     status: isUnreachable ? 'unreachable' : (errors.in + errors.out > 0 ? 'errors' : 'ok')
                 };
             });
