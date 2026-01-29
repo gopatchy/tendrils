@@ -2434,7 +2434,8 @@
                 }
                 va = String(va).toLowerCase();
                 vb = String(vb).toLowerCase();
-                return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+                const cmp = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+                return asc ? cmp : -cmp;
             });
         }
 
@@ -2626,11 +2627,11 @@
 
             nodes.forEach(node => {
                 const name = getLabel(node);
-                (node.artnet_outputs || []).forEach(u => {
+                (node.artnet_inputs || []).forEach(u => {
                     if (!txByUniverse.has(u)) txByUniverse.set(u, []);
                     txByUniverse.get(u).push(name);
                 });
-                (node.artnet_inputs || []).forEach(u => {
+                (node.artnet_outputs || []).forEach(u => {
                     if (!rxByUniverse.has(u)) rxByUniverse.set(u, []);
                     rxByUniverse.get(u).push(name);
                 });

@@ -22,11 +22,12 @@ func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Int
 		return
 	}
 
-	if t.DebugSACN {
-		log.Printf("[sacn] listening for discovery on %s", iface.Name)
-	}
+	// TODO: remove debug logging
+	log.Printf("[sacn] listening for discovery on %s", iface.Name)
 
 	receiver.SetHandler(func(src *net.UDPAddr, pkt interface{}) {
+		// TODO: remove debug logging
+		log.Printf("[sacn] received packet from %s", src)
 		if disc, ok := pkt.(*sacn.DiscoveryPacket); ok {
 			t.handleSACNDiscoveryPacket(src.IP, disc)
 		}
@@ -34,6 +35,8 @@ func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Int
 
 	receiver.Start()
 	<-ctx.Done()
+	// TODO: remove debug logging
+	log.Printf("[sacn] discovery listener exiting on %s", iface.Name)
 }
 
 func (t *Tendrils) handleSACNDiscoveryPacket(srcIP net.IP, pkt *sacn.DiscoveryPacket) {
