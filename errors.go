@@ -6,31 +6,29 @@ import (
 	"time"
 )
 
-type PortErrorType string
-
 const (
-	ErrorTypeStartup        PortErrorType = "startup"
-	ErrorTypeNew            PortErrorType = "new"
-	ErrorTypeUnreachable    PortErrorType = "unreachable"
-	ErrorTypeHighUtilization PortErrorType = "high_utilization"
+	ErrorTypeStartup         = "startup"
+	ErrorTypeNew             = "new"
+	ErrorTypeUnreachable     = "unreachable"
+	ErrorTypeHighUtilization = "high_utilization"
 )
 
-type PortError struct {
-	ID          string        `json:"id"`
-	NodeTypeID  string        `json:"node_typeid"`
-	NodeName    string        `json:"node_name"`
-	PortName    string        `json:"port_name"`
-	ErrorType   PortErrorType `json:"error_type"`
-	InErrors    uint64        `json:"in_errors"`
-	OutErrors   uint64        `json:"out_errors"`
-	InDelta     uint64        `json:"in_delta,omitempty"`
-	OutDelta    uint64        `json:"out_delta,omitempty"`
-	Utilization float64       `json:"utilization,omitempty"`
-	FirstSeen   time.Time     `json:"first_seen"`
-	LastUpdated time.Time     `json:"last_updated"`
+type Error struct {
+	ID          string    `json:"id"`
+	NodeTypeID  string    `json:"node_typeid"`
+	NodeName    string    `json:"node_name"`
+	Type        string    `json:"type"`
+	Port        string    `json:"port,omitempty"`
+	InErrors    uint64    `json:"in_errors,omitempty"`
+	OutErrors   uint64    `json:"out_errors,omitempty"`
+	InDelta     uint64    `json:"in_delta,omitempty"`
+	OutDelta    uint64    `json:"out_delta,omitempty"`
+	Utilization float64   `json:"utilization,omitempty"`
+	FirstSeen   time.Time `json:"first_seen,omitempty"`
+	LastUpdated time.Time `json:"last_updated,omitempty"`
 }
 
-type portErrorBaseline struct {
+type errorBaseline struct {
 	InErrors  uint64
 	OutErrors uint64
 	HasData   bool
@@ -38,8 +36,8 @@ type portErrorBaseline struct {
 
 type ErrorTracker struct {
 	mu                    sync.RWMutex
-	errors                map[string]*PortError
-	baselines             map[string]*portErrorBaseline
+	errors                map[string]*Error
+	baselines             map[string]*errorBaseline
 	suppressedUnreachable map[string]bool
 	unreachableNodes      map[string]bool
 	nextID                int
@@ -48,8 +46,8 @@ type ErrorTracker struct {
 
 func NewErrorTracker(t *Tendrils) *ErrorTracker {
 	return &ErrorTracker{
-		errors:                map[string]*PortError{},
-		baselines:             map[string]*portErrorBaseline{},
+		errors:                map[string]*Error{},
+		baselines:             map[string]*errorBaseline{},
 		suppressedUnreachable: map[string]bool{},
 		unreachableNodes:      map[string]bool{},
 		t:                     t,
@@ -107,12 +105,12 @@ func (e *ErrorTracker) checkUtilizationLocked(node *Node, portName string, stats
 	}
 
 	e.nextID++
-	e.errors[key] = &PortError{
+	e.errors[key] = &Error{
 		ID:          fmt.Sprintf("err-%d", e.nextID),
 		NodeTypeID:  node.TypeID,
 		NodeName:    node.DisplayName(),
-		PortName:    portName,
-		ErrorType:   ErrorTypeHighUtilization,
+		Port:        portName,
+		Type:        ErrorTypeHighUtilization,
 		Utilization: utilization,
 		FirstSeen:   now,
 		LastUpdated: now,
@@ -130,22 +128,22 @@ func (e *ErrorTracker) checkPortLocked(node *Node, portName string, stats *Inter
 	now := time.Now()
 
 	if baseline == nil || !baseline.HasData {
-		e.baselines[key] = &portErrorBaseline{
+		e.baselines[key] = &errorBaseline{
 			InErrors:  stats.InErrors,
 			OutErrors: stats.OutErrors,
 			HasData:   true,
 		}
 		if stats.InErrors > 0 || stats.OutErrors > 0 {
 			e.nextID++
-			e.errors[key] = &PortError{
-				ID:          fmt.Sprintf("err-%d", e.nextID),
-				NodeTypeID:  node.TypeID,
-				NodeName:    node.DisplayName(),
-				PortName:    portName,
-				ErrorType:   ErrorTypeStartup,
-				InErrors:    stats.InErrors,
-				OutErrors:   stats.OutErrors,
-				FirstSeen:   now,
+			e.errors[key] = &Error{
+				ID:         fmt.Sprintf("err-%d", e.nextID),
+				NodeTypeID: node.TypeID,
+				NodeName:   node.DisplayName(),
+				Port:       portName,
+				Type:       ErrorTypeStartup,
+				InErrors:   stats.InErrors,
+				OutErrors:  stats.OutErrors,
+				FirstSeen:  now,
 				LastUpdated: now,
 			}
 			return true
@@ -172,12 +170,12 @@ func (e *ErrorTracker) checkPortLocked(node *Node, portName string, stats *Inter
 			existing.LastUpdated = now
 		} else {
 			e.nextID++
-			e.errors[key] = &PortError{
+			e.errors[key] = &Error{
 				ID:          fmt.Sprintf("err-%d", e.nextID),
 				NodeTypeID:  node.TypeID,
 				NodeName:    node.DisplayName(),
-				PortName:    portName,
-				ErrorType:   ErrorTypeNew,
+				Port:        portName,
+				Type:        ErrorTypeNew,
 				InErrors:    stats.InErrors,
 				OutErrors:   stats.OutErrors,
 				InDelta:     inDelta,
@@ -208,7 +206,7 @@ func (e *ErrorTracker) clearErrorLocked(errorID string) bool {
 
 	for key, err := range e.errors {
 		if err.ID == errorID {
-			if err.ErrorType == ErrorTypeUnreachable {
+			if err.Type == ErrorTypeUnreachable {
 				e.suppressedUnreachable[key] = true
 			}
 			delete(e.errors, key)
@@ -231,11 +229,11 @@ func (e *ErrorTracker) clearAllErrorsLocked() bool {
 
 	had := len(e.errors) > 0
 	for key, err := range e.errors {
-		if err.ErrorType == ErrorTypeUnreachable {
+		if err.Type == ErrorTypeUnreachable {
 			e.suppressedUnreachable[key] = true
 		}
 	}
-	e.errors = map[string]*PortError{}
+	e.errors = map[string]*Error{}
 	return had
 }
 
@@ -245,18 +243,7 @@ func (e *ErrorTracker) GetErrors() []*Error {
 
 	errors := make([]*Error, 0, len(e.errors))
 	for _, err := range e.errors {
-		errors = append(errors, &Error{
-			ID:          err.ID,
-			NodeTypeID:  err.NodeTypeID,
-			NodeName:    err.NodeName,
-			Type:        string(err.ErrorType),
-			Port:        err.PortName,
-			InErrors:    err.InErrors,
-			OutErrors:   err.OutErrors,
-			InDelta:     err.InDelta,
-			OutDelta:    err.OutDelta,
-			Utilization: err.Utilization,
-		})
+		errors = append(errors, err)
 	}
 	return errors
 }
@@ -300,12 +287,11 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node) (changed bool, becameUnr
 
 	now := time.Now()
 	e.nextID++
-	e.errors[key] = &PortError{
+	e.errors[key] = &Error{
 		ID:          fmt.Sprintf("err-%d", e.nextID),
 		NodeTypeID:  node.TypeID,
 		NodeName:    node.DisplayName(),
-		PortName:    "",
-		ErrorType:   ErrorTypeUnreachable,
+		Type:        ErrorTypeUnreachable,
 		FirstSeen:   now,
 		LastUpdated: now,
 	}

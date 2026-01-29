@@ -32,18 +32,6 @@ type StatusResponse struct {
 	BroadcastStats *BroadcastStatsResponse `json:"broadcast_stats,omitempty"`
 }
 
-type Error struct {
-	ID          string  `json:"id"`
-	NodeTypeID  string  `json:"node_typeid"`
-	NodeName    string  `json:"node_name"`
-	Type        string  `json:"type"`
-	Port        string  `json:"port,omitempty"`
-	InErrors    uint64  `json:"in_errors,omitempty"`
-	OutErrors   uint64  `json:"out_errors,omitempty"`
-	InDelta     uint64  `json:"in_delta,omitempty"`
-	OutDelta    uint64  `json:"out_delta,omitempty"`
-	Utilization float64 `json:"utilization,omitempty"`
-}
 
 func (t *Tendrils) startHTTPServer() {
 	if err := ensureCert(); err != nil {
