@@ -169,7 +169,7 @@ func (t *Tendrils) pingNode(node *Node) {
 	if anyReachable {
 		t.ping.failures[nodeID] = 0
 		t.ping.mu.Unlock()
-		if t.errors.ClearUnreachable(node) {
+		if node.SetUnreachable(false) {
 			log.Printf("[ping] %s is now reachable", nodeName)
 		}
 	} else {
@@ -177,7 +177,7 @@ func (t *Tendrils) pingNode(node *Node) {
 		failures := t.ping.failures[nodeID]
 		t.ping.mu.Unlock()
 		if failures >= pingFailureThreshold {
-			if t.errors.SetUnreachable(node) {
+			if node.SetUnreachable(true) {
 				log.Printf("[ping] %s is now unreachable", nodeName)
 			}
 		}

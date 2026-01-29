@@ -226,11 +226,8 @@ func (t *Tendrils) handleAPIStatusStream(w http.ResponseWriter, r *http.Request)
 }
 
 func (t *Tendrils) getNodesLocked() []*Node {
-	unreachableNodes := t.errors.GetUnreachableNodeSet()
-
 	nodes := make([]*Node, 0, len(t.nodes.nodes))
 	for _, node := range t.nodes.nodes {
-		node.Unreachable = unreachableNodes[node.ID]
 		nodes = append(nodes, node)
 	}
 

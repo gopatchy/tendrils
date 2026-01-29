@@ -130,6 +130,7 @@ func (n *Nodes) createNode() *Node {
 		ID:          newID("node"),
 		Interfaces:  InterfaceMap{},
 		MACTable:    map[string]string{},
+		errors:      n.t.errors,
 		pollTrigger: make(chan struct{}, 1),
 	}
 	n.nodes = append(n.nodes, node)
@@ -456,6 +457,7 @@ func (n *Nodes) GetOrCreateByName(name string) *Node {
 		Names:       NameSet{name: true},
 		Interfaces:  InterfaceMap{},
 		MACTable:    map[string]string{},
+		errors:      n.t.errors,
 		pollTrigger: make(chan struct{}, 1),
 	}
 	n.nodes = append(n.nodes, node)

@@ -393,9 +393,74 @@ type Node struct {
 	DanteTx            []*DantePeer           `json:"dante_tx,omitempty"`
 	DanteRx            []*DantePeer           `json:"dante_rx,omitempty"`
 	Unreachable        bool                   `json:"unreachable,omitempty"`
+	errors             *ErrorTracker
 	pollTrigger        chan struct{}
 	cancelFunc         context.CancelFunc
 	danteLastSeen      time.Time
+}
+
+func (n *Node) SetUnreachable(unreachable bool) bool {
+	if n.Unreachable == unreachable {
+		return false
+	}
+	n.Unreachable = unreachable
+	if n.errors != nil {
+		if unreachable {
+			n.errors.AddUnreachable(n)
+		} else {
+			n.errors.RemoveUnreachable(n)
+		}
+	}
+	return true
+}
+
+func (n *Node) SetInterfaceStats(portName string, stats *InterfaceStats) {
+	iface := n.Interfaces[portName]
+	if iface == nil {
+		return
+	}
+
+	oldStats := iface.Stats
+	iface.Stats = stats
+
+	if n.errors == nil {
+		return
+	}
+
+	var inDelta, outDelta uint64
+	if oldStats != nil {
+		if stats.InErrors > oldStats.InErrors {
+			inDelta = stats.InErrors - oldStats.InErrors
+		}
+		if stats.OutErrors > oldStats.OutErrors {
+			outDelta = stats.OutErrors - oldStats.OutErrors
+		}
+	}
+	if inDelta > 0 || outDelta > 0 {
+		n.errors.AddPortError(n, portName, stats, inDelta, outDelta)
+	}
+
+	if stats.Speed > 0 {
+		maxBytesRate := stats.InBytesRate
+		if stats.OutBytesRate > maxBytesRate {
+			maxBytesRate = stats.OutBytesRate
+		}
+		speedBytes := float64(stats.Speed) / 8.0
+		utilization := (maxBytesRate / speedBytes) * 100.0
+
+		var oldUtilization float64
+		if oldStats != nil && oldStats.Speed > 0 {
+			oldMax := oldStats.InBytesRate
+			if oldStats.OutBytesRate > oldMax {
+				oldMax = oldStats.OutBytesRate
+			}
+			oldUtilization = (oldMax / (float64(oldStats.Speed) / 8.0)) * 100.0
+		}
+
+		if oldUtilization < 70.0 && utilization >= 70.0 {
+			n.errors.AddUtilizationError(n, portName, utilization)
+		}
+	}
 }
 
 func (n *Node) MACTableSize() int {

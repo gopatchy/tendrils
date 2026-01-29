@@ -284,9 +284,7 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 			stats.PoE = poe
 		}
 
-		iface.Stats = stats
-		t.errors.CheckPort(node, name, stats)
-		t.errors.CheckUtilization(node, name, stats)
+		node.SetInterfaceStats(name, stats)
 	}
 }
 
