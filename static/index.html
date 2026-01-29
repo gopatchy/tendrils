@@ -330,16 +330,16 @@
         }
 
         .data-table {
-            width: 100%;
             border-collapse: collapse;
             background: #222;
             border-radius: 8px;
             overflow: hidden;
             font-size: 11px;
+            margin: 0 auto;
         }
 
         .data-table th, .data-table td {
-            padding: 6px 10px;
+            padding: 6px 20px;
             text-align: left;
             border-bottom: 1px solid #333;
         }
@@ -2621,15 +2621,35 @@
 
         function renderArtnetTable() {
             const nodes = tableData.nodes || [];
-            let rows = [];
+            const txByUniverse = new Map();
+            const rxByUniverse = new Map();
+
             nodes.forEach(node => {
                 const name = getLabel(node);
-                (node.artnet_inputs || []).forEach(u => {
-                    rows.push({ node: name, direction: 'Input', universe: u, universeStr: formatUniverse(u) });
-                });
                 (node.artnet_outputs || []).forEach(u => {
-                    rows.push({ node: name, direction: 'Output', universe: u, universeStr: formatUniverse(u) });
+                    if (!txByUniverse.has(u)) txByUniverse.set(u, []);
+                    txByUniverse.get(u).push(name);
                 });
+                (node.artnet_inputs || []).forEach(u => {
+                    if (!rxByUniverse.has(u)) rxByUniverse.set(u, []);
+                    rxByUniverse.get(u).push(name);
+                });
+            });
+
+            const allUniverses = new Set([...txByUniverse.keys(), ...rxByUniverse.keys()]);
+            let rows = [];
+            allUniverses.forEach(u => {
+                const txNodes = txByUniverse.get(u) || [];
+                const rxNodes = rxByUniverse.get(u) || [];
+                const maxLen = Math.max(txNodes.length, rxNodes.length, 1);
+                for (let i = 0; i < maxLen; i++) {
+                    rows.push({
+                        universe: u,
+                        universeStr: formatUniverse(u),
+                        tx: txNodes[i] || '',
+                        rx: rxNodes[i] || ''
+                    });
+                }
             });
 
             if (tableSortColumn) {
@@ -2637,16 +2657,16 @@
             }
 
             let html = '<table class="data-table"><thead><tr>';
-            html += '<th data-sort="node">Node</th>';
-            html += '<th data-sort="direction">Direction</th>';
+            html += '<th data-sort="tx">TX</th>';
             html += '<th data-sort="universe">Universe</th>';
+            html += '<th data-sort="rx">RX</th>';
             html += '</tr></thead><tbody>';
 
             rows.forEach(r => {
                 html += '<tr>';
-                html += '<td>' + escapeHtml(r.node) + '</td>';
-                html += '<td>' + r.direction + '</td>';
+                html += '<td>' + escapeHtml(r.tx) + '</td>';
                 html += '<td>' + r.universeStr + '</td>';
+                html += '<td>' + escapeHtml(r.rx) + '</td>';
                 html += '</tr>';
             });
 
@@ -2656,22 +2676,39 @@
 
         function renderSacnTable() {
             const nodes = tableData.nodes || [];
-            let rows = [];
+            const txByUniverse = new Map();
+            const rxByUniverse = new Map();
+
             nodes.forEach(node => {
                 const name = getLabel(node);
-                const inputs = [];
+                (node.sacn_outputs || []).forEach(u => {
+                    if (!txByUniverse.has(u)) txByUniverse.set(u, []);
+                    txByUniverse.get(u).push(name);
+                });
                 (node.multicast_groups || []).forEach(g => {
                     if (typeof g === 'string' && g.startsWith('sacn:')) {
                         const u = parseInt(g.substring(5), 10);
-                        if (!isNaN(u)) inputs.push(u);
+                        if (!isNaN(u)) {
+                            if (!rxByUniverse.has(u)) rxByUniverse.set(u, []);
+                            rxByUniverse.get(u).push(name);
+                        }
                     }
                 });
-                inputs.forEach(u => {
-                    rows.push({ node: name, direction: 'Input', universe: u });
-                });
-                (node.sacn_outputs || []).forEach(u => {
-                    rows.push({ node: name, direction: 'Output', universe: u });
-                });
+            });
+
+            const allUniverses = new Set([...txByUniverse.keys(), ...rxByUniverse.keys()]);
+            let rows = [];
+            allUniverses.forEach(u => {
+                const txNodes = txByUniverse.get(u) || [];
+                const rxNodes = rxByUniverse.get(u) || [];
+                const maxLen = Math.max(txNodes.length, rxNodes.length, 1);
+                for (let i = 0; i < maxLen; i++) {
+                    rows.push({
+                        universe: u,
+                        tx: txNodes[i] || '',
+                        rx: rxNodes[i] || ''
+                    });
+                }
             });
 
             if (tableSortColumn) {
@@ -2679,16 +2716,16 @@
             }
 
             let html = '<table class="data-table"><thead><tr>';
-            html += '<th data-sort="node">Node</th>';
-            html += '<th data-sort="direction">Direction</th>';
+            html += '<th data-sort="tx">TX</th>';
             html += '<th data-sort="universe">Universe</th>';
+            html += '<th data-sort="rx">RX</th>';
             html += '</tr></thead><tbody>';
 
             rows.forEach(r => {
                 html += '<tr>';
-                html += '<td>' + escapeHtml(r.node) + '</td>';
-                html += '<td>' + r.direction + '</td>';
+                html += '<td>' + escapeHtml(r.tx) + '</td>';
                 html += '<td class="numeric">' + r.universe + '</td>';
+                html += '<td>' + escapeHtml(r.rx) + '</td>';
                 html += '</tr>';
             });
 
