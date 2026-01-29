@@ -1231,10 +1231,10 @@
         }
 
         function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable) {
-            let div = nodeElements.get(node.typeid);
+            let div = nodeElements.get(node.id);
             if (!div) {
                 div = document.createElement('div');
-                div.dataset.typeid = node.typeid;
+                div.dataset.id = node.id;
                 div.addEventListener('click', () => {
                     const nodeData = div._nodeData;
                     if (!nodeData) return;
@@ -1244,7 +1244,7 @@
                         setTimeout(() => div.classList.remove('copied'), 300);
                     });
                 });
-                nodeElements.set(node.typeid, div);
+                nodeElements.set(node.id, div);
             }
             div._nodeData = node;
 
@@ -1590,18 +1590,18 @@
                         const insertPt = container.querySelector(':scope > .node-row, :scope > .children');
                         container.insertBefore(switchRow, insertPt);
                     }
-                    const currentIds = new Set(switches.map(n => n.typeid));
+                    const currentIds = new Set(switches.map(n => n.id));
                     Array.from(switchRow.children).forEach(ch => {
-                        if (!currentIds.has(ch.dataset.typeid)) ch.remove();
+                        if (!currentIds.has(ch.dataset.id)) ch.remove();
                     });
                     switches.forEach(node => {
-                        usedNodeIds.add(node.typeid);
-                        const uplink = switchUplinks.get(node.typeid);
-                        const danteInfo = danteNodes.get(node.typeid);
-                        const artnetInfo = artnetNodes.get(node.typeid);
-                        const sacnInfo = sacnNodes.get(node.typeid);
-                        const hasError = errorNodeIds.has(node.typeid);
-                        const isUnreachable = unreachableNodeIds.has(node.typeid);
+                        usedNodeIds.add(node.id);
+                        const uplink = switchUplinks.get(node.id);
+                        const danteInfo = danteNodes.get(node.id);
+                        const artnetInfo = artnetNodes.get(node.id);
+                        const sacnInfo = sacnNodes.get(node.id);
+                        const hasError = errorNodeIds.has(node.id);
+                        const isUnreachable = unreachableNodeIds.has(node.id);
                         const el = createNodeElement(node, null, loc, uplink, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable);
                         if (el.parentNode !== switchRow) switchRow.appendChild(el);
                     });
@@ -1619,18 +1619,18 @@
                         const insertPt = container.querySelector(':scope > .children');
                         container.insertBefore(nodeRow, insertPt);
                     }
-                    const currentIds = new Set(nonSwitches.map(n => n.typeid));
+                    const currentIds = new Set(nonSwitches.map(n => n.id));
                     Array.from(nodeRow.children).forEach(ch => {
-                        if (!currentIds.has(ch.dataset.typeid)) ch.remove();
+                        if (!currentIds.has(ch.dataset.id)) ch.remove();
                     });
                     nonSwitches.forEach(node => {
-                        usedNodeIds.add(node.typeid);
-                        const conn = switchConnections.get(node.typeid);
-                        const danteInfo = danteNodes.get(node.typeid);
-                        const artnetInfo = artnetNodes.get(node.typeid);
-                        const sacnInfo = sacnNodes.get(node.typeid);
-                        const hasError = errorNodeIds.has(node.typeid);
-                        const isUnreachable = unreachableNodeIds.has(node.typeid);
+                        usedNodeIds.add(node.id);
+                        const conn = switchConnections.get(node.id);
+                        const danteInfo = danteNodes.get(node.id);
+                        const artnetInfo = artnetNodes.get(node.id);
+                        const sacnInfo = sacnNodes.get(node.id);
+                        const hasError = errorNodeIds.has(node.id);
+                        const isUnreachable = unreachableNodeIds.has(node.id);
                         const el = createNodeElement(node, conn, loc, null, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable);
                         if (el.parentNode !== nodeRow) nodeRow.appendChild(el);
                     });
@@ -1686,8 +1686,8 @@
 
                 const nodeEl = document.createElement('div');
                 nodeEl.className = 'error-node';
-                nodeEl.textContent = err.node_name || err.node_typeid;
-                nodeEl.addEventListener('click', () => scrollToNode(err.node_typeid));
+                nodeEl.textContent = err.node_name || err.node_id;
+                nodeEl.addEventListener('click', () => scrollToNode(err.node_id));
                 item.appendChild(nodeEl);
 
                 if (err.type === 'unreachable') {
@@ -1737,7 +1737,7 @@
         }
 
         function scrollToNode(typeid) {
-            const nodeEl = document.querySelector('.node[data-typeid="' + typeid + '"]');
+            const nodeEl = document.querySelector('.node[data-id="' + typeid + '"]');
             if (nodeEl) {
                 nodeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 nodeEl.classList.add('scroll-highlight');
@@ -1807,8 +1807,8 @@
             const links = data.links || [];
 
             portErrors = data.errors || [];
-            const unreachableNodeIds = new Set(nodes.filter(n => n.unreachable).map(n => n.typeid));
-            const errorNodeIds = new Set(portErrors.filter(e => e.type !== 'unreachable').map(e => e.node_typeid));
+            const unreachableNodeIds = new Set(nodes.filter(n => n.unreachable).map(n => n.id));
+            const errorNodeIds = new Set(portErrors.filter(e => e.type !== 'unreachable').map(e => e.node_id));
 
 
             const locationTree = buildLocationTree(config.locations || [], null);
@@ -1817,7 +1817,7 @@
 
             const nodesByTypeId = new Map();
             nodes.forEach(node => {
-                nodesByTypeId.set(node.typeid, node);
+                nodesByTypeId.set(node.id, node);
             });
 
             const nodeLocations = new Map();
@@ -1827,7 +1827,7 @@
             nodes.forEach(node => {
                 const loc = findLocationForNode(node, nodeIndex);
                 if (loc) {
-                    nodeLocations.set(node.typeid, loc);
+                    nodeLocations.set(node.id, loc);
                     if (!assignedNodes.has(loc)) {
                         assignedNodes.set(loc, []);
                     }
@@ -1842,8 +1842,8 @@
             const allSwitches = nodes.filter(n => isSwitch(n));
 
             links.forEach(link => {
-                const nodeA = nodesByTypeId.get(link.node_a?.typeid);
-                const nodeB = nodesByTypeId.get(link.node_b?.typeid);
+                const nodeA = nodesByTypeId.get(link.node_a?.id);
+                const nodeB = nodesByTypeId.get(link.node_b?.id);
                 if (!nodeA || !nodeB) return;
 
                 const aIsSwitch = isSwitch(nodeA);
@@ -1863,10 +1863,10 @@
                         ratesB: getInterfaceRates(link.node_b)
                     });
                 } else if (aIsSwitch && !bIsSwitch) {
-                    const nodeLoc = nodeLocations.get(nodeB.typeid);
+                    const nodeLoc = nodeLocations.get(nodeB.id);
                     const effectiveSwitch = findEffectiveSwitch(nodeLoc, assignedNodes);
-                    const isLocalSwitch = effectiveSwitch && effectiveSwitch.typeid === nodeA.typeid;
-                    switchConnections.set(nodeB.typeid, {
+                    const isLocalSwitch = effectiveSwitch && effectiveSwitch.id === nodeA.id;
+                    switchConnections.set(nodeB.id, {
                         port: link.interface_a || '?',
                         switchName: getLabel(nodeA),
                         showSwitchName: !isLocalSwitch,
@@ -1876,10 +1876,10 @@
                         rates: getInterfaceRates(link.node_a)
                     });
                 } else if (bIsSwitch && !aIsSwitch) {
-                    const nodeLoc = nodeLocations.get(nodeA.typeid);
+                    const nodeLoc = nodeLocations.get(nodeA.id);
                     const effectiveSwitch = findEffectiveSwitch(nodeLoc, assignedNodes);
-                    const isLocalSwitch = effectiveSwitch && effectiveSwitch.typeid === nodeB.typeid;
-                    switchConnections.set(nodeA.typeid, {
+                    const isLocalSwitch = effectiveSwitch && effectiveSwitch.id === nodeB.id;
+                    switchConnections.set(nodeA.id, {
                         port: link.interface_b || '?',
                         switchName: getLabel(nodeB),
                         showSwitchName: !isLocalSwitch,
@@ -1894,7 +1894,7 @@
             const danteNodes = new Map();
 
             nodes.forEach(node => {
-                const nodeId = node.typeid;
+                const nodeId = node.id;
                 const danteTx = node.dante_tx || [];
                 const danteRx = node.dante_rx || [];
 
@@ -1956,7 +1956,7 @@
             };
 
             nodes.forEach(node => {
-                const nodeId = node.typeid;
+                const nodeId = node.id;
                 const artnetInputs = node.artnet_inputs || [];
                 const artnetOutputs = node.artnet_outputs || [];
 
@@ -2011,7 +2011,7 @@
             };
 
             nodes.forEach(node => {
-                const nodeId = node.typeid;
+                const nodeId = node.id;
                 const sacnInputs = node.sacn_inputs || [];
                 const sacnOutputs = node.sacn_outputs || [];
 
@@ -2043,10 +2043,10 @@
             const switchUplinks = new Map();
             if (allSwitches.length > 0 && switchLinks.length > 0) {
                 const adjacency = new Map();
-                allSwitches.forEach(sw => adjacency.set(sw.typeid, []));
+                allSwitches.forEach(sw => adjacency.set(sw.id, []));
 
                 switchLinks.forEach(link => {
-                    adjacency.get(link.switchA.typeid).push({
+                    adjacency.get(link.switchA.id).push({
                         neighbor: link.switchB,
                         localPort: link.portA,
                         remotePort: link.portB,
@@ -2054,7 +2054,7 @@
                         localErrors: link.errorsA,
                         localRates: link.ratesA
                     });
-                    adjacency.get(link.switchB.typeid).push({
+                    adjacency.get(link.switchB.id).push({
                         neighbor: link.switchA,
                         localPort: link.portB,
                         remotePort: link.portA,
@@ -2076,16 +2076,16 @@
                 let bestMaxDepth = Infinity;
 
                 for (const candidate of sortedSwitches) {
-                    const visited = new Set([candidate.typeid]);
+                    const visited = new Set([candidate.id]);
                     const queue = [{ sw: candidate, depth: 0 }];
                     let maxDepth = 0;
 
                     while (queue.length > 0) {
                         const { sw, depth } = queue.shift();
                         maxDepth = Math.max(maxDepth, depth);
-                        for (const edge of adjacency.get(sw.typeid) || []) {
-                            if (!visited.has(edge.neighbor.typeid)) {
-                                visited.add(edge.neighbor.typeid);
+                        for (const edge of adjacency.get(sw.id) || []) {
+                            if (!visited.has(edge.neighbor.id)) {
+                                visited.add(edge.neighbor.id);
                                 queue.push({ sw: edge.neighbor, depth: depth + 1 });
                             }
                         }
@@ -2100,18 +2100,18 @@
                     }
                 }
 
-                switchUplinks.set(bestRoot.typeid, 'ROOT');
+                switchUplinks.set(bestRoot.id, 'ROOT');
 
-                const visited = new Set([bestRoot.typeid]);
+                const visited = new Set([bestRoot.id]);
                 const queue = [bestRoot];
 
                 while (queue.length > 0) {
                     const current = queue.shift();
-                    for (const edge of adjacency.get(current.typeid) || []) {
-                        if (!visited.has(edge.neighbor.typeid)) {
-                            visited.add(edge.neighbor.typeid);
-                            const reverseEdge = adjacency.get(edge.neighbor.typeid).find(e => e.neighbor.typeid === current.typeid);
-                            switchUplinks.set(edge.neighbor.typeid, {
+                    for (const edge of adjacency.get(current.id) || []) {
+                        if (!visited.has(edge.neighbor.id)) {
+                            visited.add(edge.neighbor.id);
+                            const reverseEdge = adjacency.get(edge.neighbor.id).find(e => e.neighbor.id === current.id);
+                            switchUplinks.set(edge.neighbor.id, {
                                 localPort: edge.remotePort,
                                 remotePort: edge.localPort,
                                 parentName: getLabel(current),
@@ -2157,18 +2157,18 @@
                         switchRow.className = 'node-row switch-row';
                         unassignedLoc.appendChild(switchRow);
                     }
-                    const currentIds = new Set(switches.map(n => n.typeid));
+                    const currentIds = new Set(switches.map(n => n.id));
                     Array.from(switchRow.children).forEach(ch => {
-                        if (!currentIds.has(ch.dataset.typeid)) ch.remove();
+                        if (!currentIds.has(ch.dataset.id)) ch.remove();
                     });
                     switches.forEach(node => {
-                        usedNodeIds.add(node.typeid);
-                        const uplink = switchUplinks.get(node.typeid);
-                        const danteInfo = danteNodes.get(node.typeid);
-                        const artnetInfo = artnetNodes.get(node.typeid);
-                        const sacnInfo = sacnNodes.get(node.typeid);
-                        const hasError = errorNodeIds.has(node.typeid);
-                        const isUnreachable = unreachableNodeIds.has(node.typeid);
+                        usedNodeIds.add(node.id);
+                        const uplink = switchUplinks.get(node.id);
+                        const danteInfo = danteNodes.get(node.id);
+                        const artnetInfo = artnetNodes.get(node.id);
+                        const sacnInfo = sacnNodes.get(node.id);
+                        const hasError = errorNodeIds.has(node.id);
+                        const isUnreachable = unreachableNodeIds.has(node.id);
                         const el = createNodeElement(node, null, null, uplink, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable);
                         if (el.parentNode !== switchRow) switchRow.appendChild(el);
                     });
@@ -2183,18 +2183,18 @@
                         nodeRow.className = 'node-row';
                         unassignedLoc.appendChild(nodeRow);
                     }
-                    const currentIds = new Set(nonSwitches.map(n => n.typeid));
+                    const currentIds = new Set(nonSwitches.map(n => n.id));
                     Array.from(nodeRow.children).forEach(ch => {
-                        if (!currentIds.has(ch.dataset.typeid)) ch.remove();
+                        if (!currentIds.has(ch.dataset.id)) ch.remove();
                     });
                     nonSwitches.forEach(node => {
-                        usedNodeIds.add(node.typeid);
-                        const conn = switchConnections.get(node.typeid);
-                        const danteInfo = danteNodes.get(node.typeid);
-                        const artnetInfo = artnetNodes.get(node.typeid);
-                        const sacnInfo = sacnNodes.get(node.typeid);
-                        const hasError = errorNodeIds.has(node.typeid);
-                        const isUnreachable = unreachableNodeIds.has(node.typeid);
+                        usedNodeIds.add(node.id);
+                        const conn = switchConnections.get(node.id);
+                        const danteInfo = danteNodes.get(node.id);
+                        const artnetInfo = artnetNodes.get(node.id);
+                        const sacnInfo = sacnNodes.get(node.id);
+                        const hasError = errorNodeIds.has(node.id);
+                        const isUnreachable = unreachableNodeIds.has(node.id);
                         const el = createNodeElement(node, conn, null, null, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable);
                         if (el.parentNode !== nodeRow) nodeRow.appendChild(el);
                     });
