@@ -218,30 +218,20 @@ func ParseMulticastGroup(ip net.IP) MulticastGroup {
 	return MulticastGroup{RawIP: ip.String()}
 }
 
-type MulticastMembership struct {
-	Group    MulticastGroup
-	LastSeen time.Time
-}
-
-type MulticastMembershipSet map[string]*MulticastMembership
+type MulticastMembershipSet map[MulticastGroup]time.Time
 
 func (s MulticastMembershipSet) Add(group MulticastGroup) {
-	key := group.String()
-	if m, exists := s[key]; exists {
-		m.LastSeen = time.Now()
-	} else {
-		s[key] = &MulticastMembership{Group: group, LastSeen: time.Now()}
-	}
+	s[group] = time.Now()
 }
 
 func (s MulticastMembershipSet) Remove(group MulticastGroup) {
-	delete(s, group.String())
+	delete(s, group)
 }
 
 func (s MulticastMembershipSet) Groups() []MulticastGroup {
 	result := make([]MulticastGroup, 0, len(s))
-	for _, m := range s {
-		result = append(result, m.Group)
+	for g := range s {
+		result = append(result, g)
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].String() < result[j].String()
@@ -251,9 +241,9 @@ func (s MulticastMembershipSet) Groups() []MulticastGroup {
 
 func (s MulticastMembershipSet) SACNInputs() []SACNUniverse {
 	var result []SACNUniverse
-	for _, m := range s {
-		if m.Group.IsSACN() {
-			result = append(result, m.Group.SACNUniverse)
+	for g := range s {
+		if g.IsSACN() {
+			result = append(result, g.SACNUniverse)
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
@@ -262,9 +252,9 @@ func (s MulticastMembershipSet) SACNInputs() []SACNUniverse {
 
 func (s MulticastMembershipSet) Expire(maxAge time.Duration) {
 	expireTime := time.Now().Add(-maxAge)
-	for key, m := range s {
-		if m.LastSeen.Before(expireTime) {
-			delete(s, key)
+	for g, lastSeen := range s {
+		if lastSeen.Before(expireTime) {
+			delete(s, g)
 		}
 	}
 }
@@ -417,43 +407,6 @@ func (n *Node) SACNInputs() []SACNUniverse {
 		return nil
 	}
 	return n.MulticastGroups.SACNInputs()
-}
-
-func (n *Node) MarshalJSON() ([]byte, error) {
-	type nodeJSON struct {
-		ID                 string                 `json:"id"`
-		Names              NameSet                `json:"names"`
-		Interfaces         InterfaceMap           `json:"interfaces"`
-		MACTableSize       int                    `json:"mac_table_size,omitempty"`
-		PoEBudget          *PoEBudget             `json:"poe_budget,omitempty"`
-		IsDanteClockMaster bool                   `json:"is_dante_clock_master,omitempty"`
-		DanteTxChannels    string                 `json:"dante_tx_channels,omitempty"`
-		MulticastGroups    MulticastMembershipSet `json:"multicast_groups,omitempty"`
-		ArtNetInputs       ArtNetUniverseSet      `json:"artnet_inputs,omitempty"`
-		ArtNetOutputs      ArtNetUniverseSet      `json:"artnet_outputs,omitempty"`
-		SACNInputs         []SACNUniverse         `json:"sacn_inputs,omitempty"`
-		SACNOutputs        SACNUniverseSet        `json:"sacn_outputs,omitempty"`
-		DanteTx            []*DantePeer           `json:"dante_tx,omitempty"`
-		DanteRx            []*DantePeer           `json:"dante_rx,omitempty"`
-		Unreachable        bool                   `json:"unreachable,omitempty"`
-	}
-	return json.Marshal(nodeJSON{
-		ID:                 n.ID,
-		Names:              n.Names,
-		Interfaces:         n.Interfaces,
-		MACTableSize:       n.MACTableSize(),
-		PoEBudget:          n.PoEBudget,
-		IsDanteClockMaster: n.IsDanteClockMaster,
-		DanteTxChannels:    n.DanteTxChannels,
-		MulticastGroups:    n.MulticastGroups,
-		ArtNetInputs:       n.ArtNetInputs,
-		ArtNetOutputs:      n.ArtNetOutputs,
-		SACNInputs:         n.SACNInputs(),
-		SACNOutputs:        n.SACNOutputs,
-		DanteTx:            n.DanteTx,
-		DanteRx:            n.DanteRx,
-		Unreachable:        n.Unreachable,
-	})
 }
 
 type DantePeer struct {

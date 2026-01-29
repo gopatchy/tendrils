@@ -65,13 +65,12 @@ func (n *Nodes) GetMulticastGroupMembers(groupIP net.IP) []*Node {
 	defer n.mu.RUnlock()
 
 	group := ParseMulticastGroup(groupIP)
-	groupKey := group.String()
 	var members []*Node
 	for _, node := range n.nodes {
 		if node.MulticastGroups == nil {
 			continue
 		}
-		if _, exists := node.MulticastGroups[groupKey]; exists {
+		if _, exists := node.MulticastGroups[group]; exists {
 			members = append(members, node)
 		}
 	}
@@ -93,9 +92,9 @@ func (n *Nodes) mergeMulticast(keep, merge *Node) {
 	if keep.MulticastGroups == nil {
 		keep.MulticastGroups = MulticastMembershipSet{}
 	}
-	for key, membership := range merge.MulticastGroups {
-		if existing, ok := keep.MulticastGroups[key]; !ok || membership.LastSeen.After(existing.LastSeen) {
-			keep.MulticastGroups[key] = membership
+	for group, lastSeen := range merge.MulticastGroups {
+		if existing, ok := keep.MulticastGroups[group]; !ok || lastSeen.After(existing) {
+			keep.MulticastGroups[group] = lastSeen
 		}
 	}
 }

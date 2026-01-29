@@ -103,10 +103,9 @@ func (n *Nodes) GetDanteTxDeviceInGroup(groupIP net.IP) *Node {
 	defer n.mu.RUnlock()
 
 	group := ParseMulticastGroup(groupIP)
-	groupKey := group.String()
 	for _, node := range n.nodes {
 		if node.DanteTxChannels != "" && node.MulticastGroups != nil {
-			if _, exists := node.MulticastGroups[groupKey]; exists {
+			if _, exists := node.MulticastGroups[group]; exists {
 				return node
 			}
 		}

@@ -115,14 +115,26 @@ func ensureCert() error {
 }
 
 func (t *Tendrils) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
-	status := t.GetStatus()
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(status); err != nil {
+	data, err := t.GetStatusJSON()
+	if err != nil {
 		log.Printf("[ERROR] failed to encode status: %v", err)
+		return
 	}
+	w.Write(data)
 }
 
-func (t *Tendrils) GetStatus() *StatusResponse {
+func (t *Tendrils) GetStatusJSON() ([]byte, error) {
+	t.nodes.mu.Lock()
+	t.nodes.expireMulticastMemberships()
+	t.nodes.expireArtNet()
+	t.nodes.expireSACN()
+	t.nodes.expireDante()
+	t.nodes.mu.Unlock()
+
+	t.nodes.mu.RLock()
+	defer t.nodes.mu.RUnlock()
+
 	var broadcastStats *BroadcastStatsResponse
 	if t.broadcast != nil {
 		stats := t.broadcast.GetStats()
@@ -132,13 +144,13 @@ func (t *Tendrils) GetStatus() *StatusResponse {
 	if config == nil {
 		config = &Config{}
 	}
-	return &StatusResponse{
+	return json.Marshal(&StatusResponse{
 		Config:         config,
-		Nodes:          t.getNodes(),
-		Links:          t.getLinks(),
+		Nodes:          t.getNodesLocked(),
+		Links:          t.getLinksLocked(),
 		Errors:         t.errors.GetErrors(),
 		BroadcastStats: broadcastStats,
-	}
+	})
 }
 
 func (t *Tendrils) handleClearError(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +187,7 @@ func (t *Tendrils) handleAPIStatusStream(w http.ResponseWriter, r *http.Request)
 	defer t.unsubscribeSSE(subID)
 
 	sendStatus := func() error {
-		data, err := json.Marshal(t.GetStatus())
+		data, err := t.GetStatusJSON()
 		if err != nil {
 			log.Printf("[ERROR] failed to marshal status: %v", err)
 			return err
@@ -213,25 +225,13 @@ func (t *Tendrils) handleAPIStatusStream(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (t *Tendrils) getNodes() []*Node {
-	t.nodes.mu.Lock()
-	t.nodes.expireMulticastMemberships()
-	t.nodes.expireArtNet()
-	t.nodes.expireSACN()
-	t.nodes.expireDante()
-	t.nodes.mu.Unlock()
-
-	t.nodes.mu.RLock()
-	defer t.nodes.mu.RUnlock()
-
+func (t *Tendrils) getNodesLocked() []*Node {
 	unreachableNodes := t.errors.GetUnreachableNodeSet()
 
 	nodes := make([]*Node, 0, len(t.nodes.nodes))
 	for _, node := range t.nodes.nodes {
-		n := new(Node)
-		*n = *node
-		n.Unreachable = unreachableNodes[node.ID]
-		nodes = append(nodes, n)
+		node.Unreachable = unreachableNodes[node.ID]
+		nodes = append(nodes, node)
 	}
 
 	sort.Slice(nodes, func(i, j int) bool {
@@ -248,10 +248,7 @@ func (t *Tendrils) getNodes() []*Node {
 }
 
 
-func (t *Tendrils) getLinks() []*Link {
-	t.nodes.mu.RLock()
-	defer t.nodes.mu.RUnlock()
-
+func (t *Tendrils) getLinksLocked() []*Link {
 	links := t.nodes.getDirectLinks()
 	sort.Slice(links, func(i, j int) bool {
 		if links[i].NodeA.DisplayName() != links[j].NodeA.DisplayName() {
