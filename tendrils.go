@@ -35,6 +35,7 @@ type Tendrils struct {
 	nodes            *Nodes
 	artnet           *ArtNetNodes
 	artnetConn       *net.UDPConn
+	sacnSources      *SACNSources
 	danteFlows       *DanteFlows
 	errors           *ErrorTracker
 	ping             *PingManager
@@ -53,6 +54,7 @@ type Tendrils struct {
 	DisableIGMP    bool
 	DisableMDNS    bool
 	DisableArtNet  bool
+	DisableSACN    bool
 	DisableDante   bool
 	DisableBMD     bool
 	DisableShure   bool
@@ -65,6 +67,7 @@ type Tendrils struct {
 	DebugIGMP      bool
 	DebugMDNS      bool
 	DebugArtNet    bool
+	DebugSACN      bool
 	DebugDante     bool
 	DebugBMD       bool
 	DebugShure     bool
@@ -76,6 +79,7 @@ func New() *Tendrils {
 	t := &Tendrils{
 		activeInterfaces: map[string]context.CancelFunc{},
 		artnet:           NewArtNetNodes(),
+		sacnSources:      NewSACNSources(),
 		danteFlows:       NewDanteFlows(),
 		ping:             NewPingManager(),
 		sseSubs:          map[int]chan struct{}{},
@@ -301,6 +305,9 @@ func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 	}
 	if !t.DisableArtNet {
 		go t.startArtNetPoller(ctx, iface)
+	}
+	if !t.DisableSACN {
+		go t.startSACNDiscoveryListener(ctx, iface)
 	}
 	if !t.DisableDante {
 		go t.listenDante(ctx, iface)

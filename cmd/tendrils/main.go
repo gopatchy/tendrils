@@ -15,6 +15,7 @@ func main() {
 	noIGMP := flag.Bool("no-igmp", false, "disable IGMP querier")
 	noMDNS := flag.Bool("no-mdns", false, "disable mDNS discovery")
 	noArtNet := flag.Bool("no-artnet", false, "disable Art-Net discovery")
+	noSACN := flag.Bool("no-sacn", false, "disable sACN discovery")
 	noDante := flag.Bool("no-dante", false, "disable Dante discovery")
 	noBMD := flag.Bool("no-bmd", false, "disable Blackmagic discovery")
 	noShure := flag.Bool("no-shure", false, "disable Shure discovery")
@@ -27,6 +28,7 @@ func main() {
 	debugIGMP := flag.Bool("debug-igmp", false, "debug IGMP querier")
 	debugMDNS := flag.Bool("debug-mdns", false, "debug mDNS discovery")
 	debugArtNet := flag.Bool("debug-artnet", false, "debug Art-Net discovery")
+	debugSACN := flag.Bool("debug-sacn", false, "debug sACN discovery")
 	debugDante := flag.Bool("debug-dante", false, "debug Dante discovery")
 	debugBMD := flag.Bool("debug-bmd", false, "debug Blackmagic discovery")
 	debugShure := flag.Bool("debug-shure", false, "debug Shure discovery")
@@ -43,6 +45,7 @@ func main() {
 	t.DisableIGMP = *noIGMP
 	t.DisableMDNS = *noMDNS
 	t.DisableArtNet = *noArtNet
+	t.DisableSACN = *noSACN
 	t.DisableDante = *noDante
 	t.DisableBMD = *noBMD
 	t.DisableShure = *noShure
@@ -55,6 +58,7 @@ func main() {
 	t.DebugIGMP = *debugIGMP
 	t.DebugMDNS = *debugMDNS
 	t.DebugArtNet = *debugArtNet
+	t.DebugSACN = *debugSACN
 	t.DebugDante = *debugDante
 	t.DebugBMD = *debugBMD
 	t.DebugShure = *debugShure
