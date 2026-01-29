@@ -1992,9 +1992,21 @@
             const sacnUniverseInputs = new Map();
             const sacnUniverseOutputs = new Map();
 
+            function getSacnInputsFromMulticast(node) {
+                const groups = node.multicast_groups || [];
+                const inputs = [];
+                groups.forEach(g => {
+                    if (typeof g === 'string' && g.startsWith('sacn:')) {
+                        const u = parseInt(g.substring(5), 10);
+                        if (!isNaN(u)) inputs.push(u);
+                    }
+                });
+                return inputs;
+            }
+
             nodes.forEach(node => {
                 const name = getShortLabel(node);
-                (node.sacn_inputs || []).forEach(u => {
+                getSacnInputsFromMulticast(node).forEach(u => {
                     if (!sacnUniverseInputs.has(u)) sacnUniverseInputs.set(u, []);
                     sacnUniverseInputs.get(u).push(name);
                 });
@@ -2012,7 +2024,7 @@
 
             nodes.forEach(node => {
                 const nodeId = node.id;
-                const sacnInputs = node.sacn_inputs || [];
+                const sacnInputs = getSacnInputsFromMulticast(node);
                 const sacnOutputs = node.sacn_outputs || [];
 
                 if (sacnInputs.length === 0 && sacnOutputs.length === 0) return;

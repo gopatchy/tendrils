@@ -171,13 +171,28 @@ func (n *Nodes) updateNodeIPs(node *Node, ips []net.IP) []string {
 			}
 		}
 		n.ipIndex[ipKey] = node
-		iface, exists := node.Interfaces[ipKey]
-		if !exists {
-			iface = &Interface{IPs: IPSet{}}
-			node.Interfaces[ipKey] = iface
+
+		var targetIface *Interface
+		for _, iface := range node.Interfaces {
+			if iface.MAC != "" {
+				targetIface = iface
+				break
+			}
 		}
-		iface.IPs.Add(ip)
-		added = append(added, "ip="+ipKey)
+		if targetIface != nil {
+			if !targetIface.IPs.Has(ipKey) {
+				targetIface.IPs.Add(ip)
+				added = append(added, "ip="+ipKey)
+			}
+		} else {
+			iface, exists := node.Interfaces[ipKey]
+			if !exists {
+				iface = &Interface{IPs: IPSet{}}
+				node.Interfaces[ipKey] = iface
+			}
+			iface.IPs.Add(ip)
+			added = append(added, "ip="+ipKey)
+		}
 		go n.t.requestARP(ip)
 	}
 	return added
@@ -281,8 +296,13 @@ func (n *Nodes) updateNodeInterface(node *Node, mac net.HardwareAddr, ips []net.
 		iface.IPs.Add(ip)
 		n.ipIndex[ipKey] = node
 
-		if ipOnlyIface, exists := node.Interfaces[ipKey]; exists && ipOnlyIface != iface {
-			delete(node.Interfaces, ipKey)
+		for key, other := range node.Interfaces {
+			if other != iface && other.IPs.Has(ipKey) {
+				delete(other.IPs, ipKey)
+				if len(other.IPs) == 0 && other.MAC == "" {
+					delete(node.Interfaces, key)
+				}
+			}
 		}
 	}
 

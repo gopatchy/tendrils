@@ -115,7 +115,7 @@ func ensureCert() error {
 }
 
 func (t *Tendrils) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	data, err := t.GetStatusJSON()
 	if err != nil {
 		log.Printf("[ERROR] failed to encode status: %v", err)
@@ -178,7 +178,7 @@ func (t *Tendrils) handleAPIStatusStream(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")

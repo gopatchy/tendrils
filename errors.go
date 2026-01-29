@@ -2,6 +2,7 @@ package tendrils
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -245,6 +246,12 @@ func (e *ErrorTracker) GetErrors() []*Error {
 	for _, err := range e.errors {
 		errors = append(errors, err)
 	}
+	sort.Slice(errors, func(i, j int) bool {
+		if errors[i].NodeName != errors[j].NodeName {
+			return errors[i].NodeName < errors[j].NodeName
+		}
+		return errors[i].Port < errors[j].Port
+	})
 	return errors
 }
 
