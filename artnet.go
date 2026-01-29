@@ -182,53 +182,58 @@ func (n *Nodes) UpdateArtNet(node *Node, inputs, outputs []int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	if node.ArtNetInputs == nil {
+		node.ArtNetInputs = ArtNetUniverseSet{}
+	}
+	if node.ArtNetOutputs == nil {
+		node.ArtNetOutputs = ArtNetUniverseSet{}
+	}
+
 	for _, u := range inputs {
-		if !containsInt(node.ArtNetInputs, u) {
-			node.ArtNetInputs = append(node.ArtNetInputs, u)
-		}
+		node.ArtNetInputs.Add(ArtNetUniverse(u))
 	}
 	for _, u := range outputs {
-		if !containsInt(node.ArtNetOutputs, u) {
-			node.ArtNetOutputs = append(node.ArtNetOutputs, u)
-		}
+		node.ArtNetOutputs.Add(ArtNetUniverse(u))
 	}
-	sort.Ints(node.ArtNetInputs)
-	sort.Ints(node.ArtNetOutputs)
-	node.artnetLastSeen = time.Now()
 }
 
 func (n *Nodes) expireArtNet() {
-	expireTime := time.Now().Add(-60 * time.Second)
 	for _, node := range n.nodes {
-		if !node.artnetLastSeen.IsZero() && node.artnetLastSeen.Before(expireTime) {
-			node.ArtNetInputs = nil
-			node.ArtNetOutputs = nil
-			node.artnetLastSeen = time.Time{}
+		if node.ArtNetInputs != nil {
+			node.ArtNetInputs.Expire(60 * time.Second)
+		}
+		if node.ArtNetOutputs != nil {
+			node.ArtNetOutputs.Expire(60 * time.Second)
 		}
 	}
 }
 
 func (n *Nodes) mergeArtNet(keep, merge *Node) {
-	for _, u := range merge.ArtNetInputs {
-		if !containsInt(keep.ArtNetInputs, u) {
-			keep.ArtNetInputs = append(keep.ArtNetInputs, u)
+	if merge.ArtNetInputs != nil {
+		if keep.ArtNetInputs == nil {
+			keep.ArtNetInputs = ArtNetUniverseSet{}
+		}
+		for u, lastSeen := range merge.ArtNetInputs {
+			if existing, ok := keep.ArtNetInputs[u]; !ok || lastSeen.After(existing) {
+				keep.ArtNetInputs[u] = lastSeen
+			}
 		}
 	}
-	for _, u := range merge.ArtNetOutputs {
-		if !containsInt(keep.ArtNetOutputs, u) {
-			keep.ArtNetOutputs = append(keep.ArtNetOutputs, u)
+	if merge.ArtNetOutputs != nil {
+		if keep.ArtNetOutputs == nil {
+			keep.ArtNetOutputs = ArtNetUniverseSet{}
+		}
+		for u, lastSeen := range merge.ArtNetOutputs {
+			if existing, ok := keep.ArtNetOutputs[u]; !ok || lastSeen.After(existing) {
+				keep.ArtNetOutputs[u] = lastSeen
+			}
 		}
 	}
-	if merge.artnetLastSeen.After(keep.artnetLastSeen) {
-		keep.artnetLastSeen = merge.artnetLastSeen
-	}
-	sort.Ints(keep.ArtNetInputs)
-	sort.Ints(keep.ArtNetOutputs)
 }
 
 func (n *Nodes) logArtNet() {
-	inputUniverses := map[int][]string{}
-	outputUniverses := map[int][]string{}
+	inputUniverses := map[ArtNetUniverse][]string{}
+	outputUniverses := map[ArtNetUniverse][]string{}
 
 	for _, node := range n.nodes {
 		if len(node.ArtNetInputs) == 0 && len(node.ArtNetOutputs) == 0 {
@@ -238,10 +243,10 @@ func (n *Nodes) logArtNet() {
 		if name == "" {
 			name = "??"
 		}
-		for _, u := range node.ArtNetInputs {
+		for u := range node.ArtNetInputs {
 			inputUniverses[u] = append(inputUniverses[u], name)
 		}
-		for _, u := range node.ArtNetOutputs {
+		for u := range node.ArtNetOutputs {
 			outputUniverses[u] = append(outputUniverses[u], name)
 		}
 	}
@@ -250,8 +255,8 @@ func (n *Nodes) logArtNet() {
 		return
 	}
 
-	var allUniverses []int
-	seen := map[int]bool{}
+	seen := map[ArtNetUniverse]bool{}
+	var allUniverses []ArtNetUniverse
 	for u := range inputUniverses {
 		if !seen[u] {
 			allUniverses = append(allUniverses, u)
@@ -264,7 +269,7 @@ func (n *Nodes) logArtNet() {
 			seen[u] = true
 		}
 	}
-	sort.Ints(allUniverses)
+	sort.Slice(allUniverses, func(i, j int) bool { return allUniverses[i] < allUniverses[j] })
 
 	log.Printf("[sigusr1] ================ %d artnet universes ================", len(allUniverses))
 	for _, u := range allUniverses {
@@ -279,9 +284,6 @@ func (n *Nodes) logArtNet() {
 			sort.Slice(outs, func(i, j int) bool { return sortorder.NaturalLess(outs[i], outs[j]) })
 			parts = append(parts, fmt.Sprintf("out: %s", strings.Join(outs, ", ")))
 		}
-		netVal := (u >> 8) & 0x7f
-		subnet := (u >> 4) & 0x0f
-		universe := u & 0x0f
-		log.Printf("[sigusr1]   artnet:%d (%d/%d/%d) %s", u, netVal, subnet, universe, strings.Join(parts, "; "))
+		log.Printf("[sigusr1]   artnet:%d (%s) %s", u, u.String(), strings.Join(parts, "; "))
 	}
 }

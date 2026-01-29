@@ -6,7 +6,7 @@ import (
 )
 
 type Link struct {
-	TypeID     string `json:"typeid"`
+	ID         string `json:"id"`
 	NodeA      *Node  `json:"node_a"`
 	InterfaceA string `json:"interface_a,omitempty"`
 	NodeB      *Node  `json:"node_b"`
@@ -15,7 +15,7 @@ type Link struct {
 
 func (l *Link) MarshalJSON() ([]byte, error) {
 	type linkJSON struct {
-		TypeID     string      `json:"typeid"`
+		ID         string      `json:"id"`
 		NodeA      interface{} `json:"node_a"`
 		InterfaceA string      `json:"interface_a,omitempty"`
 		NodeB      interface{} `json:"node_b"`
@@ -23,7 +23,7 @@ func (l *Link) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(linkJSON{
-		TypeID:     l.TypeID,
+		ID:         l.ID,
 		NodeA:      l.NodeA.WithInterface(l.InterfaceA),
 		InterfaceA: l.InterfaceA,
 		NodeB:      l.NodeB.WithInterface(l.InterfaceB),
@@ -83,7 +83,7 @@ func (n *Nodes) getDirectLinks() []*Link {
 				if !seen[key] {
 					seen[key] = true
 					links = append(links, &Link{
-						TypeID:     newTypeID("link"),
+						ID:         newID("link"),
 						NodeA:      lh.node,
 						InterfaceA: lh.port,
 						NodeB:      target,

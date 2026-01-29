@@ -230,7 +230,7 @@ func (t *Tendrils) getNodes() []*Node {
 	for _, node := range t.nodes.nodes {
 		n := new(Node)
 		*n = *node
-		n.Unreachable = unreachableNodes[node.TypeID]
+		n.Unreachable = unreachableNodes[node.ID]
 		nodes = append(nodes, n)
 	}
 

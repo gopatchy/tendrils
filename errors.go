@@ -15,7 +15,7 @@ const (
 
 type Error struct {
 	ID          string    `json:"id"`
-	NodeTypeID  string    `json:"node_typeid"`
+	NodeID  string    `json:"node_id"`
 	NodeName    string    `json:"node_name"`
 	Type        string    `json:"type"`
 	Port        string    `json:"port,omitempty"`
@@ -88,7 +88,7 @@ func (e *ErrorTracker) checkUtilizationLocked(node *Node, portName string, stats
 	speedBytes := float64(stats.Speed) / 8.0
 	utilization := (maxBytesRate / speedBytes) * 100.0
 
-	key := "util:" + node.TypeID + ":" + portName
+	key := "util:" + node.ID + ":" + portName
 	now := time.Now()
 
 	if utilization < 70.0 {
@@ -107,7 +107,7 @@ func (e *ErrorTracker) checkUtilizationLocked(node *Node, portName string, stats
 	e.nextID++
 	e.errors[key] = &Error{
 		ID:          fmt.Sprintf("err-%d", e.nextID),
-		NodeTypeID:  node.TypeID,
+		NodeID:  node.ID,
 		NodeName:    node.DisplayName(),
 		Port:        portName,
 		Type:        ErrorTypeHighUtilization,
@@ -122,7 +122,7 @@ func (e *ErrorTracker) checkPortLocked(node *Node, portName string, stats *Inter
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	key := node.TypeID + ":" + portName
+	key := node.ID + ":" + portName
 	baseline := e.baselines[key]
 
 	now := time.Now()
@@ -137,7 +137,7 @@ func (e *ErrorTracker) checkPortLocked(node *Node, portName string, stats *Inter
 			e.nextID++
 			e.errors[key] = &Error{
 				ID:         fmt.Sprintf("err-%d", e.nextID),
-				NodeTypeID: node.TypeID,
+				NodeID: node.ID,
 				NodeName:   node.DisplayName(),
 				Port:       portName,
 				Type:       ErrorTypeStartup,
@@ -172,7 +172,7 @@ func (e *ErrorTracker) checkPortLocked(node *Node, portName string, stats *Inter
 			e.nextID++
 			e.errors[key] = &Error{
 				ID:          fmt.Sprintf("err-%d", e.nextID),
-				NodeTypeID:  node.TypeID,
+				NodeID:  node.ID,
 				NodeName:    node.DisplayName(),
 				Port:        portName,
 				Type:        ErrorTypeNew,
@@ -253,8 +253,8 @@ func (e *ErrorTracker) GetUnreachableNodeSet() map[string]bool {
 	defer e.mu.RUnlock()
 
 	result := map[string]bool{}
-	for nodeTypeID := range e.unreachableNodes {
-		result[nodeTypeID] = true
+	for nodeID := range e.unreachableNodes {
+		result[nodeID] = true
 	}
 	return result
 }
@@ -271,10 +271,10 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node) (changed bool, becameUnr
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	key := "unreachable:" + node.TypeID
+	key := "unreachable:" + node.ID
 
-	wasUnreachable := e.unreachableNodes[node.TypeID]
-	e.unreachableNodes[node.TypeID] = true
+	wasUnreachable := e.unreachableNodes[node.ID]
+	e.unreachableNodes[node.ID] = true
 	becameUnreachable = !wasUnreachable
 
 	if e.suppressedUnreachable[key] {
@@ -289,7 +289,7 @@ func (e *ErrorTracker) setUnreachableLocked(node *Node) (changed bool, becameUnr
 	e.nextID++
 	e.errors[key] = &Error{
 		ID:          fmt.Sprintf("err-%d", e.nextID),
-		NodeTypeID:  node.TypeID,
+		NodeID:  node.ID,
 		NodeName:    node.DisplayName(),
 		Type:        ErrorTypeUnreachable,
 		FirstSeen:   now,
@@ -310,12 +310,12 @@ func (e *ErrorTracker) clearUnreachableLocked(node *Node) (changed bool, becameR
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	key := "unreachable:" + node.TypeID
+	key := "unreachable:" + node.ID
 
 	delete(e.suppressedUnreachable, key)
 
-	wasUnreachable := e.unreachableNodes[node.TypeID]
-	delete(e.unreachableNodes, node.TypeID)
+	wasUnreachable := e.unreachableNodes[node.ID]
+	delete(e.unreachableNodes, node.ID)
 	becameReachable = wasUnreachable
 
 	if _, exists := e.errors[key]; exists {

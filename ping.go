@@ -142,7 +142,7 @@ func (t *Tendrils) pingNode(node *Node) {
 	t.nodes.mu.RLock()
 	var ips []string
 	nodeName := node.DisplayName()
-	nodeID := node.TypeID
+	nodeID := node.ID
 	for _, iface := range node.Interfaces {
 		for ipStr := range iface.IPs {
 			ip := net.ParseIP(ipStr)

@@ -102,10 +102,13 @@ func (n *Nodes) GetDanteTxDeviceInGroup(groupIP net.IP) *Node {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	groupName := multicastGroupName(groupIP)
+	group := ParseMulticastGroup(groupIP)
+	groupKey := group.String()
 	for _, node := range n.nodes {
-		if node.DanteTxChannels != "" && containsString(node.MulticastGroups, groupName) {
-			return node
+		if node.DanteTxChannels != "" && node.MulticastGroups != nil {
+			if _, exists := node.MulticastGroups[groupKey]; exists {
+				return node
+			}
 		}
 	}
 	return nil
@@ -883,7 +886,7 @@ func (t *Tendrils) probeDanteDeviceWithPort(ip net.IP, port int) {
 					log.Printf("[dante] %s: multicast group %s -> tx device %q", ip, groupIP, sourceName)
 				}
 				if sourceNode == nil {
-					sourceNode = t.nodes.GetOrCreateByName(multicastGroupName(groupIP))
+					sourceNode = t.nodes.GetOrCreateByName(ParseMulticastGroup(groupIP).String())
 				}
 				subscriberNode := t.nodes.GetOrCreateByName(info.Name)
 				t.nodes.UpdateDanteFlow(sourceNode, subscriberNode, "", DanteFlowActive)

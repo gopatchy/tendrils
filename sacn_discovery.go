@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net"
-	"sort"
 	"time"
 
 	"github.com/gopatchy/sacn"
@@ -61,29 +60,33 @@ func (n *Nodes) UpdateSACN(node *Node, outputs []int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	node.SACNOutputs = outputs
-	sort.Ints(node.SACNOutputs)
-	node.sacnLastSeen = time.Now()
+	if node.SACNOutputs == nil {
+		node.SACNOutputs = SACNUniverseSet{}
+	}
+
+	for _, u := range outputs {
+		node.SACNOutputs.Add(SACNUniverse(u))
+	}
 }
 
 func (n *Nodes) expireSACN() {
-	expireTime := time.Now().Add(-60 * time.Second)
 	for _, node := range n.nodes {
-		if !node.sacnLastSeen.IsZero() && node.sacnLastSeen.Before(expireTime) {
-			node.SACNOutputs = nil
-			node.sacnLastSeen = time.Time{}
+		if node.SACNOutputs != nil {
+			node.SACNOutputs.Expire(60 * time.Second)
 		}
 	}
 }
 
 func (n *Nodes) mergeSACN(keep, merge *Node) {
-	for _, u := range merge.SACNOutputs {
-		if !containsInt(keep.SACNOutputs, u) {
-			keep.SACNOutputs = append(keep.SACNOutputs, u)
+	if merge.SACNOutputs == nil {
+		return
+	}
+	if keep.SACNOutputs == nil {
+		keep.SACNOutputs = SACNUniverseSet{}
+	}
+	for u, lastSeen := range merge.SACNOutputs {
+		if existing, ok := keep.SACNOutputs[u]; !ok || lastSeen.After(existing) {
+			keep.SACNOutputs[u] = lastSeen
 		}
 	}
-	if merge.sacnLastSeen.After(keep.sacnLastSeen) {
-		keep.sacnLastSeen = merge.sacnLastSeen
-	}
-	sort.Ints(keep.SACNOutputs)
 }

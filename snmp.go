@@ -246,7 +246,7 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 		outBytes, hasOutBytes := ifHCOutOctets[ifIndex]
 
 		if hasInPkts && hasOutPkts && hasInBytes && hasOutBytes {
-			key := node.TypeID + ":" + name
+			key := node.ID + ":" + name
 			ifaceTracker.mu.Lock()
 			prev, hasPrev := ifaceTracker.counters[key]
 			if hasPrev {

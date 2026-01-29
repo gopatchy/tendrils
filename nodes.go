@@ -14,30 +14,25 @@ import (
 )
 
 type Nodes struct {
-	mu         sync.RWMutex
-	nodes      map[int]*Node
-	ipIndex    map[string]int
-	macIndex   map[string]int
-	nameIndex  map[string]int
-	nodeCancel map[int]context.CancelFunc
-	nextID     int
-	t          *Tendrils
-	ctx        context.Context
-	cancelAll  context.CancelFunc
+	mu        sync.RWMutex
+	nodes     []*Node
+	ipIndex   map[string]*Node
+	macIndex  map[string]*Node
+	nameIndex map[string]*Node
+	t         *Tendrils
+	ctx       context.Context
+	cancelAll context.CancelFunc
 }
 
 func NewNodes(t *Tendrils) *Nodes {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Nodes{
-		nodes:      map[int]*Node{},
-		ipIndex:    map[string]int{},
-		macIndex:   map[string]int{},
-		nameIndex:  map[string]int{},
-		nodeCancel: map[int]context.CancelFunc{},
-		nextID:     1,
-		t:          t,
-		ctx:        ctx,
-		cancelAll:  cancel,
+		ipIndex:   map[string]*Node{},
+		macIndex:  map[string]*Node{},
+		nameIndex: map[string]*Node{},
+		t:         t,
+		ctx:       ctx,
+		cancelAll: cancel,
 	}
 }
 
@@ -60,10 +55,9 @@ func (n *Nodes) updateLocked(target *Node, mac net.HardwareAddr, ips []net.IP, i
 		return false
 	}
 
-	targetID, isNew := n.resolveTargetNode(target, mac, ips, nodeName)
-	node := n.nodes[targetID]
+	node, isNew := n.resolveTargetNode(target, mac, ips, nodeName)
 
-	added := n.applyNodeUpdates(node, targetID, mac, ips, ifaceName, nodeName)
+	added := n.applyNodeUpdates(node, mac, ips, ifaceName, nodeName)
 
 	n.logUpdates(node, added, isNew, source)
 
@@ -74,108 +68,82 @@ func (n *Nodes) updateLocked(target *Node, mac net.HardwareAddr, ips []net.IP, i
 	return isNew || len(added) > 0
 }
 
-func (n *Nodes) resolveTargetNode(target *Node, mac net.HardwareAddr, ips []net.IP, nodeName string) (int, bool) {
-	targetID := n.findByTarget(target)
-	targetID = n.findOrMergeByMAC(targetID, mac)
-	if targetID == -1 {
-		targetID = n.findByIPs(ips)
+func (n *Nodes) resolveTargetNode(target *Node, mac net.HardwareAddr, ips []net.IP, nodeName string) (*Node, bool) {
+	node := n.findOrMergeByMAC(target, mac)
+	if node == nil {
+		node = n.findByIPs(ips)
 	}
-	targetID = n.findOrMergeByName(targetID, nodeName)
+	node = n.findOrMergeByName(node, nodeName)
 
-	if targetID == -1 {
+	if node == nil {
 		return n.createNode(), true
 	}
-	return targetID, false
+	return node, false
 }
 
-func (n *Nodes) findByTarget(target *Node) int {
-	if target == nil {
-		return -1
-	}
-	for id, node := range n.nodes {
-		if node == target {
-			return id
-		}
-	}
-	return -1
-}
-
-func (n *Nodes) findOrMergeByMAC(targetID int, mac net.HardwareAddr) int {
+func (n *Nodes) findOrMergeByMAC(target *Node, mac net.HardwareAddr) *Node {
 	if mac == nil {
-		return targetID
+		return target
 	}
 	macKey := mac.String()
-	id, exists := n.macIndex[macKey]
-	if !exists {
-		return targetID
+	found := n.macIndex[macKey]
+	if found == nil {
+		return target
 	}
-	if _, nodeExists := n.nodes[id]; !nodeExists {
-		delete(n.macIndex, macKey)
-		return targetID
+	if target == nil {
+		return found
 	}
-	if targetID == -1 {
-		return id
+	if found != target {
+		n.mergeNodes(target, found)
 	}
-	if id != targetID {
-		n.mergeNodes(targetID, id)
-	}
-	return targetID
+	return target
 }
 
-func (n *Nodes) findByIPs(ips []net.IP) int {
+func (n *Nodes) findByIPs(ips []net.IP) *Node {
 	for _, ip := range ips {
-		if id, exists := n.ipIndex[ip.String()]; exists {
-			if _, nodeExists := n.nodes[id]; nodeExists {
-				return id
-			}
+		if node := n.ipIndex[ip.String()]; node != nil {
+			return node
 		}
 	}
-	return -1
+	return nil
 }
 
-func (n *Nodes) findOrMergeByName(targetID int, nodeName string) int {
+func (n *Nodes) findOrMergeByName(target *Node, nodeName string) *Node {
 	if nodeName == "" {
-		return targetID
+		return target
 	}
-	id, exists := n.nameIndex[nodeName]
-	if !exists {
-		return targetID
+	found := n.nameIndex[nodeName]
+	if found == nil {
+		return target
 	}
-	nameNode, nodeExists := n.nodes[id]
-	if !nodeExists {
-		delete(n.nameIndex, nodeName)
-		return targetID
+	if target == nil {
+		return found
 	}
-	if targetID == -1 {
-		return id
+	if found != target && len(found.Interfaces) == 0 {
+		n.mergeNodes(target, found)
 	}
-	if id != targetID && len(nameNode.Interfaces) == 0 {
-		n.mergeNodes(targetID, id)
-	}
-	return targetID
+	return target
 }
 
-func (n *Nodes) createNode() int {
-	targetID := n.nextID
-	n.nextID++
+func (n *Nodes) createNode() *Node {
 	node := &Node{
-		TypeID:      newTypeID("node"),
+		ID:          newID("node"),
 		Interfaces:  InterfaceMap{},
 		MACTable:    map[string]string{},
 		pollTrigger: make(chan struct{}, 1),
 	}
-	n.nodes[targetID] = node
-	n.startNodePoller(targetID, node)
-	return targetID
+	n.nodes = append(n.nodes, node)
+	n.startNodePoller(node)
+	return node
 }
 
-func (n *Nodes) applyNodeUpdates(node *Node, nodeID int, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName string) []string {
+func (n *Nodes) applyNodeUpdates(node *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName string) []string {
 	var added []string
 
 	if mac != nil {
-		added = n.updateNodeInterface(node, nodeID, mac, ips, ifaceName)
+		added = n.updateNodeInterface(node, mac, ips, ifaceName)
 	} else {
-		added = n.updateNodeIPs(node, nodeID, ips)
+		added = n.updateNodeIPs(node, ips)
 	}
 
 	if nodeName != "" {
@@ -184,7 +152,7 @@ func (n *Nodes) applyNodeUpdates(node *Node, nodeID int, mac net.HardwareAddr, i
 		}
 		if !node.Names.Has(nodeName) {
 			node.Names.Add(nodeName)
-			n.nameIndex[nodeName] = nodeID
+			n.nameIndex[nodeName] = node
 			added = append(added, "name="+nodeName)
 		}
 	}
@@ -192,22 +160,17 @@ func (n *Nodes) applyNodeUpdates(node *Node, nodeID int, mac net.HardwareAddr, i
 	return added
 }
 
-func (n *Nodes) updateNodeIPs(node *Node, nodeID int, ips []net.IP) []string {
+func (n *Nodes) updateNodeIPs(node *Node, ips []net.IP) []string {
 	var added []string
 	for _, ip := range ips {
 		ipKey := ip.String()
-		if existingID, exists := n.ipIndex[ipKey]; exists {
-			if existingID == nodeID {
-				continue
-			}
-			if existingNode, nodeExists := n.nodes[existingID]; nodeExists {
-				n.mergeNodes(nodeID, existingID)
-				if n.t.LogEvents {
-					log.Printf("[merge] %s into %s (shared ip %s)", existingNode, node, ipKey)
-				}
+		if existing := n.ipIndex[ipKey]; existing != nil && existing != node {
+			n.mergeNodes(node, existing)
+			if n.t.LogEvents {
+				log.Printf("[merge] %s into %s (shared ip %s)", existing, node, ipKey)
 			}
 		}
-		n.ipIndex[ipKey] = nodeID
+		n.ipIndex[ipKey] = node
 		iface, exists := node.Interfaces[ipKey]
 		if !exists {
 			iface = &Interface{IPs: IPSet{}}
@@ -245,9 +208,9 @@ func (n *Nodes) logUpdates(node *Node, added []string, isNew bool, source string
 	}
 }
 
-func (n *Nodes) startNodePoller(nodeID int, node *Node) {
+func (n *Nodes) startNodePoller(node *Node) {
 	ctx, cancel := context.WithCancel(n.ctx)
-	n.nodeCancel[nodeID] = cancel
+	node.cancelFunc = cancel
 
 	go func() {
 		pollTicker := time.NewTicker(10 * time.Second)
@@ -277,7 +240,7 @@ func (n *Nodes) triggerPoll(node *Node) {
 	}
 }
 
-func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr, ips []net.IP, ifaceName string) []string {
+func (n *Nodes) updateNodeInterface(node *Node, mac net.HardwareAddr, ips []net.IP, ifaceName string) []string {
 	macKey := mac.String()
 	var added []string
 
@@ -300,25 +263,23 @@ func (n *Nodes) updateNodeInterface(node *Node, nodeID int, mac net.HardwareAddr
 		added = append(added, "iface="+ifaceKey)
 	}
 
-	if _, exists := n.macIndex[macKey]; !exists {
-		n.macIndex[macKey] = nodeID
+	if n.macIndex[macKey] == nil {
+		n.macIndex[macKey] = node
 	}
 
 	for _, ip := range ips {
 		ipKey := ip.String()
-		if existingID, exists := n.ipIndex[ipKey]; exists && existingID != nodeID {
-			if existingNode, nodeExists := n.nodes[existingID]; nodeExists {
-				n.mergeNodes(nodeID, existingID)
-				if n.t.LogEvents {
-					log.Printf("[merge] %s into %s (shared ip %s)", existingNode, node, ipKey)
-				}
+		if existing := n.ipIndex[ipKey]; existing != nil && existing != node {
+			n.mergeNodes(node, existing)
+			if n.t.LogEvents {
+				log.Printf("[merge] %s into %s (shared ip %s)", existing, node, ipKey)
 			}
 		}
 		if !iface.IPs.Has(ipKey) {
 			added = append(added, "ip="+ipKey)
 		}
 		iface.IPs.Add(ip)
-		n.ipIndex[ipKey] = nodeID
+		n.ipIndex[ipKey] = node
 
 		if ipOnlyIface, exists := node.Interfaces[ipKey]; exists && ipOnlyIface != iface {
 			delete(node.Interfaces, ipKey)
@@ -356,40 +317,36 @@ func (n *Nodes) Merge(macs []net.HardwareAddr, source string) {
 		return
 	}
 
-	existingIDs := map[int]bool{}
+	existing := map[*Node]bool{}
 	for _, mac := range macs {
-		if id, exists := n.macIndex[mac.String()]; exists {
-			existingIDs[id] = true
+		if node := n.macIndex[mac.String()]; node != nil {
+			existing[node] = true
 		}
 	}
 
-	if len(existingIDs) < 2 {
+	if len(existing) < 2 {
 		return
 	}
 
-	var ids []int
-	for id := range existingIDs {
-		ids = append(ids, id)
+	var nodes []*Node
+	for node := range existing {
+		nodes = append(nodes, node)
 	}
-	sort.Ints(ids)
 
-	targetID := ids[0]
-	for i := 1; i < len(ids); i++ {
+	target := nodes[0]
+	for i := 1; i < len(nodes); i++ {
 		if n.t.LogEvents {
-			log.Printf("[merge] %s into %s (via %s)", n.nodes[ids[i]], n.nodes[targetID], source)
+			log.Printf("[merge] %s into %s (via %s)", nodes[i], target, source)
 		}
-		n.mergeNodes(targetID, ids[i])
+		n.mergeNodes(target, nodes[i])
 	}
 
 	if n.t.LogNodes {
-		n.logNode(n.nodes[targetID])
+		n.logNode(target)
 	}
 }
 
-func (n *Nodes) mergeNodes(keepID, mergeID int) {
-	keep := n.nodes[keepID]
-	merge := n.nodes[mergeID]
-
+func (n *Nodes) mergeNodes(keep, merge *Node) {
 	if keep == nil || merge == nil {
 		return
 	}
@@ -399,7 +356,7 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 			keep.Names = NameSet{}
 		}
 		keep.Names.Add(name)
-		n.nameIndex[name] = keepID
+		n.nameIndex[name] = keep
 	}
 
 	for _, iface := range merge.Interfaces {
@@ -408,8 +365,8 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 			ips = append(ips, net.ParseIP(ipStr))
 		}
 		if iface.MAC != "" {
-			n.updateNodeInterface(keep, keepID, iface.MAC.Parse(), ips, iface.Name)
-			n.macIndex[string(iface.MAC)] = keepID
+			n.updateNodeInterface(keep, iface.MAC.Parse(), ips, iface.Name)
+			n.macIndex[string(iface.MAC)] = keep
 		}
 	}
 
@@ -425,12 +382,20 @@ func (n *Nodes) mergeNodes(keepID, mergeID int) {
 	n.mergeMulticast(keep, merge)
 	n.mergeDante(keep, merge)
 
-	if cancel, exists := n.nodeCancel[mergeID]; exists {
-		cancel()
-		delete(n.nodeCancel, mergeID)
+	if merge.cancelFunc != nil {
+		merge.cancelFunc()
 	}
 
-	delete(n.nodes, mergeID)
+	n.removeNode(merge)
+}
+
+func (n *Nodes) removeNode(node *Node) {
+	for i, nd := range n.nodes {
+		if nd == node {
+			n.nodes = append(n.nodes[:i], n.nodes[i+1:]...)
+			return
+		}
+	}
 }
 
 func (n *Nodes) GetByIP(ip net.IP) *Node {
@@ -441,55 +406,41 @@ func (n *Nodes) GetByIP(ip net.IP) *Node {
 }
 
 func (n *Nodes) getByIPLocked(ip net.IP) *Node {
-	if id, exists := n.ipIndex[ip.String()]; exists {
-		return n.nodes[id]
-	}
-	return nil
+	return n.ipIndex[ip.String()]
 }
 
 func (n *Nodes) GetByMAC(mac net.HardwareAddr) *Node {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	if id, exists := n.macIndex[mac.String()]; exists {
-		return n.nodes[id]
-	}
-	return nil
+	return n.macIndex[mac.String()]
 }
 
 func (n *Nodes) GetByName(name string) *Node {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	if id, exists := n.nameIndex[name]; exists {
-		return n.nodes[id]
-	}
-	return nil
+	return n.nameIndex[name]
 }
 
 func (n *Nodes) GetOrCreateByName(name string) *Node {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if id, exists := n.nameIndex[name]; exists {
-		if node, nodeExists := n.nodes[id]; nodeExists {
-			return node
-		}
-		delete(n.nameIndex, name)
+	if node := n.nameIndex[name]; node != nil {
+		return node
 	}
 
-	targetID := n.nextID
-	n.nextID++
 	node := &Node{
-		TypeID:      newTypeID("node"),
+		ID:          newID("node"),
 		Names:       NameSet{name: true},
 		Interfaces:  InterfaceMap{},
 		MACTable:    map[string]string{},
 		pollTrigger: make(chan struct{}, 1),
 	}
-	n.nodes[targetID] = node
-	n.nameIndex[name] = targetID
-	n.startNodePoller(targetID, node)
+	n.nodes = append(n.nodes, node)
+	n.nameIndex[name] = node
+	n.startNodePoller(node)
 
 	if n.t.LogEvents {
 		log.Printf("[add] %s [name=%s] (via name-lookup)", node, name)
@@ -518,16 +469,13 @@ func (n *Nodes) SetDanteClockMaster(ip net.IP) {
 		node.IsDanteClockMaster = false
 	}
 
-	if id, exists := n.ipIndex[ip.String()]; exists {
-		n.nodes[id].IsDanteClockMaster = true
+	if node := n.ipIndex[ip.String()]; node != nil {
+		node.IsDanteClockMaster = true
 	}
 }
 
 func (n *Nodes) getNodeByIPLocked(ip net.IP) *Node {
-	if id, exists := n.ipIndex[ip.String()]; exists {
-		return n.nodes[id]
-	}
-	return nil
+	return n.ipIndex[ip.String()]
 }
 
 func (n *Nodes) logNode(node *Node) {
@@ -620,12 +568,15 @@ func (n *Nodes) LogAll() {
 
 	groupMembers := map[string][]string{}
 	for _, node := range n.nodes {
-		for _, groupName := range node.MulticastGroups {
+		if node.MulticastGroups == nil {
+			continue
+		}
+		for _, group := range node.MulticastGroups.Groups() {
 			name := node.DisplayName()
 			if name == "" {
 				name = "??"
 			}
-			groupMembers[groupName] = append(groupMembers[groupName], name)
+			groupMembers[group.String()] = append(groupMembers[group.String()], name)
 		}
 	}
 
