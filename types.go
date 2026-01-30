@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"sort"
 	"strings"
@@ -358,14 +359,41 @@ type Interface struct {
 }
 
 type InterfaceStats struct {
-	Speed       uint64    `json:"speed,omitempty"`
-	InErrors    uint64    `json:"in_errors,omitempty"`
-	OutErrors   uint64    `json:"out_errors,omitempty"`
-	InPktsRate  float64   `json:"in_pkts_rate,omitempty"`
-	OutPktsRate float64   `json:"out_pkts_rate,omitempty"`
-	InBytesRate float64   `json:"in_bytes_rate,omitempty"`
-	OutBytesRate float64  `json:"out_bytes_rate,omitempty"`
-	PoE         *PoEStats `json:"poe,omitempty"`
+	Speed        uint64    `json:"speed,omitempty"`
+	InErrors     uint64    `json:"in_errors,omitempty"`
+	OutErrors    uint64    `json:"out_errors,omitempty"`
+	InPktsRate   float64   `json:"in_pkts_rate,omitempty"`
+	OutPktsRate  float64   `json:"out_pkts_rate,omitempty"`
+	InBytesRate  float64   `json:"in_bytes_rate,omitempty"`
+	OutBytesRate float64   `json:"out_bytes_rate,omitempty"`
+	PoE          *PoEStats `json:"poe,omitempty"`
+}
+
+func round2(v float64) float64 {
+	return math.Round(v*100) / 100
+}
+
+func (s *InterfaceStats) MarshalJSON() ([]byte, error) {
+	type statsJSON struct {
+		Speed        uint64    `json:"speed,omitempty"`
+		InErrors     uint64    `json:"in_errors,omitempty"`
+		OutErrors    uint64    `json:"out_errors,omitempty"`
+		InPktsRate   float64   `json:"in_pkts_rate,omitempty"`
+		OutPktsRate  float64   `json:"out_pkts_rate,omitempty"`
+		InBytesRate  float64   `json:"in_bytes_rate,omitempty"`
+		OutBytesRate float64   `json:"out_bytes_rate,omitempty"`
+		PoE          *PoEStats `json:"poe,omitempty"`
+	}
+	return json.Marshal(statsJSON{
+		Speed:        s.Speed,
+		InErrors:     s.InErrors,
+		OutErrors:    s.OutErrors,
+		InPktsRate:   round2(s.InPktsRate),
+		OutPktsRate:  round2(s.OutPktsRate),
+		InBytesRate:  round2(s.InBytesRate),
+		OutBytesRate: round2(s.OutBytesRate),
+		PoE:          s.PoE,
+	})
 }
 
 type PoEStats struct {
@@ -558,16 +586,11 @@ type DantePeer struct {
 
 func (p *DantePeer) MarshalJSON() ([]byte, error) {
 	type peerJSON struct {
-		Node     *Node           `json:"node"`
+		NodeID   string          `json:"node_id"`
 		Channels []*DanteChannel `json:"channels,omitempty"`
 	}
-	nodeRef := &Node{
-		ID:         p.Node.ID,
-		Names:      p.Node.Names,
-		Interfaces: p.Node.Interfaces,
-	}
 	return json.Marshal(peerJSON{
-		Node:     nodeRef,
+		NodeID:   p.Node.ID,
 		Channels: p.Channels,
 	})
 }

@@ -72,7 +72,22 @@
       "Bash(git -C /home/flamingcow/artmap diff)",
       "Bash(git -C /home/flamingcow/artnet status)",
       "Bash(git -C /home/flamingcow/tendrils status)",
-      "Bash(git -C /home/flamingcow/artmap status)"
+      "Bash(git -C /home/flamingcow/artmap status)",
+      "Bash(git -C /home/flamingcow/artnet status --short)",
+      "Bash(git -C /home/flamingcow/tendrils status --short)",
+      "Bash(git -C /home/flamingcow/artmap status --short)",
+      "Bash(git -C /home/flamingcow/sacn status --short)",
+      "Bash(git -C /home/flamingcow/multicast status --short)",
+      "Bash(git -C /home/flamingcow/artnet diff go.mod go.sum)",
+      "Bash(git -C /home/flamingcow/tendrils diff go.mod go.sum)",
+      "Bash(git -C /home/flamingcow/artmap diff go.mod go.sum)",
+      "Bash(git -C /home/flamingcow/sacn diff go.mod go.sum)",
+      "Bash(git -C /home/flamingcow/multicast diff go.mod go.sum)",
+      "Bash(git -C /home/flamingcow/artnet diff --name-only)",
+      "Bash(git -C /home/flamingcow/tendrils diff --name-only)",
+      "Bash(git -C /home/flamingcow/artmap diff --name-only)",
+      "Bash(git -C /home/flamingcow/sacn diff --name-only)",
+      "Bash(git -C /home/flamingcow/multicast diff --name-only)"
     ],
     "ask": [
       "Bash(rm *)"

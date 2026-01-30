@@ -15,18 +15,18 @@ type Link struct {
 
 func (l *Link) MarshalJSON() ([]byte, error) {
 	type linkJSON struct {
-		ID         string      `json:"id"`
-		NodeA      interface{} `json:"node_a"`
-		InterfaceA string      `json:"interface_a,omitempty"`
-		NodeB      interface{} `json:"node_b"`
-		InterfaceB string      `json:"interface_b,omitempty"`
+		ID         string `json:"id"`
+		NodeAID    string `json:"node_a_id"`
+		InterfaceA string `json:"interface_a,omitempty"`
+		NodeBID    string `json:"node_b_id"`
+		InterfaceB string `json:"interface_b,omitempty"`
 	}
 
 	return json.Marshal(linkJSON{
 		ID:         l.ID,
-		NodeA:      l.NodeA.WithInterface(l.InterfaceA),
+		NodeAID:    l.NodeA.ID,
 		InterfaceA: l.InterfaceA,
-		NodeB:      l.NodeB.WithInterface(l.InterfaceB),
+		NodeBID:    l.NodeB.ID,
 		InterfaceB: l.InterfaceB,
 	})
 }
