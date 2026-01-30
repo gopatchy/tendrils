@@ -354,8 +354,27 @@ func (m InterfaceMap) MarshalJSON() ([]byte, error) {
 type Interface struct {
 	Name  string          `json:"name,omitempty"`
 	MAC   MAC             `json:"mac"`
-	IPs   IPSet           `json:"ips"`
+	IPs   IPSet           `json:"ips,omitempty"`
 	Stats *InterfaceStats `json:"stats,omitempty"`
+}
+
+func (i *Interface) MarshalJSON() ([]byte, error) {
+	type ifaceJSON struct {
+		Name  string          `json:"name,omitempty"`
+		MAC   MAC             `json:"mac"`
+		IPs   []string        `json:"ips,omitempty"`
+		Stats *InterfaceStats `json:"stats,omitempty"`
+	}
+	var ips []string
+	if len(i.IPs) > 0 {
+		ips = i.IPs.Slice()
+	}
+	return json.Marshal(ifaceJSON{
+		Name:  i.Name,
+		MAC:   i.MAC,
+		IPs:   ips,
+		Stats: i.Stats,
+	})
 }
 
 type InterfaceStats struct {
