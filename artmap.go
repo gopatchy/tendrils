@@ -52,21 +52,21 @@ func (t *Tendrils) probeArtmap(ip net.IP) {
 	}
 	defer resp.Body.Close()
 
-	server := resp.Header.Get("Server")
-	if server != "artmap" {
-		if server != "" {
-			log.Printf("[artmap] unexpected server header ip=%s server=%q", ip, server)
-		}
+	if resp.Header.Get("Server") != "artmap" {
 		return
 	}
 
 	var cfg artmapConfig
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
-		log.Printf("[artmap] decode error ip=%s: %v", ip, err)
+		if t.DebugArtmap {
+			log.Printf("[artmap] decode error ip=%s: %v", ip, err)
+		}
 		return
 	}
 
-	log.Printf("[artmap] found ip=%s targets=%d mappings=%d", ip, len(cfg.Targets), len(cfg.Mappings))
+	if t.DebugArtmap {
+		log.Printf("[artmap] found ip=%s targets=%d mappings=%d", ip, len(cfg.Targets), len(cfg.Mappings))
+	}
 
 	t.processArtmapConfig(&cfg)
 }
@@ -76,13 +76,11 @@ func (t *Tendrils) processArtmapConfig(cfg *artmapConfig) {
 	for _, target := range cfg.Targets {
 		ip := parseTargetIP(target.Address)
 		if ip == nil {
-			log.Printf("[artmap] failed to parse target address %q", target.Address)
 			continue
 		}
 
 		node := t.nodes.GetByIP(ip)
 		if node == nil {
-			log.Printf("[artmap] target ip=%s not found as node", ip)
 			continue
 		}
 
@@ -90,12 +88,15 @@ func (t *Tendrils) processArtmapConfig(cfg *artmapConfig) {
 		switch target.Universe.Protocol {
 		case "artnet":
 			t.nodes.UpdateArtNet(node, []int{universe}, nil)
-			log.Printf("[artmap] marked %s (%s) as artnet input for universe %d", node.DisplayName(), ip, universe)
+			if t.DebugArtmap {
+				log.Printf("[artmap] marked %s (%s) as artnet input for universe %d", node.DisplayName(), ip, universe)
+			}
 		case "sacn":
 			t.nodes.UpdateSACNUnicastInputs(node, []int{universe})
-			log.Printf("[artmap] marked %s (%s) as sacn input for universe %d", node.DisplayName(), ip, universe)
+			if t.DebugArtmap {
+				log.Printf("[artmap] marked %s (%s) as sacn input for universe %d", node.DisplayName(), ip, universe)
+			}
 		default:
-			log.Printf("[artmap] unknown protocol %q for target %s", target.Universe.Protocol, target.Address)
 			continue
 		}
 		updated = true
