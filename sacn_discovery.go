@@ -60,8 +60,24 @@ func (n *Nodes) UpdateSACN(node *Node, outputs []int) {
 	}
 }
 
+func (n *Nodes) UpdateSACNUnicastInputs(node *Node, inputs []int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if node.SACNUnicastInputs == nil {
+		node.SACNUnicastInputs = SACNUniverseSet{}
+	}
+
+	for _, u := range inputs {
+		node.SACNUnicastInputs.Add(SACNUniverse(u))
+	}
+}
+
 func (n *Nodes) expireSACN() {
 	for _, node := range n.nodes {
+		if node.SACNUnicastInputs != nil {
+			node.SACNUnicastInputs.Expire(60 * time.Second)
+		}
 		if node.SACNOutputs != nil {
 			node.SACNOutputs.Expire(60 * time.Second)
 		}
@@ -69,15 +85,24 @@ func (n *Nodes) expireSACN() {
 }
 
 func (n *Nodes) mergeSACN(keep, merge *Node) {
-	if merge.SACNOutputs == nil {
-		return
+	if merge.SACNUnicastInputs != nil {
+		if keep.SACNUnicastInputs == nil {
+			keep.SACNUnicastInputs = SACNUniverseSet{}
+		}
+		for u, lastSeen := range merge.SACNUnicastInputs {
+			if existing, ok := keep.SACNUnicastInputs[u]; !ok || lastSeen.After(existing) {
+				keep.SACNUnicastInputs[u] = lastSeen
+			}
+		}
 	}
-	if keep.SACNOutputs == nil {
-		keep.SACNOutputs = SACNUniverseSet{}
-	}
-	for u, lastSeen := range merge.SACNOutputs {
-		if existing, ok := keep.SACNOutputs[u]; !ok || lastSeen.After(existing) {
-			keep.SACNOutputs[u] = lastSeen
+	if merge.SACNOutputs != nil {
+		if keep.SACNOutputs == nil {
+			keep.SACNOutputs = SACNUniverseSet{}
+		}
+		for u, lastSeen := range merge.SACNOutputs {
+			if existing, ok := keep.SACNOutputs[u]; !ok || lastSeen.After(existing) {
+				keep.SACNOutputs[u] = lastSeen
+			}
 		}
 	}
 }

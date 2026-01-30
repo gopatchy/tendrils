@@ -34,6 +34,7 @@ func main() {
 	debugShure := flag.Bool("debug-shure", false, "debug Shure discovery")
 	debugYamaha := flag.Bool("debug-yamaha", false, "debug Yamaha discovery")
 	debugBroadcast := flag.Bool("debug-broadcast", false, "debug broadcast traffic monitoring")
+	debugArtmap := flag.Bool("debug-artmap", false, "debug artmap polling")
 	flag.Parse()
 
 	t := tendrils.New()
@@ -64,5 +65,6 @@ func main() {
 	t.DebugShure = *debugShure
 	t.DebugYamaha = *debugYamaha
 	t.DebugBroadcast = *debugBroadcast
+	t.DebugArtmap = *debugArtmap
 	t.Run()
 }

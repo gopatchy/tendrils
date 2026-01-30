@@ -450,6 +450,7 @@ type Node struct {
 	MulticastGroups       MulticastMembershipSet `json:"multicast_groups,omitempty"`
 	ArtNetInputs          ArtNetUniverseSet      `json:"artnet_inputs,omitempty"`
 	ArtNetOutputs         ArtNetUniverseSet      `json:"artnet_outputs,omitempty"`
+	SACNUnicastInputs     SACNUniverseSet        `json:"sacn_unicast_inputs,omitempty"`
 	SACNOutputs           SACNUniverseSet        `json:"sacn_outputs,omitempty"`
 	Unreachable           bool                   `json:"unreachable,omitempty"`
 	errors                *ErrorTracker

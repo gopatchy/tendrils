@@ -210,21 +210,23 @@ export function render(data, config) {
     const sacnUniverseInputs = new Map();
     const sacnUniverseOutputs = new Map();
 
-    function getSacnInputsFromMulticast(node) {
-        const groups = node.multicast_groups || [];
+    function getSacnInputs(node) {
         const inputs = [];
-        groups.forEach(g => {
+        (node.multicast_groups || []).forEach(g => {
             if (typeof g === 'string' && g.startsWith('sacn:')) {
                 const u = parseInt(g.substring(5), 10);
                 if (!isNaN(u)) inputs.push(u);
             }
+        });
+        (node.sacn_unicast_inputs || []).forEach(u => {
+            if (!inputs.includes(u)) inputs.push(u);
         });
         return inputs;
     }
 
     nodes.forEach(node => {
         const name = getShortLabel(node);
-        getSacnInputsFromMulticast(node).forEach(u => {
+        getSacnInputs(node).forEach(u => {
             if (!sacnUniverseInputs.has(u)) sacnUniverseInputs.set(u, []);
             sacnUniverseInputs.get(u).push(name);
         });
@@ -242,7 +244,7 @@ export function render(data, config) {
 
     nodes.forEach(node => {
         const nodeId = node.id;
-        const sacnInputs = getSacnInputsFromMulticast(node);
+        const sacnInputs = getSacnInputs(node);
         const sacnOutputs = node.sacn_outputs || [];
 
         if (sacnInputs.length === 0 && sacnOutputs.length === 0) return;

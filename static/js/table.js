@@ -338,6 +338,12 @@ export function renderSacnTable() {
                 }
             }
         });
+        (node.sacn_unicast_inputs || []).forEach(u => {
+            if (!rxByUniverse.has(u)) rxByUniverse.set(u, []);
+            if (!rxByUniverse.get(u).includes(name)) {
+                rxByUniverse.get(u).push(name);
+            }
+        });
     });
 
     const allUniverses = new Set([...txByUniverse.keys(), ...rxByUniverse.keys()]);

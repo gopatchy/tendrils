@@ -87,7 +87,9 @@
       "Bash(git -C /home/flamingcow/tendrils diff --name-only)",
       "Bash(git -C /home/flamingcow/artmap diff --name-only)",
       "Bash(git -C /home/flamingcow/sacn diff --name-only)",
-      "Bash(git -C /home/flamingcow/multicast diff --name-only)"
+      "Bash(git -C /home/flamingcow/multicast diff --name-only)",
+      "Bash(du:*)",
+      "Bash(tree:*)"
     ],
     "ask": [
       "Bash(rm *)"

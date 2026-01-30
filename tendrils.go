@@ -69,6 +69,7 @@ type Tendrils struct {
 	DebugShure     bool
 	DebugYamaha    bool
 	DebugBroadcast bool
+	DebugArtmap    bool
 }
 
 func New() *Tendrils {
@@ -345,5 +346,9 @@ func (t *Tendrils) pollNode(node *Node) {
 		for _, ip := range ips {
 			t.probeDanteDevice(ip)
 		}
+	}
+
+	for _, ip := range ips {
+		t.probeArtmap(ip)
 	}
 }

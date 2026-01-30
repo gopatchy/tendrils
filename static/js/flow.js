@@ -131,7 +131,8 @@ export function showFlowView(flowSpec) {
                 if (protocol === 'sacn') {
                     if ((node.sacn_outputs || []).includes(universe)) sourceIds.push(node.id);
                     const groups = node.multicast_groups || [];
-                    if (groups.some(g => g === 'sacn:' + universe)) destIds.push(node.id);
+                    const unicastInputs = node.sacn_unicast_inputs || [];
+                    if (groups.some(g => g === 'sacn:' + universe) || unicastInputs.includes(universe)) destIds.push(node.id);
                 } else {
                     if ((node.artnet_outputs || []).includes(universe)) sourceIds.push(node.id);
                     if ((node.artnet_inputs || []).includes(universe)) destIds.push(node.id);
