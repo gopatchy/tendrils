@@ -11,10 +11,10 @@ github.com/google/gopacket v1.1.19 h1:ves8RnFZPGiFnTS0uPQStjwru6uO6h+nlr9j6fL7kF
 github.com/google/gopacket v1.1.19/go.mod h1:iJ8V8n6KS+z2U1A8pUwu8bW5SyEMkXJB8Yo/Vo+TKTo=
 github.com/gopatchy/artnet v0.0.0-20260128203426-0a3e9b1daf66 h1:QZrypvWOUbZeJsFRRx8UXf+MUbvkF/WR2KvNUynWFTM=
 github.com/gopatchy/artnet v0.0.0-20260128203426-0a3e9b1daf66/go.mod h1:V/D32mh1xfK/llCKbrqI2jxw4xL4hf6Ge2yLiIrp9/4=
-github.com/gopatchy/multicast v0.0.0-20260130055445-f208d585e5b6 h1:c30UCg0bKZkCM2JdZSKRVmebyEN8ioD5NmTAaj9ctl8=
-github.com/gopatchy/multicast v0.0.0-20260130055445-f208d585e5b6/go.mod h1:mSeh6GX+fL6SWZYqxYHTdnddvzDx4qsGSBnlGwY5ZsA=
-github.com/gopatchy/sacn v0.0.0-20260130055500-cb293b4fda5c h1:LiaM9DSSO18UfUBMXOuoAbSqWcLpNjNVfTiXJHmTfrg=
-github.com/gopatchy/sacn v0.0.0-20260130055500-cb293b4fda5c/go.mod h1:tciDemP83Z+aYVtOfDdrLczcJh39d/pyccwW/VYho8M=
+github.com/gopatchy/multicast v0.0.0-20260130055828-12d0b38af995 h1:dwu07X0JnN6Ar3oZMLa/BokX04JRa3AeM38Nz7nwKnM=
+github.com/gopatchy/multicast v0.0.0-20260130055828-12d0b38af995/go.mod h1:mSeh6GX+fL6SWZYqxYHTdnddvzDx4qsGSBnlGwY5ZsA=
+github.com/gopatchy/sacn v0.0.0-20260130055955-54a46fbfe1f0 h1:j1uxCRJSu7G8UwlTykIDacbcQY2qoUpZ9t/SBHqLET8=
+github.com/gopatchy/sacn v0.0.0-20260130055955-54a46fbfe1f0/go.mod h1:1Vk/caJzWUKpLR6AQTyQC8rr04TpA8lGI8kaUlAlHV8=
 github.com/gosnmp/gosnmp v1.43.2 h1:F9loz6uMCNtIQj0RNO5wz/mZ+FZt2WyNKJYOvw+Zosw=
 github.com/gosnmp/gosnmp v1.43.2/go.mod h1:smHIwoaqr1M+HTAEd7+mKkPs8lp3Lf/U+htPUql1Q3c=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=

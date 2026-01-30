@@ -6,8 +6,8 @@ require (
 	github.com/fvbommel/sortorder v1.1.0
 	github.com/google/gopacket v1.1.19
 	github.com/gopatchy/artnet v0.0.0-20260128203426-0a3e9b1daf66
-	github.com/gopatchy/multicast v0.0.0-20260130055445-f208d585e5b6
-	github.com/gopatchy/sacn v0.0.0-20260130055500-cb293b4fda5c
+	github.com/gopatchy/multicast v0.0.0-20260130055828-12d0b38af995
+	github.com/gopatchy/sacn v0.0.0-20260130055955-54a46fbfe1f0
 	github.com/gosnmp/gosnmp v1.43.2
 	github.com/miekg/dns v1.1.72
 	go.jetify.com/typeid v1.3.0
