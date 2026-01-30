@@ -10,24 +10,14 @@ import (
 )
 
 func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Interface) {
-	receiver, err := sacn.NewReceiver("")
+	receiver, err := sacn.NewDiscoveryReceiver(&iface)
 	if err != nil {
-		log.Printf("[ERROR] failed to create sacn receiver: %v", err)
+		log.Printf("[ERROR] failed to create sacn discovery receiver on %s: %v", iface.Name, err)
 		return
 	}
 	defer receiver.Stop()
 
-	if err := receiver.JoinDiscovery(&iface); err != nil {
-		log.Printf("[ERROR] failed to join sacn discovery multicast on %s: %v", iface.Name, err)
-		return
-	}
-
-	// TODO: remove debug logging
-	log.Printf("[sacn] listening for discovery on %s", iface.Name)
-
 	receiver.SetHandler(func(src *net.UDPAddr, pkt interface{}) {
-		// TODO: remove debug logging
-		log.Printf("[sacn] received packet from %s", src)
 		if disc, ok := pkt.(*sacn.DiscoveryPacket); ok {
 			t.handleSACNDiscoveryPacket(src.IP, disc)
 		}
@@ -35,8 +25,6 @@ func (t *Tendrils) startSACNDiscoveryListener(ctx context.Context, iface net.Int
 
 	receiver.Start()
 	<-ctx.Done()
-	// TODO: remove debug logging
-	log.Printf("[sacn] discovery listener exiting on %s", iface.Name)
 }
 
 func (t *Tendrils) handleSACNDiscoveryPacket(srcIP net.IP, pkt *sacn.DiscoveryPacket) {
