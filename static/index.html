@@ -720,6 +720,139 @@
             color: #888;
         }
 
+        .flow-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .flow-title {
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #aaa;
+        }
+
+        .flow-path {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+        }
+
+        .flow-node {
+            background: #a6d;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: center;
+            min-width: 120px;
+            cursor: pointer;
+        }
+
+        .flow-node:hover {
+            filter: brightness(1.2);
+        }
+
+        .flow-node.switch {
+            background: #2a2;
+        }
+
+        .flow-node.source {
+            background: #d62;
+        }
+
+        .flow-node.dest {
+            background: #26d;
+        }
+
+        .flow-link {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 4px 0;
+            gap: 10px;
+        }
+
+        .flow-link .port-labels {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            font-size: 10px;
+            color: #888;
+            gap: 4px;
+            min-width: 40px;
+        }
+
+        .flow-link .line {
+            width: 2px;
+            background: #666;
+            height: 24px;
+        }
+
+        .flow-link .line.unknown {
+            background: repeating-linear-gradient(
+                180deg,
+                #666 0px,
+                #666 4px,
+                transparent 4px,
+                transparent 8px
+            );
+        }
+
+        .flow-link .line.has-errors {
+            background: #f90;
+        }
+
+        .flow-link .stats {
+            font-size: 9px;
+            color: #888;
+            text-align: left;
+            white-space: pre;
+            min-width: 40px;
+        }
+
+        .flow-error {
+            color: #f99;
+            font-size: 14px;
+            padding: 20px;
+        }
+
+        .flow-receivers {
+            margin-top: 30px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .flow-receivers-summary {
+            color: #aaa;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .flow-receivers-summary:hover {
+            color: #fff;
+        }
+
+        .flow-receiver-list {
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .flow-receiver-list.expanded {
+            display: flex;
+        }
+
         .node.has-error {
             box-shadow: 0 0 0 3px #f66;
         }
@@ -1265,11 +1398,29 @@
             plainLines.push(plainFormat ? plainFormat(label, value) : label + ': ' + value);
         }
 
-        function buildClickableList(container, items, label, plainFormat) {
+        function buildClickableList(container, items, label, plainFormat, flowInfo) {
             const plainLines = [];
             items.forEach((item, idx) => {
                 if (idx > 0) container.appendChild(document.createTextNode('\n'));
-                addClickableValue(container, label, item, plainLines, plainFormat);
+                const lbl = document.createElement('span');
+                lbl.className = 'lbl';
+                lbl.textContent = label;
+                container.appendChild(lbl);
+                container.appendChild(document.createTextNode(' '));
+                const val = document.createElement('span');
+                val.className = 'clickable-value';
+                val.textContent = item;
+                val.style.cursor = 'pointer';
+                val.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (flowInfo && flowInfo.universes && flowInfo.universes[idx] !== undefined) {
+                        openFlowHash(flowInfo.protocol, flowInfo.universes[idx], flowInfo.nodeId);
+                    } else {
+                        navigator.clipboard.writeText(item);
+                    }
+                });
+                container.appendChild(val);
+                plainLines.push(plainFormat ? plainFormat(label, item) : label + ': ' + item);
             });
             container.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1298,9 +1449,10 @@
             });
         }
 
-        function buildDanteDetail(container, entries, arrow) {
+        function buildDanteDetail(container, entries, arrow, sourceNodeId, peerNodeIds) {
             const plainLines = [];
             entries.forEach((entry, entryIdx) => {
+                const peerNodeId = peerNodeIds ? peerNodeIds[entryIdx] : null;
                 entry.split('\n').forEach((line, lineIdx) => {
                     if (entryIdx > 0 && lineIdx === 0) {
                         container.appendChild(document.createTextNode('\n\n'));
@@ -1312,7 +1464,27 @@
                         container.appendChild(document.createTextNode('      ' + line.trim()));
                         plainLines.push('      ' + line.trim());
                     } else {
-                        addClickableValue(container, arrow, line, plainLines, (l, v) => l + ' ' + v);
+                        const lbl = document.createElement('span');
+                        lbl.className = 'lbl';
+                        lbl.textContent = arrow;
+                        container.appendChild(lbl);
+                        container.appendChild(document.createTextNode(' '));
+                        const val = document.createElement('span');
+                        val.className = 'clickable-value';
+                        val.textContent = line;
+                        val.style.cursor = 'pointer';
+                        val.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (sourceNodeId && peerNodeId) {
+                                const src = arrow === '→' ? sourceNodeId : peerNodeId;
+                                const dst = arrow === '→' ? peerNodeId : sourceNodeId;
+                                openFlowHash('dante', src, 'to', dst);
+                            } else {
+                                navigator.clipboard.writeText(line);
+                            }
+                        });
+                        container.appendChild(val);
+                        plainLines.push(arrow + ' ' + line);
                     }
                 });
             });
@@ -1593,7 +1765,7 @@
 
                 const detail = container.querySelector('.dante-detail');
                 detail.innerHTML = '';
-                buildDanteDetail(detail, danteInfo.txTo, '→');
+                buildDanteDetail(detail, danteInfo.txTo, '→', node.id, danteInfo.txToPeerIds);
             } else {
                 const container = div.querySelector(':scope > .dante-tx-hover');
                 if (container) container.remove();
@@ -1615,7 +1787,7 @@
 
                 const detail = container.querySelector('.dante-detail');
                 detail.innerHTML = '';
-                buildDanteDetail(detail, danteInfo.rxFrom, '←');
+                buildDanteDetail(detail, danteInfo.rxFrom, '←', node.id, danteInfo.rxFromPeerIds);
             } else {
                 const container = div.querySelector(':scope > .dante-rx-hover');
                 if (container) container.remove();
@@ -1638,7 +1810,8 @@
 
                 const detail = container.querySelector('.artnet-detail');
                 detail.innerHTML = '';
-                buildClickableList(detail, artnetInfo.outputs.map(o => o.display), '←', (l, v) => l + ' ' + v);
+                buildClickableList(detail, artnetInfo.outputs.map(o => o.display), '←', (l, v) => l + ' ' + v,
+                    { protocol: 'artnet', nodeId: node.id, universes: artnetInfo.outputs.map(o => o.universe) });
             } else {
                 const container = div.querySelector(':scope > .artnet-out-hover');
                 if (container) container.remove();
@@ -1661,7 +1834,8 @@
 
                 const detail = container.querySelector('.artnet-detail');
                 detail.innerHTML = '';
-                buildClickableList(detail, artnetInfo.inputs.map(i => i.display), '→', (l, v) => l + ' ' + v);
+                buildClickableList(detail, artnetInfo.inputs.map(i => i.display), '→', (l, v) => l + ' ' + v,
+                    { protocol: 'artnet', nodeId: node.id, universes: artnetInfo.inputs.map(i => i.universe) });
             } else {
                 const container = div.querySelector(':scope > .artnet-in-hover');
                 if (container) container.remove();
@@ -1684,7 +1858,8 @@
 
                 const detail = container.querySelector('.sacn-detail');
                 detail.innerHTML = '';
-                buildClickableList(detail, sacnInfo.outputs.map(o => o.display), '←', (l, v) => l + ' ' + v);
+                buildClickableList(detail, sacnInfo.outputs.map(o => o.display), '←', (l, v) => l + ' ' + v,
+                    { protocol: 'sacn', nodeId: node.id, universes: sacnInfo.outputs.map(o => o.universe) });
             } else {
                 const container = div.querySelector(':scope > .sacn-out-hover');
                 if (container) container.remove();
@@ -1707,7 +1882,8 @@
 
                 const detail = container.querySelector('.sacn-detail');
                 detail.innerHTML = '';
-                buildClickableList(detail, sacnInfo.inputs.map(i => i.display), '→', (l, v) => l + ' ' + v);
+                buildClickableList(detail, sacnInfo.inputs.map(i => i.display), '→', (l, v) => l + ' ' + v,
+                    { protocol: 'sacn', nodeId: node.id, universes: sacnInfo.inputs.map(i => i.universe) });
             } else {
                 const container = div.querySelector(':scope > .sacn-in-hover');
                 if (container) container.remove();
@@ -2081,30 +2257,32 @@
 
                 if (danteTx.length === 0 && danteRx.length === 0) return;
 
-                const txTo = danteTx.map(peer => {
+                const txEntries = danteTx.map(peer => {
                     const peerNode = nodesByTypeId.get(peer.node_id);
                     const peerName = peerNode ? getShortLabel(peerNode) : '??';
                     const channels = (peer.channels || []).map(formatDanteChannel);
                     const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
-                    return peerName + channelSummary;
+                    return { text: peerName + channelSummary, peerId: peer.node_id };
                 });
 
-                const rxFrom = danteRx.map(peer => {
+                const rxEntries = danteRx.map(peer => {
                     const peerNode = nodesByTypeId.get(peer.node_id);
                     const peerName = peerNode ? getShortLabel(peerNode) : '??';
                     const channels = (peer.channels || []).map(formatDanteChannel);
                     const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
-                    return peerName + channelSummary;
+                    return { text: peerName + channelSummary, peerId: peer.node_id };
                 });
 
-                txTo.sort((a, b) => a.split('\n')[0].localeCompare(b.split('\n')[0]));
-                rxFrom.sort((a, b) => a.split('\n')[0].localeCompare(b.split('\n')[0]));
+                txEntries.sort((a, b) => a.text.split('\n')[0].localeCompare(b.text.split('\n')[0]));
+                rxEntries.sort((a, b) => a.text.split('\n')[0].localeCompare(b.text.split('\n')[0]));
 
                 danteNodes.set(nodeId, {
                     isTx: danteTx.length > 0,
                     isRx: danteRx.length > 0,
-                    txTo: txTo,
-                    rxFrom: rxFrom
+                    txTo: txEntries.map(e => e.text),
+                    txToPeerIds: txEntries.map(e => e.peerId),
+                    rxFrom: rxEntries.map(e => e.text),
+                    rxFromPeerIds: rxEntries.map(e => e.peerId)
                 });
             });
 
@@ -2145,21 +2323,24 @@
 
                 if (artnetInputs.length === 0 && artnetOutputs.length === 0) return;
 
-                const inputs = artnetInputs.slice().sort((a, b) => a - b).map(u => {
+                const sortedInputs = artnetInputs.slice().sort((a, b) => a - b);
+                const sortedOutputs = artnetOutputs.slice().sort((a, b) => a - b);
+
+                const inputs = sortedInputs.map(u => {
                     const sources = collapseNames(universeOutputs.get(u) || []);
                     const uniStr = formatUniverse(u);
                     if (sources.length > 0) {
-                        return { display: sources[0] + ' [' + uniStr + ']', firstTarget: sources[0] };
+                        return { display: sources[0] + ' [' + uniStr + ']', firstTarget: sources[0], universe: u };
                     }
-                    return { display: uniStr, firstTarget: null };
+                    return { display: uniStr, firstTarget: null, universe: u };
                 });
-                const outputs = artnetOutputs.slice().sort((a, b) => a - b).map(u => {
+                const outputs = sortedOutputs.map(u => {
                     const dests = collapseNames(universeInputs.get(u) || []);
                     const uniStr = formatUniverse(u);
                     if (dests.length > 0) {
-                        return { display: dests[0] + ' [' + uniStr + ']', firstTarget: dests[0] };
+                        return { display: dests[0] + ' [' + uniStr + ']', firstTarget: dests[0], universe: u };
                     }
-                    return { display: uniStr, firstTarget: null };
+                    return { display: uniStr, firstTarget: null, universe: u };
                 });
 
                 artnetNodes.set(nodeId, {
@@ -2212,19 +2393,22 @@
 
                 if (sacnInputs.length === 0 && sacnOutputs.length === 0) return;
 
-                const inputs = sacnInputs.slice().sort((a, b) => a - b).map(u => {
+                const sortedSacnInputs = sacnInputs.slice().sort((a, b) => a - b);
+                const sortedSacnOutputs = sacnOutputs.slice().sort((a, b) => a - b);
+
+                const inputs = sortedSacnInputs.map(u => {
                     const sources = sacnCollapseNames(sacnUniverseOutputs.get(u) || []);
                     if (sources.length > 0) {
-                        return { display: sources[0] + ' [' + u + ']', firstTarget: sources[0] };
+                        return { display: sources[0] + ' [' + u + ']', firstTarget: sources[0], universe: u };
                     }
-                    return { display: String(u), firstTarget: null };
+                    return { display: String(u), firstTarget: null, universe: u };
                 });
-                const outputs = sacnOutputs.slice().sort((a, b) => a - b).map(u => {
+                const outputs = sortedSacnOutputs.map(u => {
                     const dests = sacnCollapseNames(sacnUniverseInputs.get(u) || []);
                     if (dests.length > 0) {
-                        return { display: dests[0] + ' [' + u + ']', firstTarget: dests[0] };
+                        return { display: dests[0] + ' [' + u + ']', firstTarget: dests[0], universe: u };
                     }
-                    return { display: String(u), firstTarget: null };
+                    return { display: String(u), firstTarget: null, universe: u };
                 });
 
                 sacnNodes.set(nodeId, {
@@ -2329,8 +2513,13 @@
             updateBroadcastStats(data.broadcast_stats);
 
             tableData = data;
+            flowViewData = data;
             if (currentView === 'table') {
                 renderTable();
+            }
+            const hash = window.location.hash;
+            if (hash.startsWith('#flow/')) {
+                showFlowView(hash.slice(6));
             }
         }
 
@@ -2775,6 +2964,349 @@
             return net + ':' + subnet + ':' + universe + ' (' + u + ')';
         }
 
+        let flowViewData = null;
+
+        function buildNetworkGraph(nodes, links) {
+            const graph = new Map();
+            const nodesByTypeId = new Map();
+            nodes.forEach(n => {
+                nodesByTypeId.set(n.id, n);
+                graph.set(n.id, []);
+            });
+            links.forEach(link => {
+                const nodeA = nodesByTypeId.get(link.node_a_id);
+                const nodeB = nodesByTypeId.get(link.node_b_id);
+                if (!nodeA || !nodeB) return;
+                graph.get(link.node_a_id).push({
+                    nodeId: link.node_b_id,
+                    viaInterface: link.interface_a,
+                    fromInterface: link.interface_b
+                });
+                graph.get(link.node_b_id).push({
+                    nodeId: link.node_a_id,
+                    viaInterface: link.interface_b,
+                    fromInterface: link.interface_a
+                });
+            });
+            return { graph, nodesByTypeId };
+        }
+
+        function findPath(graph, sourceId, destId) {
+            if (sourceId === destId) return [{ nodeId: sourceId }];
+            const visited = new Set([sourceId]);
+            const queue = [[{ nodeId: sourceId }]];
+            while (queue.length > 0) {
+                const path = queue.shift();
+                const current = path[path.length - 1];
+                const edges = graph.get(current.nodeId) || [];
+                for (const edge of edges) {
+                    if (visited.has(edge.nodeId)) continue;
+                    const newPath = [...path, edge];
+                    if (edge.nodeId === destId) return newPath;
+                    visited.add(edge.nodeId);
+                    queue.push(newPath);
+                }
+            }
+            return null;
+        }
+
+        function resolveNodeId(identifier, nodes) {
+            const lower = identifier.toLowerCase();
+            for (const node of nodes) {
+                if (node.id === identifier) return node.id;
+                if (node.names) {
+                    for (const name of node.names) {
+                        if (name.toLowerCase() === lower) return node.id;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function showFlowView(flowSpec) {
+            if (!flowViewData) return;
+            const { nodes, links } = flowViewData;
+            const { graph, nodesByTypeId } = buildNetworkGraph(nodes, links);
+
+            const parts = flowSpec.split('/');
+            const protocol = parts[0];
+            let title = '', paths = [], error = '';
+
+            if (protocol === 'dante') {
+                if (parts.includes('to')) {
+                    const toIdx = parts.indexOf('to');
+                    const sourceIdent = parts.slice(1, toIdx).join('/');
+                    const destIdent = parts.slice(toIdx + 1).join('/');
+                    const sourceId = resolveNodeId(sourceIdent, nodes);
+                    const destId = resolveNodeId(destIdent, nodes);
+                    if (!sourceId) { error = 'Source node not found: ' + sourceIdent; }
+                    else if (!destId) { error = 'Destination node not found: ' + destIdent; }
+                    else {
+                        const sourceNode = nodesByTypeId.get(sourceId);
+                        const destNode = nodesByTypeId.get(destId);
+                        title = 'Dante: ' + getShortLabel(sourceNode) + ' → ' + getShortLabel(destNode);
+                        const path = findPath(graph, sourceId, destId);
+                        if (path) paths.push({ path, sourceId, destId });
+                        else error = 'No path found between nodes';
+                    }
+                } else {
+                    const sourceIdent = parts[1];
+                    const txChannel = parts[2];
+                    const sourceId = resolveNodeId(sourceIdent, nodes);
+                    if (!sourceId) { error = 'Source node not found: ' + sourceIdent; }
+                    else {
+                        const sourceNode = nodesByTypeId.get(sourceId);
+                        const danteTx = sourceNode.dante_flows?.tx || [];
+                        title = 'Dante TX: ' + getShortLabel(sourceNode) + (txChannel ? ' ch ' + txChannel : '');
+                        const destIds = new Set();
+                        danteTx.forEach(peer => {
+                            if (txChannel) {
+                                const hasChannel = (peer.channels || []).some(ch => ch.tx_channel === txChannel);
+                                if (hasChannel) destIds.add(peer.node_id);
+                            } else {
+                                destIds.add(peer.node_id);
+                            }
+                        });
+                        destIds.forEach(destId => {
+                            const path = findPath(graph, sourceId, destId);
+                            if (path) paths.push({ path, sourceId, destId });
+                        });
+                        if (paths.length === 0 && destIds.size > 0) error = 'No paths found to destinations';
+                        else if (destIds.size === 0) error = 'No active flows' + (txChannel ? ' for channel ' + txChannel : '');
+                    }
+                }
+            } else if (protocol === 'sacn' || protocol === 'artnet') {
+                const universe = parseInt(parts[1], 10);
+                const sourceIdent = parts[2];
+                const protoName = protocol === 'sacn' ? 'sACN' : 'Art-Net';
+                if (isNaN(universe)) { error = 'Invalid universe'; }
+                else {
+                    const sourceIds = [];
+                    const destIds = [];
+                    nodes.forEach(node => {
+                        if (protocol === 'sacn') {
+                            if ((node.sacn_outputs || []).includes(universe)) sourceIds.push(node.id);
+                            const groups = node.multicast_groups || [];
+                            if (groups.some(g => g === 'sacn:' + universe)) destIds.push(node.id);
+                        } else {
+                            if ((node.artnet_outputs || []).includes(universe)) sourceIds.push(node.id);
+                            if ((node.artnet_inputs || []).includes(universe)) destIds.push(node.id);
+                        }
+                    });
+                    if (sourceIdent) {
+                        const clickedNodeId = resolveNodeId(sourceIdent, nodes);
+                        if (!clickedNodeId) { error = 'Node not found: ' + sourceIdent; }
+                        else {
+                            const clickedNode = nodesByTypeId.get(clickedNodeId);
+                            const isSource = sourceIds.includes(clickedNodeId);
+                            const isDest = destIds.includes(clickedNodeId);
+                            if (isSource) {
+                                const destNames = destIds.filter(id => id !== clickedNodeId).map(id => getShortLabel(nodesByTypeId.get(id))).join(', ');
+                                title = protoName + ' ' + universe + ': ' + getShortLabel(clickedNode) + ' → ' + (destNames || '?');
+                                destIds.forEach(destId => {
+                                    if (destId !== clickedNodeId) {
+                                        const path = findPath(graph, clickedNodeId, destId);
+                                        if (path) paths.push({ path, sourceId: clickedNodeId, destId });
+                                    }
+                                });
+                            } else if (isDest) {
+                                const sourceNames = sourceIds.map(id => getShortLabel(nodesByTypeId.get(id))).join(', ');
+                                title = protoName + ' ' + universe + ': ' + (sourceNames || '?') + ' → ' + getShortLabel(clickedNode);
+                                sourceIds.forEach(sourceId => {
+                                    const path = findPath(graph, sourceId, clickedNodeId);
+                                    if (path) paths.push({ path, sourceId, destId: clickedNodeId });
+                                });
+                            } else {
+                                error = 'Node is not a source or destination for universe ' + universe;
+                            }
+                        }
+                    } else {
+                        title = protoName + ' Universe ' + universe;
+                        sourceIds.forEach(sourceId => {
+                            destIds.forEach(destId => {
+                                if (sourceId !== destId) {
+                                    const path = findPath(graph, sourceId, destId);
+                                    if (path) paths.push({ path, sourceId, destId });
+                                }
+                            });
+                        });
+                    }
+                    if (!error && paths.length === 0) error = 'No active flows for universe ' + universe;
+                }
+            } else {
+                error = 'Unknown protocol: ' + protocol;
+            }
+
+            renderFlowOverlay(title, paths, error, nodesByTypeId);
+        }
+
+        function renderFlowOverlay(title, paths, error, nodesByTypeId) {
+            let overlay = document.getElementById('flow-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'flow-overlay';
+                overlay.className = 'flow-overlay';
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) closeFlowView();
+                });
+                document.body.appendChild(overlay);
+            }
+            overlay.innerHTML = '';
+            overlay.style.display = 'flex';
+
+            const titleEl = document.createElement('div');
+            titleEl.className = 'flow-title';
+            titleEl.textContent = title;
+            titleEl.addEventListener('click', (e) => e.stopPropagation());
+            overlay.appendChild(titleEl);
+
+            if (error) {
+                const errEl = document.createElement('div');
+                errEl.className = 'flow-error';
+                errEl.textContent = error;
+                errEl.addEventListener('click', (e) => e.stopPropagation());
+                overlay.appendChild(errEl);
+                return;
+            }
+
+            if (paths.length === 0) {
+                const errEl = document.createElement('div');
+                errEl.className = 'flow-error';
+                errEl.textContent = 'No paths to display';
+                errEl.addEventListener('click', (e) => e.stopPropagation());
+                overlay.appendChild(errEl);
+                return;
+            }
+
+            if (paths.length === 1) {
+                const pathEl = renderFlowPath(paths[0], nodesByTypeId);
+                pathEl.addEventListener('click', (e) => e.stopPropagation());
+                overlay.appendChild(pathEl);
+            } else {
+                const summary = document.createElement('div');
+                summary.className = 'flow-receivers-summary';
+                summary.textContent = paths.length + ' flow paths (click to expand)';
+                const listEl = document.createElement('div');
+                listEl.className = 'flow-receiver-list';
+                summary.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    listEl.classList.toggle('expanded');
+                    summary.textContent = listEl.classList.contains('expanded')
+                        ? paths.length + ' flow paths (click to collapse)'
+                        : paths.length + ' flow paths (click to expand)';
+                });
+                paths.forEach(p => {
+                    const pathEl = renderFlowPath(p, nodesByTypeId);
+                    pathEl.addEventListener('click', (e) => e.stopPropagation());
+                    listEl.appendChild(pathEl);
+                });
+                overlay.appendChild(summary);
+                overlay.appendChild(listEl);
+                if (paths.length <= 5) {
+                    listEl.classList.add('expanded');
+                    summary.textContent = paths.length + ' flow paths (click to collapse)';
+                }
+            }
+        }
+
+        function renderFlowPath(pathInfo, nodesByTypeId) {
+            const { path, sourceId, destId } = pathInfo;
+            const container = document.createElement('div');
+            container.className = 'flow-path';
+
+            path.forEach((step, idx) => {
+                const node = nodesByTypeId.get(step.nodeId);
+                if (!node) return;
+
+                if (idx > 0) {
+                    const linkEl = document.createElement('div');
+                    linkEl.className = 'flow-link';
+
+                    const prevNode = nodesByTypeId.get(path[idx - 1].nodeId);
+
+                    const portLabels = document.createElement('div');
+                    portLabels.className = 'port-labels';
+                    const leftPort = document.createElement('span');
+                    leftPort.textContent = path[idx].viaInterface || '?';
+                    const rightPort = document.createElement('span');
+                    rightPort.textContent = path[idx].fromInterface || '?';
+                    portLabels.appendChild(leftPort);
+                    portLabels.appendChild(rightPort);
+                    linkEl.appendChild(portLabels);
+
+                    let iface = findInterface(prevNode, path[idx].viaInterface);
+                    let flipped = false;
+                    if (!iface?.stats) {
+                        iface = findInterface(node, path[idx].fromInterface);
+                        flipped = true;
+                    }
+
+                    const line = document.createElement('div');
+                    line.className = 'line';
+                    if (!path[idx].viaInterface && !path[idx].fromInterface) line.classList.add('unknown');
+                    if (iface?.stats && ((iface.stats.in_errors || 0) > 0 || (iface.stats.out_errors || 0) > 0)) {
+                        line.classList.add('has-errors');
+                    }
+                    linkEl.appendChild(line);
+
+                    const stats = document.createElement('div');
+                    stats.className = 'stats';
+                    const statLines = [];
+                    if (iface?.stats) {
+                        const speed = iface.stats.speed;
+                        const speedStr = speed >= 1e9 ? (speed/1e9)+'G' : speed >= 1e6 ? (speed/1e6)+'M' : '?';
+                        statLines.push(speedStr);
+                        const inBytes = iface.stats.in_bytes_rate || 0;
+                        const outBytes = iface.stats.out_bytes_rate || 0;
+                        if (speed > 0 && (inBytes > 0 || outBytes > 0)) {
+                            const inPct = ((inBytes * 8) / speed * 100).toFixed(0);
+                            const outPct = ((outBytes * 8) / speed * 100).toFixed(0);
+                            if (flipped) {
+                                statLines.push('↓' + inPct + '% ↑' + outPct + '%');
+                            } else {
+                                statLines.push('↓' + outPct + '% ↑' + inPct + '%');
+                            }
+                        }
+                    }
+                    stats.textContent = statLines.join('\n');
+                    linkEl.appendChild(stats);
+
+                    container.appendChild(linkEl);
+                }
+
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'flow-node';
+                if (isSwitch(node)) nodeEl.classList.add('switch');
+                if (step.nodeId === sourceId && sourceId !== destId) nodeEl.classList.add('source');
+                else if (step.nodeId === destId) nodeEl.classList.add('dest');
+                nodeEl.textContent = getShortLabel(node);
+                nodeEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeFlowView();
+                    scrollToNode(step.nodeId);
+                });
+                container.appendChild(nodeEl);
+            });
+
+            return container;
+        }
+
+        function closeFlowView() {
+            const overlay = document.getElementById('flow-overlay');
+            if (overlay) overlay.style.display = 'none';
+            const hash = window.location.hash;
+            if (hash.startsWith('#flow/')) {
+                let newHash = '';
+                if (currentMode !== 'network') newHash = currentMode;
+                if (currentView === 'table') newHash += (newHash ? '-' : '') + 'table';
+                history.pushState(null, '', window.location.pathname + window.location.search + (newHash ? '#' + newHash : ''));
+            }
+        }
+
+        function openFlowHash(protocol, ...args) {
+            window.location.hash = 'flow/' + protocol + '/' + args.join('/');
+        }
+
         document.getElementById('clear-all-errors').addEventListener('click', clearAllErrors);
         document.getElementById('toggle-errors').addEventListener('click', () => {
             const panel = document.getElementById('error-panel');
@@ -2789,17 +3321,31 @@
             }
         });
 
-        const hash = window.location.hash.slice(1);
-        const hashParts = hash.split('-');
-        const hashMode = hashParts[0];
-        const hashView = hashParts.includes('table') ? 'table' : 'map';
+        function parseHash() {
+            const hash = window.location.hash.slice(1);
+            if (hash.startsWith('flow/')) {
+                if (flowViewData) showFlowView(hash.slice(5));
+                return;
+            }
+            closeFlowView();
+            const hashParts = hash.split('-');
+            const hashMode = hashParts[0];
+            const hashView = hashParts.includes('table') ? 'table' : 'map';
 
-        if (hashMode === 'dante' || hashMode === 'artnet' || hashMode === 'sacn') {
-            setMode(hashMode);
+            if (hashMode === 'dante' || hashMode === 'artnet' || hashMode === 'sacn') {
+                setMode(hashMode);
+            } else if (currentMode !== 'network') {
+                setMode('network');
+            }
+            if (hashView === 'table' && currentView !== 'table') {
+                setView('table');
+            } else if (hashView !== 'table' && currentView === 'table') {
+                setView('map');
+            }
         }
-        if (hashView === 'table') {
-            setView('table');
-        }
+
+        window.addEventListener('hashchange', parseHash);
+        parseHash();
     </script>
 </body>
 </html>
