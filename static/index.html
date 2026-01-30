@@ -1119,26 +1119,28 @@
             return 'speed-slow';
         }
 
-        function getInterfaceSpeed(node) {
-            if (!node.interfaces || node.interfaces.length === 0) return 0;
-            const iface = node.interfaces[0];
-            return iface.stats?.speed || 0;
+        function findInterface(node, ifaceName) {
+            if (!node || !node.interfaces) return null;
+            return node.interfaces.find(i => i.name === ifaceName) || null;
         }
 
-        function getInterfaceErrors(node) {
-            if (!node.interfaces || node.interfaces.length === 0) return null;
-            const iface = node.interfaces[0];
-            if (!iface.stats) return null;
+        function getInterfaceSpeed(node, ifaceName) {
+            const iface = findInterface(node, ifaceName);
+            return iface?.stats?.speed || 0;
+        }
+
+        function getInterfaceErrors(node, ifaceName) {
+            const iface = findInterface(node, ifaceName);
+            if (!iface?.stats) return null;
             const inErr = iface.stats.in_errors || 0;
             const outErr = iface.stats.out_errors || 0;
             if (inErr === 0 && outErr === 0) return null;
             return { in: inErr, out: outErr };
         }
 
-        function getInterfaceRates(node) {
-            if (!node.interfaces || node.interfaces.length === 0) return null;
-            const iface = node.interfaces[0];
-            if (!iface.stats) return null;
+        function getInterfaceRates(node, ifaceName) {
+            const iface = findInterface(node, ifaceName);
+            if (!iface?.stats) return null;
             return {
                 inPkts: iface.stats.in_pkts_rate || 0,
                 outPkts: iface.stats.out_pkts_rate || 0,
@@ -2014,8 +2016,8 @@
             const allSwitches = nodes.filter(n => isSwitch(n));
 
             links.forEach(link => {
-                const nodeA = nodesByTypeId.get(link.node_a?.id);
-                const nodeB = nodesByTypeId.get(link.node_b?.id);
+                const nodeA = nodesByTypeId.get(link.node_a_id);
+                const nodeB = nodesByTypeId.get(link.node_b_id);
                 if (!nodeA || !nodeB) return;
 
                 const aIsSwitch = isSwitch(nodeA);
@@ -2027,12 +2029,12 @@
                         switchB: nodeB,
                         portA: link.interface_a || '?',
                         portB: link.interface_b || '?',
-                        speedA: getInterfaceSpeed(link.node_a),
-                        speedB: getInterfaceSpeed(link.node_b),
-                        errorsA: getInterfaceErrors(link.node_a),
-                        errorsB: getInterfaceErrors(link.node_b),
-                        ratesA: getInterfaceRates(link.node_a),
-                        ratesB: getInterfaceRates(link.node_b)
+                        speedA: getInterfaceSpeed(nodeA, link.interface_a),
+                        speedB: getInterfaceSpeed(nodeB, link.interface_b),
+                        errorsA: getInterfaceErrors(nodeA, link.interface_a),
+                        errorsB: getInterfaceErrors(nodeB, link.interface_b),
+                        ratesA: getInterfaceRates(nodeA, link.interface_a),
+                        ratesB: getInterfaceRates(nodeB, link.interface_b)
                     });
                 } else if (aIsSwitch && !bIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeB.id);
@@ -2043,9 +2045,9 @@
                         switchName: getLabel(nodeA),
                         showSwitchName: !isLocalSwitch,
                         external: effectiveSwitch && !isLocalSwitch,
-                        speed: getInterfaceSpeed(link.node_a),
-                        errors: getInterfaceErrors(link.node_a),
-                        rates: getInterfaceRates(link.node_a)
+                        speed: getInterfaceSpeed(nodeA, link.interface_a),
+                        errors: getInterfaceErrors(nodeA, link.interface_a),
+                        rates: getInterfaceRates(nodeA, link.interface_a)
                     });
                 } else if (bIsSwitch && !aIsSwitch) {
                     const nodeLoc = nodeLocations.get(nodeA.id);
@@ -2056,9 +2058,9 @@
                         switchName: getLabel(nodeB),
                         showSwitchName: !isLocalSwitch,
                         external: effectiveSwitch && !isLocalSwitch,
-                        speed: getInterfaceSpeed(link.node_b),
-                        errors: getInterfaceErrors(link.node_b),
-                        rates: getInterfaceRates(link.node_b)
+                        speed: getInterfaceSpeed(nodeB, link.interface_b),
+                        errors: getInterfaceErrors(nodeB, link.interface_b),
+                        rates: getInterfaceRates(nodeB, link.interface_b)
                     });
                 }
             });
@@ -2080,14 +2082,16 @@
                 if (danteTx.length === 0 && danteRx.length === 0) return;
 
                 const txTo = danteTx.map(peer => {
-                    const peerName = getShortLabel(peer.node);
+                    const peerNode = nodesByTypeId.get(peer.node_id);
+                    const peerName = peerNode ? getShortLabel(peerNode) : '??';
                     const channels = (peer.channels || []).map(formatDanteChannel);
                     const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
                     return peerName + channelSummary;
                 });
 
                 const rxFrom = danteRx.map(peer => {
-                    const peerName = getShortLabel(peer.node);
+                    const peerNode = nodesByTypeId.get(peer.node_id);
+                    const peerName = peerNode ? getShortLabel(peerNode) : '??';
                     const channels = (peer.channels || []).map(formatDanteChannel);
                     const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
                     return peerName + channelSummary;
@@ -2467,8 +2471,8 @@
             const switchLinks = [];
 
             links.forEach(link => {
-                const nodeA = nodesByTypeId.get(link.node_a?.id);
-                const nodeB = nodesByTypeId.get(link.node_b?.id);
+                const nodeA = nodesByTypeId.get(link.node_a_id);
+                const nodeB = nodesByTypeId.get(link.node_b_id);
                 if (!nodeA || !nodeB) return;
 
                 const aIsSwitch = isSwitch(nodeA);
@@ -2478,18 +2482,18 @@
                     upstreamConnections.set(nodeB.id, {
                         switchName: getLabel(nodeA),
                         port: link.interface_a || '?',
-                        speed: getInterfaceSpeed(link.node_a),
-                        errors: getInterfaceErrors(link.node_a),
-                        rates: getInterfaceRates(link.node_a),
+                        speed: getInterfaceSpeed(nodeA, link.interface_a),
+                        errors: getInterfaceErrors(nodeA, link.interface_a),
+                        rates: getInterfaceRates(nodeA, link.interface_a),
                         isLocalPort: false
                     });
                 } else if (bIsSwitch && !aIsSwitch) {
                     upstreamConnections.set(nodeA.id, {
                         switchName: getLabel(nodeB),
                         port: link.interface_b || '?',
-                        speed: getInterfaceSpeed(link.node_b),
-                        errors: getInterfaceErrors(link.node_b),
-                        rates: getInterfaceRates(link.node_b),
+                        speed: getInterfaceSpeed(nodeB, link.interface_b),
+                        errors: getInterfaceErrors(nodeB, link.interface_b),
+                        rates: getInterfaceRates(nodeB, link.interface_b),
                         isLocalPort: false
                     });
                 } else if (aIsSwitch && bIsSwitch) {
@@ -2498,12 +2502,12 @@
                         switchB: nodeB,
                         portA: link.interface_a || '?',
                         portB: link.interface_b || '?',
-                        speedA: getInterfaceSpeed(link.node_a),
-                        speedB: getInterfaceSpeed(link.node_b),
-                        errorsA: getInterfaceErrors(link.node_a),
-                        errorsB: getInterfaceErrors(link.node_b),
-                        ratesA: getInterfaceRates(link.node_a),
-                        ratesB: getInterfaceRates(link.node_b)
+                        speedA: getInterfaceSpeed(nodeA, link.interface_a),
+                        speedB: getInterfaceSpeed(nodeB, link.interface_b),
+                        errorsA: getInterfaceErrors(nodeA, link.interface_a),
+                        errorsB: getInterfaceErrors(nodeB, link.interface_b),
+                        ratesA: getInterfaceRates(nodeA, link.interface_a),
+                        ratesB: getInterfaceRates(nodeB, link.interface_b)
                     });
                 }
             });
@@ -2596,13 +2600,16 @@
 
         function renderDanteTable() {
             const nodes = tableData.nodes || [];
+            const nodesByTypeId = new Map();
+            nodes.forEach(node => nodesByTypeId.set(node.id, node));
             let rows = [];
             nodes.forEach(node => {
                 const name = getLabel(node);
                 const tx = node.dante_flows?.tx || [];
                 const rx = node.dante_flows?.rx || [];
                 tx.forEach(peer => {
-                    const peerName = getLabel(peer.node);
+                    const peerNode = nodesByTypeId.get(peer.node_id);
+                    const peerName = peerNode ? getLabel(peerNode) : '??';
                     (peer.channels || []).forEach(ch => {
                         rows.push({
                             source: name,
