@@ -61,7 +61,15 @@
       "Bash(go work use:*)",
       "Bash(go mod init:*)",
       "Bash(git push:*)",
-      "Bash(go doc:*)"
+      "Bash(go doc:*)",
+      "Bash(ip maddr:*)",
+      "Bash(snmpwalk:*)",
+      "Bash(go work sync:*)",
+      "Bash(GOWORK=/home/flamingcow/go.work go vet:*)",
+      "Bash(git pull:*)"
+    ],
+    "ask": [
+      "Bash(rm *)"
     ]
   }
 }

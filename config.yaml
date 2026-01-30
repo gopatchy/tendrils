@@ -13,20 +13,20 @@ locations:
     - "48:59:00:3f:00:3e" # Pixie Driver 8k Port 6
     - "48:59:00:25:00:3e" # Pixie Driver 8k Port 7
     - "48:59:00:41:00:3e" # Pixie Driver 8k Port 8
-    - ART9 # Cyc
-    - ART10 # Cyc
-    - ART11 # Cyc
-    - ART12 # Cyc
-    - ART13 # Cyc
-    - ART14 # Cyc
+    - DMXG # cyc1
+    - DMXH # cyc2
+    - DMXI # cyc3
+    - DMXJ # cyc4
+    - DMXK # cyc5
+    - DMXL # cyc6
 
   - direction: horizontal
     children:
     - nodes:
-      - ART16 # R2X1
+      - DMXQ # r2x1
 
     - nodes:
-      - ART20 # R2X2
+      - DMXR # r2x2
 
   - direction: horizontal
     children:
@@ -109,23 +109,23 @@ locations:
     - satellite-2
     - "Y001-MAIN2-L-d1e298"
     - "ac:44:f2:4e:87:2a" # MAIN2-L bridge interface
-    - ART3 # Wash
-    - ART4 # Wash
-    - ART5 # Wash
-    - ART17 # Focus
+    - DMXA # wash1
+    - DMXB # wash2
+    - DMXC # wash3
+    - DMXM # focus{1,2}
 
   - nodes:
-    - ART15 # R3X
-    - ART18 # Focus
+    - DMXN # focus{3,4}
+    - DMXP # r3x{1,2}
 
   - nodes:
     - satellite-3
     - "Y001-MAIN2-R-f0dd93"
     - "ac:44:f2:4e:87:27" # MAIN2-R bridge interface
-    - ART6 # Wash
-    - ART7 # Wash
+    - DMXD # wash4
+    - DMXE # wash5
     - DMXF # wash6
-    - ART19 # Focus
+    - DMXO # focus{5,6}
 
 - name: Booth
   direction: vertical
