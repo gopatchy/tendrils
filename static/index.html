@@ -894,6 +894,7 @@
 
         .clickable-value, .node-name {
             cursor: pointer;
+            display: inline-block;
         }
 
 
@@ -1410,7 +1411,6 @@
                 const val = document.createElement('span');
                 val.className = 'clickable-value';
                 val.textContent = item;
-                val.style.cursor = 'pointer';
                 val.addEventListener('click', (e) => {
                     e.stopPropagation();
                     if (flowInfo && flowInfo.universes && flowInfo.universes[idx] !== undefined) {
@@ -1472,7 +1472,6 @@
                         const val = document.createElement('span');
                         val.className = 'clickable-value';
                         val.textContent = line;
-                        val.style.cursor = 'pointer';
                         val.addEventListener('click', (e) => {
                             e.stopPropagation();
                             if (sourceNodeId && peerNodeId) {
