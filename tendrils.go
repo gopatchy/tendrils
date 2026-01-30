@@ -33,7 +33,6 @@ func getInterfaceIPv4(iface net.Interface) (srcIP, broadcast net.IP) {
 type Tendrils struct {
 	activeInterfaces map[string]context.CancelFunc
 	nodes            *Nodes
-	artnetConn       *net.UDPConn
 	errors           *ErrorTracker
 	ping             *PingManager
 	broadcast        *BroadcastStats
@@ -156,10 +155,6 @@ func (t *Tendrils) Run() {
 	if !t.DisableARP {
 		t.readARPTable()
 		go t.pollARP(ctx)
-	}
-
-	if !t.DisableArtNet {
-		go t.startArtNetListener(ctx)
 	}
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -298,7 +293,7 @@ func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 		go t.listenMDNS(ctx, iface)
 	}
 	if !t.DisableArtNet {
-		go t.startArtNetPoller(ctx, iface)
+		go t.startArtNet(ctx, iface)
 	}
 	if !t.DisableSACN {
 		go t.startSACNDiscoveryListener(ctx, iface)

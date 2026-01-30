@@ -66,7 +66,13 @@
       "Bash(snmpwalk:*)",
       "Bash(go work sync:*)",
       "Bash(GOWORK=/home/flamingcow/go.work go vet:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(GOPROXY=direct go get:*)",
+      "Bash(git -C /home/flamingcow/tendrils diff)",
+      "Bash(git -C /home/flamingcow/artmap diff)",
+      "Bash(git -C /home/flamingcow/artnet status)",
+      "Bash(git -C /home/flamingcow/tendrils status)",
+      "Bash(git -C /home/flamingcow/artmap status)"
     ],
     "ask": [
       "Bash(rm *)"

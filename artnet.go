@@ -13,119 +13,69 @@ import (
 	"github.com/gopatchy/artnet"
 )
 
-func (t *Tendrils) startArtNetListener(ctx context.Context) {
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: artnet.Port})
-	if err != nil {
-		log.Printf("[ERROR] failed to listen artnet: %v", err)
-		return
-	}
-	defer conn.Close()
-
-	t.artnetConn = conn
-
-	buf := make([]byte, 65536)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-		n, src, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				continue
-			}
-			continue
-		}
-
-		t.handleArtNetPacket(src, buf[:n])
-	}
+type artnetHandler struct {
+	t         *Tendrils
+	discovery *artnet.Discovery
 }
 
-func (t *Tendrils) startArtNetPoller(ctx context.Context, iface net.Interface) {
+func (h *artnetHandler) HandleDMX(src *net.UDPAddr, pkt *artnet.DMXPacket) {}
+
+func (h *artnetHandler) HandlePoll(src *net.UDPAddr, pkt *artnet.PollPacket) {
+	h.discovery.HandlePoll(src)
+}
+
+func (h *artnetHandler) HandlePollReply(src *net.UDPAddr, pkt *artnet.PollReplyPacket) {
+	h.discovery.HandlePollReply(src, pkt)
+}
+
+func (t *Tendrils) startArtNet(ctx context.Context, iface net.Interface) {
 	srcIP, broadcast := getInterfaceIPv4(iface)
 	if srcIP == nil || broadcast == nil {
 		return
 	}
 
-	sendConn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: srcIP, Port: 0})
+	sender, err := artnet.NewInterfaceSender(iface.Name)
 	if err != nil {
-		log.Printf("[ERROR] failed to create artnet send socket on %s: %v", iface.Name, err)
-		return
-	}
-	defer sendConn.Close()
-
-	go t.listenArtNetReplies(ctx, sendConn, iface.Name)
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	t.sendArtPoll(sendConn, broadcast, iface.Name)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			t.sendArtPoll(sendConn, broadcast, iface.Name)
-		}
-	}
-}
-
-func (t *Tendrils) listenArtNetReplies(ctx context.Context, conn *net.UDPConn, ifaceName string) {
-	buf := make([]byte, 1024)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-		n, src, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				continue
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				continue
-			}
-		}
-
-		t.handleArtNetPacket(src, buf[:n])
-	}
-}
-
-func (t *Tendrils) handleArtNetPacket(src *net.UDPAddr, data []byte) {
-	opCode, pkt, err := artnet.ParsePacket(data)
-	if err != nil {
+		log.Printf("[ERROR] failed to create artnet sender for %s: %v", iface.Name, err)
 		return
 	}
 
-	switch opCode {
-	case artnet.OpPollReply:
-		if reply, ok := pkt.(*artnet.PollReplyPacket); ok {
-			t.handleArtPollReply(src.IP, reply)
-		}
+	discovery := artnet.NewDiscovery(sender, srcIP, broadcast, iface.HardwareAddr, "", "", nil, nil)
+	discovery.SetOnChange(func(node *artnet.Node) {
+		t.handleArtNetNode(node)
+	})
+
+	handler := &artnetHandler{t: t, discovery: discovery}
+
+	receiver, err := artnet.NewInterfaceReceiver(iface.Name, handler)
+	if err != nil {
+		log.Printf("[ERROR] failed to create artnet receiver for %s: %v", iface.Name, err)
+		sender.Close()
+		return
 	}
+
+	discovery.SetReceiver(receiver)
+	receiver.Start()
+	discovery.Start()
+
+	<-ctx.Done()
+
+	discovery.Stop()
+	receiver.Stop()
+	sender.Close()
 }
 
-func (t *Tendrils) handleArtPollReply(srcIP net.IP, pkt *artnet.PollReplyPacket) {
-	ip := pkt.IP()
-	mac := pkt.MACAddr()
-	shortName := pkt.GetShortName()
-	longName := pkt.GetLongName()
+func (t *Tendrils) handleArtNetNode(node *artnet.Node) {
+	ip := node.IP
+	mac := node.MAC
+	shortName := node.ShortName
+	longName := node.LongName
 
 	var inputs, outputs []int
-	for _, u := range pkt.InputUniverses() {
+	for _, u := range node.Inputs {
 		inputs = append(inputs, int(u))
 	}
-	for _, u := range pkt.OutputUniverses() {
+	for _, u := range node.Outputs {
 		outputs = append(outputs, int(u))
 	}
 
@@ -141,41 +91,17 @@ func (t *Tendrils) handleArtPollReply(srcIP net.IP, pkt *artnet.PollReplyPacket)
 		t.nodes.Update(nil, mac, []net.IP{ip}, "", name, "artnet")
 	}
 
-	node := t.nodes.GetByIP(ip)
-	if node == nil && mac != nil {
-		node = t.nodes.GetByMAC(mac)
+	n := t.nodes.GetByIP(ip)
+	if n == nil && mac != nil {
+		n = t.nodes.GetByMAC(mac)
 	}
-	if node == nil && name != "" {
-		node = t.nodes.GetOrCreateByName(name)
+	if n == nil && name != "" {
+		n = t.nodes.GetOrCreateByName(name)
 	}
-	if node != nil {
-		t.nodes.UpdateArtNet(node, inputs, outputs)
+	if n != nil {
+		t.nodes.UpdateArtNet(n, inputs, outputs)
 	}
-}
-
-func (t *Tendrils) sendArtPoll(conn *net.UDPConn, broadcast net.IP, ifaceName string) {
-	packet := artnet.BuildPollPacket()
-
-	_, err := conn.WriteToUDP(packet, &net.UDPAddr{IP: broadcast, Port: artnet.Port})
-	if err != nil {
-		if t.DebugArtNet {
-			log.Printf("[artnet] %s: failed to send poll: %v", ifaceName, err)
-		}
-		return
-	}
-
-	if t.DebugArtNet {
-		log.Printf("[artnet] %s: sent poll to %s", ifaceName, broadcast)
-	}
-}
-
-func containsInt(slice []int, val int) bool {
-	for _, v := range slice {
-		if v == val {
-			return true
-		}
-	}
-	return false
+	t.NotifyUpdate()
 }
 
 func (n *Nodes) UpdateArtNet(node *Node, inputs, outputs []int) {
