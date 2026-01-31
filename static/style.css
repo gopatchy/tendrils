@@ -191,6 +191,33 @@ body {
     z-index: 100;
 }
 
+.node .dante-hover,
+.node .artnet-hover,
+.node .sacn-hover {
+    pointer-events: none;
+}
+
+body.dante-mode .node .port-hover,
+body.dante-mode .node .uplink-hover,
+body.artnet-mode .node .port-hover,
+body.artnet-mode .node .uplink-hover,
+body.sacn-mode .node .port-hover,
+body.sacn-mode .node .uplink-hover {
+    pointer-events: none;
+}
+
+body.dante-mode .node .dante-hover {
+    pointer-events: auto;
+}
+
+body.artnet-mode .node .artnet-hover {
+    pointer-events: auto;
+}
+
+body.sacn-mode .node .sacn-hover {
+    pointer-events: auto;
+}
+
 .node .uplink {
     font-size: 10px;
     font-weight: normal;
