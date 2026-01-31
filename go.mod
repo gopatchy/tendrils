@@ -5,7 +5,7 @@ go 1.25.6
 require (
 	github.com/fvbommel/sortorder v1.1.0
 	github.com/google/gopacket v1.1.19
-	github.com/gopatchy/artnet v0.0.0-20260130164309-5e7400fe514e
+	github.com/gopatchy/artnet v0.0.0-20260131154723-a1431d527450
 	github.com/gopatchy/multicast v0.0.0-20260130233915-4278628690a3
 	github.com/gopatchy/sacn v0.0.0-20260130234631-9c2787a20064
 	github.com/gosnmp/gosnmp v1.43.2

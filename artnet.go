@@ -28,6 +28,10 @@ func (h *artnetHandler) HandlePollReply(src *net.UDPAddr, pkt *artnet.PollReplyP
 	h.discovery.HandlePollReply(src, pkt)
 }
 
+func (h *artnetHandler) HandleTodData(src *net.UDPAddr, pkt *artnet.TodDataPacket) {
+	h.discovery.HandleTodData(src, pkt)
+}
+
 func (t *Tendrils) startArtNet(ctx context.Context, iface net.Interface) {
 	srcIP, broadcast := getInterfaceIPv4(iface)
 	if srcIP == nil || broadcast == nil {
@@ -79,8 +83,19 @@ func (t *Tendrils) handleArtNetNode(node *artnet.Node) {
 		outputs = append(outputs, int(u))
 	}
 
+	rdmUIDs := map[int][]string{}
+	for u, uids := range node.RDMUIDs {
+		var uidStrs []string
+		for _, uid := range uids {
+			uidStrs = append(uidStrs, uid.String())
+		}
+		if len(uidStrs) > 0 {
+			rdmUIDs[int(u)] = uidStrs
+		}
+	}
+
 	if t.DebugArtNet {
-		log.Printf("[artnet] %s %s short=%q long=%q in=%v out=%v", ip, mac, shortName, longName, inputs, outputs)
+		log.Printf("[artnet] %s %s short=%q long=%q in=%v out=%v rdm=%v", ip, mac, shortName, longName, inputs, outputs, rdmUIDs)
 	}
 
 	name := longName
@@ -100,6 +115,7 @@ func (t *Tendrils) handleArtNetNode(node *artnet.Node) {
 	}
 	if n != nil {
 		t.nodes.UpdateArtNet(n, inputs, outputs)
+		t.nodes.UpdateArtNetRDM(n, rdmUIDs)
 	}
 	t.NotifyUpdate()
 }
@@ -120,6 +136,23 @@ func (n *Nodes) UpdateArtNet(node *Node, inputs, outputs []int) {
 	}
 	for _, u := range outputs {
 		node.ArtNetOutputs.Add(ArtNetUniverse(u))
+	}
+}
+
+func (n *Nodes) UpdateArtNetRDM(node *Node, rdmUIDs map[int][]string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if len(rdmUIDs) == 0 {
+		return
+	}
+
+	if node.ArtNetRDMUIDs == nil {
+		node.ArtNetRDMUIDs = map[int][]string{}
+	}
+
+	for u, uids := range rdmUIDs {
+		node.ArtNetRDMUIDs[u] = uids
 	}
 }
 
