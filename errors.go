@@ -2,6 +2,7 @@ package tendrils
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"sync"
 	"time"
@@ -103,6 +104,7 @@ func (e *ErrorTracker) AddPortError(node *Node, portName string, stats *Interfac
 			FirstSeen:   now,
 			LastUpdated: now,
 		}
+		log.Printf("[ERROR] port errors on %s %s: in=%d out=%d", node.DisplayName(), portName, inDelta, outDelta)
 	}
 	e.t.NotifyUpdate()
 }

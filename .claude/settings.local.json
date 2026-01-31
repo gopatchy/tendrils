@@ -93,7 +93,8 @@
       "Bash(go get:*)",
       "Bash(go test:*)",
       "Bash(git stash:*)",
-      "Bash(git revert:*)"
+      "Bash(git revert:*)",
+      "Bash(done)"
     ],
     "ask": [
       "Bash(rm *)"
