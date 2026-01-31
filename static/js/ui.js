@@ -186,6 +186,26 @@ export function updateErrorPanel() {
             typeEl.className = 'error-type';
             typeEl.textContent = 'High link utilization';
             item.appendChild(typeEl);
+        } else if (err.type === 'port_flap') {
+            const portEl = document.createElement('div');
+            portEl.className = 'error-port';
+            portEl.textContent = 'Port: ' + err.port;
+            item.appendChild(portEl);
+
+            const typeEl = document.createElement('div');
+            typeEl.className = 'error-type';
+            typeEl.textContent = 'Port flap detected';
+            item.appendChild(typeEl);
+        } else if (err.type === 'port_down') {
+            const portEl = document.createElement('div');
+            portEl.className = 'error-port';
+            portEl.textContent = 'Port: ' + err.port;
+            item.appendChild(portEl);
+
+            const typeEl = document.createElement('div');
+            typeEl.className = 'error-type';
+            typeEl.textContent = 'Port down';
+            item.appendChild(typeEl);
         } else {
             const portEl = document.createElement('div');
             portEl.className = 'error-port';
@@ -194,7 +214,7 @@ export function updateErrorPanel() {
 
             const countsEl = document.createElement('div');
             countsEl.className = 'error-counts';
-            countsEl.textContent = 'rx: ' + err.in_errors + ' (+' + (err.in_delta || 0) + ') / tx: ' + err.out_errors + ' (+' + (err.out_delta || 0) + ')';
+            countsEl.textContent = 'rx: ' + (err.in_errors || 0) + ' (+' + (err.in_delta || 0) + ') / tx: ' + (err.out_errors || 0) + ' (+' + (err.out_delta || 0) + ')';
             item.appendChild(countsEl);
 
             const typeEl = document.createElement('div');

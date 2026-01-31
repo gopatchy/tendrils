@@ -192,7 +192,10 @@ locations:
       - names: ["SK_RACKPRO2 [452514]"]
       - names: ["pigeon"]
       - names: ["showpi1"]
-      - macs: ["d8:3a:dd:e3:5b:db"] # showpi2/artmap
+      - names: ["showpi2"]
+        macs: ["d8:3a:dd:e3:5b:db"]
+      - names: ["AP"]
+        macs: ["a8:29:48:ca:11:40"]
 
     - name: Sound Control
       nodes:
