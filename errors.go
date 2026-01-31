@@ -12,6 +12,8 @@ const (
 	ErrorTypeNew             = "new"
 	ErrorTypeUnreachable     = "unreachable"
 	ErrorTypeHighUtilization = "high_utilization"
+	ErrorTypePortFlap        = "port_flap"
+	ErrorTypePortDown        = "port_down"
 )
 
 type Error struct {
@@ -133,6 +135,58 @@ func (e *ErrorTracker) AddUtilizationError(node *Node, portName string, utilizat
 		Port:        portName,
 		Type:        ErrorTypeHighUtilization,
 		Utilization: utilization,
+		FirstSeen:   now,
+		LastUpdated: now,
+	}
+	e.t.NotifyUpdate()
+}
+
+func (e *ErrorTracker) AddPortFlap(node *Node, portName string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := "flap:" + node.ID + ":" + portName
+	now := time.Now()
+
+	if existing, ok := e.errors[key]; ok {
+		existing.LastUpdated = now
+		e.t.NotifyUpdate()
+		return
+	}
+
+	e.nextID++
+	e.errors[key] = &Error{
+		ID:          fmt.Sprintf("err-%d", e.nextID),
+		NodeID:      node.ID,
+		NodeName:    node.DisplayName(),
+		Port:        portName,
+		Type:        ErrorTypePortFlap,
+		FirstSeen:   now,
+		LastUpdated: now,
+	}
+	e.t.NotifyUpdate()
+}
+
+func (e *ErrorTracker) AddPortDown(node *Node, portName string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := "down:" + node.ID + ":" + portName
+	now := time.Now()
+
+	if existing, ok := e.errors[key]; ok {
+		existing.LastUpdated = now
+		e.t.NotifyUpdate()
+		return
+	}
+
+	e.nextID++
+	e.errors[key] = &Error{
+		ID:          fmt.Sprintf("err-%d", e.nextID),
+		NodeID:      node.ID,
+		NodeName:    node.DisplayName(),
+		Port:        portName,
+		Type:        ErrorTypePortDown,
 		FirstSeen:   now,
 		LastUpdated: now,
 	}

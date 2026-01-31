@@ -17,6 +17,7 @@ type ifaceCounters struct {
 	outPkts   uint64
 	inBytes   uint64
 	outBytes  uint64
+	uptime    uint64
 	timestamp time.Time
 }
 
@@ -252,9 +253,15 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 		status, hasStatus := ifOperStatus[ifIndex]
 		isUp := hasStatus && status == 1
 		if !isUp {
+			if iface.Up {
+				log.Printf("[ERROR] port down on %s %s", node.DisplayName(), name)
+				t.errors.AddPortDown(node, name)
+			}
+			iface.Up = false
 			iface.Stats = nil
 			continue
 		}
+		iface.Up = true
 
 		stats := &InterfaceStats{}
 
@@ -282,11 +289,15 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 		inPkts := ifHCInUcastPkts[ifIndex] + ifHCInMcastPkts[ifIndex] + ifHCInBcastPkts[ifIndex]
 		outPkts := ifHCOutUcastPkts[ifIndex] + ifHCOutMcastPkts[ifIndex] + ifHCOutBcastPkts[ifIndex]
 
-		if hasInBytes && hasOutBytes {
-			key := node.ID + ":" + name
-			ifaceTracker.mu.Lock()
-			prev, hasPrev := ifaceTracker.counters[key]
-			if hasPrev {
+		key := node.ID + ":" + name
+		ifaceTracker.mu.Lock()
+		prev, hasPrev := ifaceTracker.counters[key]
+		if hasPrev {
+			if prev.uptime > 0 && stats.Uptime > 0 && stats.Uptime < prev.uptime {
+				log.Printf("[ERROR] port flap on %s %s: uptime dropped from %d to %d seconds", node.DisplayName(), name, prev.uptime, stats.Uptime)
+				t.errors.AddPortFlap(node, name)
+			}
+			if hasInBytes && hasOutBytes {
 				elapsed := now.Sub(prev.timestamp).Seconds()
 				if elapsed > 0 {
 					stats.InPktsRate = float64(inPkts-prev.inPkts) / elapsed
@@ -307,15 +318,20 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 					}
 				}
 			}
-			ifaceTracker.counters[key] = &ifaceCounters{
-				inPkts:    inPkts,
-				outPkts:   outPkts,
-				inBytes:   inBytes,
-				outBytes:  outBytes,
-				timestamp: now,
-			}
-			ifaceTracker.mu.Unlock()
 		}
+		storedUptime := stats.Uptime
+		if storedUptime == 0 && hasPrev {
+			storedUptime = prev.uptime
+		}
+		ifaceTracker.counters[key] = &ifaceCounters{
+			inPkts:    inPkts,
+			outPkts:   outPkts,
+			inBytes:   inBytes,
+			outBytes:  outBytes,
+			uptime:    storedUptime,
+			timestamp: now,
+		}
+		ifaceTracker.mu.Unlock()
 
 		if poe, ok := poeStats[name]; ok {
 			stats.PoE = poe

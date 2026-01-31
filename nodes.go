@@ -246,7 +246,7 @@ func (n *Nodes) startNodePoller(node *Node) {
 
 	go func() {
 		pollTicker := time.NewTicker(10 * time.Second)
-		pingTicker := time.NewTicker(5 * time.Second)
+		pingTicker := time.NewTicker(3 * time.Second)
 		defer pollTicker.Stop()
 		defer pingTicker.Stop()
 

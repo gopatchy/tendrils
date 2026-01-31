@@ -172,7 +172,7 @@ func (t *Tendrils) pingNode(node *Node) {
 
 	anyReachable := false
 	for _, ipStr := range ips {
-		if t.ping.Ping(ipStr, 2*time.Second) {
+		if t.ping.Ping(ipStr, 1*time.Second) {
 			anyReachable = true
 			break
 		}

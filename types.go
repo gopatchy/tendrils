@@ -360,6 +360,7 @@ type Interface struct {
 	Name  string          `json:"name,omitempty"`
 	MAC   MAC             `json:"mac"`
 	IPs   IPSet           `json:"ips,omitempty"`
+	Up    bool            `json:"up,omitempty"`
 	Stats *InterfaceStats `json:"stats,omitempty"`
 }
 
@@ -368,6 +369,7 @@ func (i *Interface) MarshalJSON() ([]byte, error) {
 		Name  string          `json:"name,omitempty"`
 		MAC   MAC             `json:"mac"`
 		IPs   []string        `json:"ips,omitempty"`
+		Up    bool            `json:"up,omitempty"`
 		Stats *InterfaceStats `json:"stats,omitempty"`
 	}
 	var ips []string
@@ -378,6 +380,7 @@ func (i *Interface) MarshalJSON() ([]byte, error) {
 		Name:  i.Name,
 		MAC:   i.MAC,
 		IPs:   ips,
+		Up:    i.Up,
 		Stats: i.Stats,
 	})
 }
