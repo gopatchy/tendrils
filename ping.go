@@ -158,6 +158,15 @@ func (t *Tendrils) pingNode(node *Node) {
 	t.nodes.mu.RUnlock()
 
 	if len(ips) == 0 {
+		t.ping.mu.Lock()
+		t.ping.failures[nodeID]++
+		failures := t.ping.failures[nodeID]
+		t.ping.mu.Unlock()
+		if failures >= pingFailureThreshold {
+			if node.SetUnreachable(true) {
+				log.Printf("[ping] %s is unreachable (no ip addresses)", nodeName)
+			}
+		}
 		return
 	}
 

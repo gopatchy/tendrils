@@ -6,27 +6,35 @@ locations:
     nodes:
     - names: ["lighting-2"]
     - names: ["Pixie Driver 8k 2 Port 1"]
+      ips: ["10.50.1.72"]
       macs: ["48:59:00:41:00:29"]
       avoid: true
     - names: ["Pixie Driver 8k 2 Port 2"]
+      ips: ["10.50.1.73"]
       macs: ["48:59:00:28:00:27"]
       avoid: true
     - names: ["Pixie Driver 8k 2 Port 3"]
+      ips: ["10.50.1.74"]
       macs: ["48:59:00:43:00:29"]
       avoid: true
     - names: ["Pixie Driver 8k 2 Port 4"]
+      ips: ["10.50.1.75"]
       macs: ["48:59:00:42:00:29"]
       avoid: true
     - names: ["Pixie Driver 8k 2 Port 5"]
+      ips: ["10.50.1.76"]
       macs: ["48:59:00:3c:00:3e"]
       avoid: true
     - names: ["Pixie Driver 8k 2 Port 6"]
+      ips: ["10.50.1.77"]
       macs: ["48:59:00:3f:00:3e"]
       avoid: true
     - names: ["Pixie Driver 8k 2 Port 7"]
+      ips: ["10.50.1.78"]
       macs: ["48:59:00:25:00:3e"]
       avoid: true
     - names: ["Pixie Driver 8k 2 Port 8"]
+      ips: ["10.50.1.79"]
       macs: ["48:59:00:41:00:3e"]
       avoid: true
     - names: ["DMXG"] # cyc1
@@ -71,27 +79,35 @@ locations:
     nodes:
     - names: ["lighting-1"]
     - names: ["Pixie Driver 8k 1 Port 1"]
+      ips: ["10.50.1.64"]
       macs: ["48:59:00:27:00:27"]
       avoid: true
     - names: ["Pixie Driver 8k 1 Port 2"]
+      ips: ["10.50.1.65"]
       macs: ["48:59:00:37:00:27"]
       avoid: true
     - names: ["Pixie Driver 8k 1 Port 3"]
+      ips: ["10.50.1.66"]
       macs: ["48:59:00:3e:00:27"]
       avoid: true
     - names: ["Pixie Driver 8k 1 Port 4"]
+      ips: ["10.50.1.67"]
       macs: ["48:59:00:3f:00:27"]
       avoid: true
     - names: ["Pixie Driver 8k 1 Port 5"]
+      ips: ["10.50.1.68"]
       macs: ["48:59:00:47:00:1a"]
       avoid: true
     - names: ["Pixie Driver 8k 1 Port 6"]
+      ips: ["10.50.1.69"]
       macs: ["48:59:00:44:00:1a"]
       avoid: true
     - names: ["Pixie Driver 8k 1 Port 7"]
+      ips: ["10.50.1.70"]
       macs: ["48:59:00:42:00:19"]
       avoid: true
     - names: ["Pixie Driver 8k 1 Port 8"]
+      ips: ["10.50.1.71"]
       macs: ["48:59:00:44:00:19"]
       avoid: true
 
