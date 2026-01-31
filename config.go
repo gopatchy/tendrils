@@ -12,10 +12,17 @@ type Config struct {
 }
 
 type Location struct {
-	Name      string      `yaml:"name" json:"name"`
-	Direction string      `yaml:"direction,omitempty" json:"direction,omitempty"`
-	Nodes     []string    `yaml:"nodes,omitempty" json:"nodes,omitempty"`
-	Children  []*Location `yaml:"children,omitempty" json:"children,omitempty"`
+	Name      string        `yaml:"name" json:"name"`
+	Direction string        `yaml:"direction,omitempty" json:"direction,omitempty"`
+	Nodes     []*NodeConfig `yaml:"nodes,omitempty" json:"nodes,omitempty"`
+	Children  []*Location   `yaml:"children,omitempty" json:"children,omitempty"`
+}
+
+type NodeConfig struct {
+	Names []string `yaml:"names,omitempty" json:"names,omitempty"`
+	MACs  []string `yaml:"macs,omitempty" json:"macs,omitempty"`
+	IPs   []string `yaml:"ips,omitempty" json:"ips,omitempty"`
+	Avoid bool     `yaml:"avoid,omitempty" json:"avoid,omitempty"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -38,4 +45,17 @@ func LoadConfig(path string) (*Config, error) {
 
 func (c *Config) ToJSON() ([]byte, error) {
 	return json.Marshal(c)
+}
+
+func (c *Config) AllNodeConfigs() []*NodeConfig {
+	var result []*NodeConfig
+	var visit func([]*Location)
+	visit = func(locs []*Location) {
+		for _, loc := range locs {
+			result = append(result, loc.Nodes...)
+			visit(loc.Children)
+		}
+	}
+	visit(c.Locations)
+	return result
 }

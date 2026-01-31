@@ -125,6 +125,7 @@ func (t *Tendrils) Run() {
 	signal.Notify(sigUsr1Ch, syscall.SIGUSR1)
 	go func() {
 		for range sigUsr1Ch {
+			t.nodes.ApplyConfig(t.config)
 			t.nodes.LogAll()
 		}
 	}()
@@ -139,6 +140,7 @@ func (t *Tendrils) Run() {
 				continue
 			}
 			t.config = cfg
+			t.nodes.ApplyConfig(cfg)
 			log.Printf("reloaded config from %s", t.ConfigFile)
 			t.NotifyUpdate()
 		}
@@ -149,6 +151,7 @@ func (t *Tendrils) Run() {
 		log.Fatalf("[ERROR] failed to load config: %v", err)
 	}
 	t.config = cfg
+	t.nodes.ApplyConfig(cfg)
 
 	t.populateLocalAddresses()
 	t.startHTTPServer()
@@ -312,6 +315,10 @@ func (t *Tendrils) startInterface(ctx context.Context, iface net.Interface) {
 
 func (t *Tendrils) pollNode(node *Node) {
 	t.nodes.mu.RLock()
+	if node.Avoid {
+		t.nodes.mu.RUnlock()
+		return
+	}
 	var ips []net.IP
 	for _, iface := range node.Interfaces {
 		for ipStr := range iface.IPs {

@@ -460,6 +460,7 @@ type Node struct {
 	SACNOutputs           SACNUniverseSet        `json:"sacn_outputs,omitempty"`
 	ArtmapMappings        []ArtmapMapping        `json:"artmap_mappings,omitempty"`
 	Unreachable           bool                   `json:"unreachable,omitempty"`
+	Avoid                 bool                   `json:"avoid,omitempty"`
 	errors                *ErrorTracker
 	pollTrigger           chan struct{}
 	cancelFunc            context.CancelFunc

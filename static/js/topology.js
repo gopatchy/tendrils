@@ -107,7 +107,11 @@ export function buildLocationTree(locations, parent) {
             name: loc.name || '',
             anonymous: anonymous,
             direction: loc.direction || 'horizontal',
-            nodeRefs: (loc.nodes || []).map(n => n.toLowerCase()),
+            nodeRefs: (loc.nodes || []).flatMap(n => [
+                ...(n.names || []).map(name => name.toLowerCase()),
+                ...(n.macs || []).map(mac => mac.toLowerCase()),
+                ...(n.ips || [])
+            ]),
             parent: parent,
             children: []
         };

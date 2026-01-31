@@ -4,168 +4,200 @@ locations:
   children:
   - name: LIGHTING-2 Rack
     nodes:
-    - lighting-2
-    - "48:59:00:41:00:29" # Pixie Driver 8k Port 1
-    - "48:59:00:28:00:27" # Pixie Driver 8k Port 2
-    - "48:59:00:43:00:29" # Pixie Driver 8k Port 3
-    - "48:59:00:42:00:29" # Pixie Driver 8k Port 4
-    - "48:59:00:3c:00:3e" # Pixie Driver 8k Port 5
-    - "48:59:00:3f:00:3e" # Pixie Driver 8k Port 6
-    - "48:59:00:25:00:3e" # Pixie Driver 8k Port 7
-    - "48:59:00:41:00:3e" # Pixie Driver 8k Port 8
-    - DMXG # cyc1
-    - DMXH # cyc2
-    - DMXI # cyc3
-    - DMXJ # cyc4
-    - DMXK # cyc5
-    - DMXL # cyc6
+    - names: ["lighting-2"]
+    - names: ["Pixie Driver 8k 2 Port 1"]
+      macs: ["48:59:00:41:00:29"]
+      avoid: true
+    - names: ["Pixie Driver 8k 2 Port 2"]
+      macs: ["48:59:00:28:00:27"]
+      avoid: true
+    - names: ["Pixie Driver 8k 2 Port 3"]
+      macs: ["48:59:00:43:00:29"]
+      avoid: true
+    - names: ["Pixie Driver 8k 2 Port 4"]
+      macs: ["48:59:00:42:00:29"]
+      avoid: true
+    - names: ["Pixie Driver 8k 2 Port 5"]
+      macs: ["48:59:00:3c:00:3e"]
+      avoid: true
+    - names: ["Pixie Driver 8k 2 Port 6"]
+      macs: ["48:59:00:3f:00:3e"]
+      avoid: true
+    - names: ["Pixie Driver 8k 2 Port 7"]
+      macs: ["48:59:00:25:00:3e"]
+      avoid: true
+    - names: ["Pixie Driver 8k 2 Port 8"]
+      macs: ["48:59:00:41:00:3e"]
+      avoid: true
+    - names: ["DMXG"] # cyc1
+    - names: ["DMXH"] # cyc2
+    - names: ["DMXI"] # cyc3
+    - names: ["DMXJ"] # cyc4
+    - names: ["DMXK"] # cyc5
+    - names: ["DMXL"] # cyc6
 
   - direction: horizontal
     children:
     - nodes:
-      - DMXQ # r2x1
+      - names: ["DMXQ"] # r2x1
 
     - nodes:
-      - DMXR # r2x2
+      - names: ["DMXR"] # r2x2
 
   - direction: horizontal
     children:
     - nodes:
-      - "MON1-A"
-      - "MON1-B"
+      - names: ["MON1-A"]
+      - names: ["MON1-B"]
 
 - name: Under Apron
   direction: horizontal
   children:
   - name: AUDIO Rack
     nodes:
-    - audio
-    - "MICS-A"
-    - "00:0e:dd:a7:29:93" # MICS-A bridge interface
-    - "MICS-B"
-    - "00:0e:dd:a8:3e:b3" # MICS-B bridge interface
-    - "MICS-C"
-    - "00:0e:dd:a7:6f:55" # MICS-C bridge interface
-    - "MICS-D"
-    - "00:0e:dd:64:3d:51" # MICS-D bridge interface
-    - "MICS-E"
-    - "00:0e:dd:ac:fc:7d" # MICS-E bridge interface
+    - names: ["audio"]
+    - names: ["MICS-A"]
+      macs: ["00:0e:dd:a7:29:93"]
+    - names: ["MICS-B"]
+      macs: ["00:0e:dd:a8:3e:b3"]
+    - names: ["MICS-C"]
+      macs: ["00:0e:dd:a7:6f:55"]
+    - names: ["MICS-D"]
+      macs: ["00:0e:dd:64:3d:51"]
+    - names: ["MICS-E"]
+      macs: ["00:0e:dd:ac:fc:7d"]
 
   - name: LIGHTING-1 Rack
     nodes:
-    - lighting-1
-    - "48:59:00:27:00:27" # Pixie Driver 8k Port 1
-    - "48:59:00:37:00:27" # Pixie Driver 8k Port 2
-    - "48:59:00:3e:00:27" # Pixie Driver 8k Port 3
-    - "48:59:00:3f:00:27" # Pixie Driver 8k Port 4
-    - "48:59:00:47:00:1a" # Pixie Driver 8k Port 5
-    - "48:59:00:44:00:1a" # Pixie Driver 8k Port 6
-    - "48:59:00:42:00:19" # Pixie Driver 8k Port 7
-    - "48:59:00:44:00:19" # Pixie Driver 8k Port 8
+    - names: ["lighting-1"]
+    - names: ["Pixie Driver 8k 1 Port 1"]
+      macs: ["48:59:00:27:00:27"]
+      avoid: true
+    - names: ["Pixie Driver 8k 1 Port 2"]
+      macs: ["48:59:00:37:00:27"]
+      avoid: true
+    - names: ["Pixie Driver 8k 1 Port 3"]
+      macs: ["48:59:00:3e:00:27"]
+      avoid: true
+    - names: ["Pixie Driver 8k 1 Port 4"]
+      macs: ["48:59:00:3f:00:27"]
+      avoid: true
+    - names: ["Pixie Driver 8k 1 Port 5"]
+      macs: ["48:59:00:47:00:1a"]
+      avoid: true
+    - names: ["Pixie Driver 8k 1 Port 6"]
+      macs: ["48:59:00:44:00:1a"]
+      avoid: true
+    - names: ["Pixie Driver 8k 1 Port 7"]
+      macs: ["48:59:00:42:00:19"]
+      avoid: true
+    - names: ["Pixie Driver 8k 1 Port 8"]
+      macs: ["48:59:00:44:00:19"]
+      avoid: true
 
   - name: VIDEO Rack
     nodes:
-    - video
-    - "ATEM 2 M/E Constellation 4K"
-    - "HyperDeck-Studio-4K-Pro"
-    - RX-QLAB-1
-    - RX-QLAB-2
-    - TX-PROJ-1
-    - TX-PROJ-2
-    - TX-M4
-    - TX-M16
-    - TX-MISC
-    - TX-PREVIEW
+    - names: ["video"]
+    - names: ["ATEM 2 M/E Constellation 4K"]
+    - names: ["HyperDeck-Studio-4K-Pro"]
+    - names: ["RX-QLAB-1"]
+    - names: ["RX-QLAB-2"]
+    - names: ["TX-PROJ-1"]
+    - names: ["TX-PROJ-2"]
+    - names: ["TX-M4"]
+    - names: ["TX-M16"]
+    - names: ["TX-MISC"]
+    - names: ["TX-PREVIEW"]
 
 - direction: horizontal
   children:
   - nodes:
-    - "Y001-MAIN1-L-d1e155"
-    - "ac:44:f2:4e:84:d6" # MAIN1-L bridge interface
+    - names: ["Y001-MAIN1-L-d1e155"]
+      macs: ["ac:44:f2:4e:84:d6"]
 
   - name: Stage 2
     nodes:
-    - "MON2"
+    - names: ["MON2"]
 
   - name: Stage 3
     nodes:
-    - "MON3"
+    - names: ["MON3"]
 
   - nodes:
-    - "Y001-MAIN1-R-d1e194"
-    - "ac:44:f2:4e:84:d4" # MAIN1-R bridge interface
-
-- direction: horizontal
-  children:
-  - nodes:
-    - "RX-PROJ-1"
-
-  - nodes:
-    - "RX-PROJ-2"
+    - names: ["Y001-MAIN1-R-d1e194"]
+      macs: ["ac:44:f2:4e:84:d4"]
 
 - direction: horizontal
   children:
   - nodes:
-    - satellite-2
-    - "Y001-MAIN2-L-d1e298"
-    - "ac:44:f2:4e:87:2a" # MAIN2-L bridge interface
-    - DMXA # wash1
-    - DMXB # wash2
-    - DMXC # wash3
-    - DMXM # focus{1,2}
+    - names: ["RX-PROJ-1"]
 
   - nodes:
-    - DMXN # focus{3,4}
-    - DMXP # r3x{1,2}
+    - names: ["RX-PROJ-2"]
+
+- direction: horizontal
+  children:
+  - nodes:
+    - names: ["satellite-2"]
+    - names: ["Y001-MAIN2-L-d1e298"]
+      macs: ["ac:44:f2:4e:87:2a"]
+    - names: ["DMXA"] # wash1
+    - names: ["DMXB"] # wash2
+    - names: ["DMXC"] # wash3
+    - names: ["DMXM"] # focus{1,2}
 
   - nodes:
-    - satellite-3
-    - "Y001-MAIN2-R-f0dd93"
-    - "ac:44:f2:4e:87:27" # MAIN2-R bridge interface
-    - DMXD # wash4
-    - DMXE # wash5
-    - DMXF # wash6
-    - DMXO # focus{5,6}
+    - names: ["DMXN"] # focus{3,4}
+    - names: ["DMXP"] # r3x{1,2}
+
+  - nodes:
+    - names: ["satellite-3"]
+    - names: ["Y001-MAIN2-R-f0dd93"]
+      macs: ["ac:44:f2:4e:87:27"]
+    - names: ["DMXD"] # wash4
+    - names: ["DMXE"] # wash5
+    - names: ["DMXF"] # wash6
+    - names: ["DMXO"] # focus{5,6}
 
 - name: Booth
   direction: vertical
   children:
   - nodes:
-    - satellite-1
+    - names: ["satellite-1"]
 
   - direction: horizontal
     children:
     - name: Lighting Control
       nodes:
-      - qlab
-      - TX-QLAB-1
-      - TX-QLAB-2
-      - "SK_PTZEXTREMEV2 [457081]"
-      - "SK_RACKPRO2 [452514]"
-      - pigeon
-      - showpi1
-      - d8:3a:dd:e3:5b:db # showpi2/artmap
-  
+      - names: ["qlab"]
+      - names: ["TX-QLAB-1"]
+      - names: ["TX-QLAB-2"]
+      - names: ["SK_PTZEXTREMEV2 [457081]"]
+      - names: ["SK_RACKPRO2 [452514]"]
+      - names: ["pigeon"]
+      - names: ["showpi1"]
+      - macs: ["d8:3a:dd:e3:5b:db"] # showpi2/artmap
+
     - name: Sound Control
       nodes:
-      - SQ-7
-      - "00:04:c4:15:07:a4" # SQ-7 bridge port
-      - BT
+      - names: ["SQ-7"]
+        macs: ["00:04:c4:15:07:a4"]
+      - names: ["BT"]
 
     - name: Camera Control
       nodes:
-      - RX-CC-PREVIEW
-      - RX-CC-M16
-      - "AtemPanel-7c2e0da86d22"
-      - "AtemPanel-7c2e0da86d4c"
+      - names: ["RX-CC-PREVIEW"]
+      - names: ["RX-CC-M16"]
+      - names: ["AtemPanel-7c2e0da86d22"]
+      - names: ["AtemPanel-7c2e0da86d4c"]
 
     - name: Video Control
       nodes:
-      - RX-VC-M4
-      - RX-VC-M16
-      - "ATEM-2-ME-Advanced-Panel-20"
+      - names: ["RX-VC-M4"]
+      - names: ["RX-VC-M16"]
+      - names: ["ATEM-2-ME-Advanced-Panel-20"]
 
     - name: Control
       nodes:
-      - sunset
-      - RX-CONTROL-1
+      - names: ["sunset"]
+      - names: ["RX-CONTROL-1"]

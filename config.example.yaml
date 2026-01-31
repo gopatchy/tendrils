@@ -1,21 +1,27 @@
 locations:
-  stage:
-    children:
-      upstage:
-        nodes:
-          - lighting-1
-      downstage:
-        nodes:
-          - lighting-2
-  house:
-    children:
-      house_left:
-        nodes:
-          - audio
-      house_right:
-        nodes:
-          - video
-      booth:
-        nodes:
-          - qlab
-          - satellite-1
+- name: Stage
+  children:
+  - name: Upstage
+    nodes:
+    - names: ["lighting-1"]
+  - name: Downstage
+    nodes:
+    - names: ["lighting-2"]
+
+- name: House
+  children:
+  - name: House Left
+    nodes:
+    - names: ["audio"]
+  - name: House Right
+    nodes:
+    - names: ["video"]
+  - name: Booth
+    nodes:
+    - names: ["qlab"]
+    - names: ["satellite-1"]
+    # Example with MAC and avoid flag:
+    # - names: ["problem-device"]
+    #   macs: ["00:11:22:33:44:55"]
+    #   ips: ["10.0.1.100"]
+    #   avoid: true

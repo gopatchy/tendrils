@@ -140,6 +140,10 @@ func (pm *PingManager) Ping(ipStr string, timeout time.Duration) bool {
 
 func (t *Tendrils) pingNode(node *Node) {
 	t.nodes.mu.RLock()
+	if node.Avoid {
+		t.nodes.mu.RUnlock()
+		return
+	}
 	var ips []string
 	nodeName := node.DisplayName()
 	nodeID := node.ID

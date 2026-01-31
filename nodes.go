@@ -40,19 +40,20 @@ func (n *Nodes) Shutdown() {
 	n.cancelAll()
 }
 
-func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) {
-	changed := n.updateLocked(target, mac, ips, ifaceName, nodeName, source)
+func (n *Nodes) Update(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) *Node {
+	node, changed := n.updateLocked(target, mac, ips, ifaceName, nodeName, source)
 	if changed {
 		n.t.NotifyUpdate()
 	}
+	return node
 }
 
-func (n *Nodes) updateLocked(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) bool {
+func (n *Nodes) updateLocked(target *Node, mac net.HardwareAddr, ips []net.IP, ifaceName, nodeName, source string) (*Node, bool) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if mac == nil && target == nil && len(ips) == 0 {
-		return false
+	if mac == nil && target == nil && len(ips) == 0 && nodeName == "" {
+		return nil, false
 	}
 
 	node, isNew := n.resolveTargetNode(target, mac, ips, nodeName)
@@ -65,7 +66,7 @@ func (n *Nodes) updateLocked(target *Node, mac net.HardwareAddr, ips []net.IP, i
 		n.triggerPoll(node)
 	}
 
-	return isNew || len(added) > 0
+	return node, isNew || len(added) > 0
 }
 
 func (n *Nodes) resolveTargetNode(target *Node, mac net.HardwareAddr, ips []net.IP, nodeName string) (*Node, bool) {
@@ -119,7 +120,7 @@ func (n *Nodes) findOrMergeByName(target *Node, nodeName string) *Node {
 	if target == nil {
 		return found
 	}
-	if found != target && len(found.Interfaces) == 0 {
+	if found != target {
 		n.mergeNodes(target, found)
 	}
 	return target
@@ -368,7 +369,7 @@ func (n *Nodes) Merge(macs []net.HardwareAddr, source string) {
 }
 
 func (n *Nodes) mergeNodes(keep, merge *Node) {
-	if keep == nil || merge == nil {
+	if keep == nil || merge == nil || keep == merge {
 		return
 	}
 
@@ -380,14 +381,20 @@ func (n *Nodes) mergeNodes(keep, merge *Node) {
 		n.nameIndex[name] = keep
 	}
 
-	for _, iface := range merge.Interfaces {
-		var ips []net.IP
-		for ipStr := range iface.IPs {
-			ips = append(ips, net.ParseIP(ipStr))
-		}
+	for ifaceKey, iface := range merge.Interfaces {
 		if iface.MAC != "" {
-			n.updateNodeInterface(keep, iface.MAC.Parse(), ips, iface.Name)
 			n.macIndex[string(iface.MAC)] = keep
+		}
+		for ipStr := range iface.IPs {
+			n.ipIndex[ipStr] = keep
+		}
+		if _, exists := keep.Interfaces[ifaceKey]; !exists {
+			keep.Interfaces[ifaceKey] = iface
+		} else {
+			keepIface := keep.Interfaces[ifaceKey]
+			for ipStr := range iface.IPs {
+				keepIface.IPs.Add(net.ParseIP(ipStr))
+			}
 		}
 	}
 
@@ -619,4 +626,64 @@ func (n *Nodes) LogAll() {
 
 	n.logArtNet()
 	n.logDante()
+}
+
+func (n *Nodes) ApplyConfig(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	for _, nc := range cfg.AllNodeConfigs() {
+		n.applyNodeConfig(nc)
+	}
+}
+
+func (n *Nodes) applyNodeConfig(nc *NodeConfig) {
+	if len(nc.Names) == 0 && len(nc.MACs) == 0 && len(nc.IPs) == 0 {
+		return
+	}
+
+	var macs []net.HardwareAddr
+	for _, macStr := range nc.MACs {
+		if mac, err := net.ParseMAC(macStr); err == nil {
+			macs = append(macs, mac)
+		}
+	}
+
+	var ips []net.IP
+	for _, ipStr := range nc.IPs {
+		if ip := net.ParseIP(ipStr); ip != nil {
+			ips = append(ips, ip)
+		}
+	}
+
+	var firstMAC net.HardwareAddr
+	if len(macs) > 0 {
+		firstMAC = macs[0]
+	}
+	firstName := ""
+	if len(nc.Names) > 0 {
+		firstName = nc.Names[0]
+	}
+
+	target := n.Update(nil, firstMAC, ips, "", firstName, "config")
+	if target == nil {
+		return
+	}
+
+	for i := 1; i < len(macs); i++ {
+		n.Update(target, macs[i], nil, "", "", "config")
+	}
+	for i := 1; i < len(nc.Names); i++ {
+		n.Update(target, nil, nil, "", nc.Names[i], "config")
+	}
+
+	if nc.Avoid {
+		n.setAvoid(target)
+	}
+}
+
+func (n *Nodes) setAvoid(node *Node) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	node.Avoid = true
 }
