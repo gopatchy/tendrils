@@ -384,6 +384,7 @@ func (i *Interface) MarshalJSON() ([]byte, error) {
 
 type InterfaceStats struct {
 	Speed        uint64    `json:"speed,omitempty"`
+	Uptime       uint64    `json:"uptime,omitempty"`
 	InErrors     uint64    `json:"in_errors,omitempty"`
 	OutErrors    uint64    `json:"out_errors,omitempty"`
 	InPktsRate   float64   `json:"in_pkts_rate,omitempty"`
@@ -400,6 +401,7 @@ func round2(v float64) float64 {
 func (s *InterfaceStats) MarshalJSON() ([]byte, error) {
 	type statsJSON struct {
 		Speed        uint64    `json:"speed,omitempty"`
+		Uptime       uint64    `json:"uptime,omitempty"`
 		InErrors     uint64    `json:"in_errors,omitempty"`
 		OutErrors    uint64    `json:"out_errors,omitempty"`
 		InPktsRate   float64   `json:"in_pkts_rate,omitempty"`
@@ -410,6 +412,7 @@ func (s *InterfaceStats) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(statsJSON{
 		Speed:        s.Speed,
+		Uptime:       s.Uptime,
 		InErrors:     s.InErrors,
 		OutErrors:    s.OutErrors,
 		InPktsRate:   round2(s.InPktsRate),

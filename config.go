@@ -8,7 +8,8 @@ import (
 )
 
 type Config struct {
-	Locations []*Location `yaml:"locations" json:"locations"`
+	Locations   []*Location `yaml:"locations" json:"locations"`
+	SharedNames []string    `yaml:"shared_names,omitempty" json:"shared_names,omitempty"`
 }
 
 type Location struct {

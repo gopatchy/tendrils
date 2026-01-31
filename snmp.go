@@ -73,9 +73,13 @@ func snmpToInt(val interface{}) (int, bool) {
 	switch v := val.(type) {
 	case int:
 		return v, true
-	case uint:
+	case int32:
 		return int(v), true
 	case int64:
+		return int(v), true
+	case uint:
+		return int(v), true
+	case uint32:
 		return int(v), true
 	case uint64:
 		return int(v), true
@@ -126,10 +130,31 @@ func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {
 
 	t.querySysName(snmp, node)
 	t.queryInterfaceMACs(snmp, node, ifNames)
-	t.queryInterfaceStats(snmp, node, ifNames)
+	sysUpTime := t.getSysUpTime(snmp)
+	t.queryInterfaceStats(snmp, node, ifNames, sysUpTime)
 	t.queryPoEBudget(snmp, node)
 	t.queryBridgeMIB(snmp, node, ifNames)
 	t.queryDHCPBindings(snmp)
+}
+
+func (t *Tendrils) getSysUpTime(snmp *gosnmp.GoSNMP) uint64 {
+	oid := "1.3.6.1.2.1.1.3.0"
+
+	result, err := snmp.Get([]string{oid})
+	if err != nil {
+		return 0
+	}
+
+	if len(result.Variables) == 0 {
+		return 0
+	}
+
+	v, ok := snmpToInt(result.Variables[0].Value)
+	if !ok {
+		log.Printf("[ERROR] failed to parse sysUpTime: type=%T value=%v", result.Variables[0].Value, result.Variables[0].Value)
+		return 0
+	}
+	return uint64(v)
 }
 
 func (t *Tendrils) querySysName(snmp *gosnmp.GoSNMP, node *Node) {
@@ -195,8 +220,9 @@ func (t *Tendrils) queryInterfaceMACs(snmp *gosnmp.GoSNMP, node *Node, ifNames m
 	}
 }
 
-func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames map[int]string) {
+func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames map[int]string, sysUpTime uint64) {
 	ifOperStatus := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.8")
+	ifLastChange := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.9")
 	ifHighSpeed := t.getInterfaceTable(snmp, "1.3.6.1.2.1.31.1.1.1.15")
 	ifInErrors := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.14")
 	ifOutErrors := t.getInterfaceTable(snmp, "1.3.6.1.2.1.2.2.1.20")
@@ -234,6 +260,12 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 
 		if speed, ok := ifHighSpeed[ifIndex]; ok {
 			stats.Speed = uint64(speed) * 1000000
+		}
+
+		if lastChange, ok := ifLastChange[ifIndex]; ok && sysUpTime > 0 {
+			if uint64(lastChange) <= sysUpTime {
+				stats.Uptime = (sysUpTime - uint64(lastChange)) / 100
+			}
 		}
 
 		if inErr, ok := ifInErrors[ifIndex]; ok {

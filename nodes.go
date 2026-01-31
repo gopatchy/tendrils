@@ -113,6 +113,9 @@ func (n *Nodes) findOrMergeByName(target *Node, nodeName string) *Node {
 	if nodeName == "" {
 		return target
 	}
+	if n.isSharedName(nodeName) {
+		return target
+	}
 	found := n.nameIndex[nodeName]
 	if found == nil {
 		return target
@@ -124,6 +127,18 @@ func (n *Nodes) findOrMergeByName(target *Node, nodeName string) *Node {
 		n.mergeNodes(target, found)
 	}
 	return target
+}
+
+func (n *Nodes) isSharedName(name string) bool {
+	if n.t.config == nil {
+		return false
+	}
+	for _, shared := range n.t.config.SharedNames {
+		if shared == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (n *Nodes) createNode() *Node {
