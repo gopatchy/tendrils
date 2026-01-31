@@ -503,6 +503,13 @@ func (n *Nodes) UpdateMACTable(node *Node, peerMAC net.HardwareAddr, ifaceName s
 	node.MACTable[peerMAC.String()] = ifaceName
 }
 
+func (n *Nodes) ClearMACTable(node *Node) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	node.MACTable = map[string]string{}
+}
+
 func (n *Nodes) SetDanteClockMaster(ip net.IP) {
 	n.Update(nil, nil, []net.IP{ip}, "", "", "ptp")
 

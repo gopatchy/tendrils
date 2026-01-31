@@ -5,4 +5,4 @@ log
 *~
 cert.pem
 key.pem
-status
+status*

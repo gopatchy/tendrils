@@ -453,7 +453,7 @@ type Node struct {
 	ID                    string                 `json:"id"`
 	Names                 NameSet                `json:"names"`
 	Interfaces            InterfaceMap           `json:"interfaces"`
-	MACTable              map[string]string      `json:"-"`
+	MACTable              map[string]string      `json:"mac_table,omitempty"`
 	PoEBudget             *PoEBudget             `json:"poe_budget,omitempty"`
 	DanteTxChannels       int                    `json:"dante_tx_channels,omitempty"`
 	DanteClockMasterSeen  time.Time              `json:"-"`

@@ -544,6 +544,8 @@ func (t *Tendrils) queryBridgeMIB(snmp *gosnmp.GoSNMP, node *Node, ifNames map[i
 
 	bridgePortToIfIndex := t.getBridgePortMapping(snmp)
 
+	t.nodes.ClearMACTable(node)
+
 	for _, entry := range macPorts {
 		mac := entry.mac
 

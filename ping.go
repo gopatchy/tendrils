@@ -24,7 +24,7 @@ type PingManager struct {
 	failures map[string]int
 }
 
-const pingFailureThreshold = 5
+const pingFailureThreshold = 3
 
 func NewPingManager() *PingManager {
 	pm := &PingManager{
