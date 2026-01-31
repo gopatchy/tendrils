@@ -13,6 +13,12 @@ import (
 type artmapConfig struct {
 	Targets  []artmapTarget  `json:"targets"`
 	Mappings []artmapMapping `json:"mappings"`
+	Senders  []artmapSender  `json:"senders"`
+}
+
+type artmapSender struct {
+	Universe artmapUniverse `json:"universe"`
+	IP       string         `json:"ip"`
 }
 
 type artmapTarget struct {
@@ -101,6 +107,36 @@ func (t *Tendrils) processArtmapConfig(cfg *artmapConfig) {
 		}
 		updated = true
 	}
+
+	for _, sender := range cfg.Senders {
+		ip := net.ParseIP(sender.IP)
+		if ip == nil {
+			continue
+		}
+
+		node := t.nodes.GetByIP(ip)
+		if node == nil {
+			continue
+		}
+
+		universe := int(sender.Universe.Number)
+		switch sender.Universe.Protocol {
+		case "artnet":
+			t.nodes.UpdateArtNet(node, nil, []int{universe})
+			if t.DebugArtmap {
+				log.Printf("[artmap] marked %s (%s) as artnet output for universe %d", node.DisplayName(), ip, universe)
+			}
+		case "sacn":
+			t.nodes.UpdateSACN(node, []int{universe})
+			if t.DebugArtmap {
+				log.Printf("[artmap] marked %s (%s) as sacn output for universe %d", node.DisplayName(), ip, universe)
+			}
+		default:
+			continue
+		}
+		updated = true
+	}
+
 	if updated {
 		t.NotifyUpdate()
 	}
