@@ -33,6 +33,13 @@ type StatusResponse struct {
 }
 
 
+func noCacheHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
+}
+
 func (t *Tendrils) startHTTPServer() {
 	if err := ensureCert(); err != nil {
 		log.Printf("[ERROR] failed to ensure certificate: %v", err)
@@ -43,7 +50,7 @@ func (t *Tendrils) startHTTPServer() {
 	mux.HandleFunc("/api/status", t.handleAPIStatus)
 	mux.HandleFunc("/api/status/stream", t.handleAPIStatusStream)
 	mux.HandleFunc("/api/errors/clear", t.handleClearError)
-	mux.Handle("/", http.FileServer(http.Dir("static")))
+	mux.Handle("/", noCacheHandler(http.FileServer(http.Dir("static"))))
 
 	log.Printf("[https] listening on :443")
 	go func() {

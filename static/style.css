@@ -750,6 +750,7 @@ body.sacn-mode .node.sacn-out.sacn-in .sacn-in-hover .sacn-detail-wrapper {
     text-align: center;
     min-width: 120px;
     cursor: pointer;
+    white-space: pre-line;
 }
 
 .flow-node:hover {
