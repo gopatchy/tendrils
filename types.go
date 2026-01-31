@@ -455,7 +455,6 @@ type Node struct {
 	MulticastGroups       MulticastMembershipSet `json:"multicast_groups,omitempty"`
 	ArtNetInputs          ArtNetUniverseSet      `json:"artnet_inputs,omitempty"`
 	ArtNetOutputs         ArtNetUniverseSet      `json:"artnet_outputs,omitempty"`
-	ArtNetRDMUIDs         map[int][]string       `json:"artnet_rdm_uids,omitempty"`
 	SACNUnicastInputs     SACNUniverseSet        `json:"sacn_unicast_inputs,omitempty"`
 	SACNOutputs           SACNUniverseSet        `json:"sacn_outputs,omitempty"`
 	ArtmapMappings        []ArtmapMapping        `json:"artmap_mappings,omitempty"`
