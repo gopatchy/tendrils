@@ -1,4 +1,4 @@
-import { getLabel, getShortLabel, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates } from './nodes.js';
+import { getLabel, getShortLabel, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates, getFirstName } from './nodes.js';
 import { buildSwitchUplinks, buildLocationTree, buildNodeIndex, findLocationForNode, findEffectiveSwitch } from './topology.js';
 import { formatUniverse } from './format.js';
 import { createNodeElement, renderLocation } from './components.js';
@@ -120,7 +120,7 @@ export function render(data, config) {
 
         const txEntries = danteTx.map(peer => {
             const peerNode = nodesByTypeId.get(peer.node_id);
-            const peerName = peerNode ? getShortLabel(peerNode) : '??';
+            const peerName = peerNode ? getFirstName(peerNode) : '??';
             const channels = (peer.channels || []).map(formatDanteChannel);
             const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
             return { text: peerName + channelSummary, peerId: peer.node_id };
@@ -128,7 +128,7 @@ export function render(data, config) {
 
         const rxEntries = danteRx.map(peer => {
             const peerNode = nodesByTypeId.get(peer.node_id);
-            const peerName = peerNode ? getShortLabel(peerNode) : '??';
+            const peerName = peerNode ? getFirstName(peerNode) : '??';
             const channels = (peer.channels || []).map(formatDanteChannel);
             const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
             return { text: peerName + channelSummary, peerId: peer.node_id };
@@ -153,7 +153,7 @@ export function render(data, config) {
     const universeOutputs = new Map();
 
     nodes.forEach(node => {
-        const name = getShortLabel(node);
+        const name = getFirstName(node);
         (node.artnet_inputs || []).forEach(u => {
             if (!universeInputs.has(u)) universeInputs.set(u, []);
             universeInputs.get(u).push(name);
@@ -225,7 +225,7 @@ export function render(data, config) {
     }
 
     nodes.forEach(node => {
-        const name = getShortLabel(node);
+        const name = getFirstName(node);
         getSacnInputs(node).forEach(u => {
             if (!sacnUniverseInputs.has(u)) sacnUniverseInputs.set(u, []);
             sacnUniverseInputs.get(u).push(name);

@@ -32,6 +32,19 @@ export function getShortLabel(node) {
     return '??';
 }
 
+export function getFirstName(node) {
+    if (node.names && node.names.length > 0) return node.names[0];
+    if (node.interfaces && node.interfaces.length > 0) {
+        for (const iface of node.interfaces) {
+            if (iface.ips && iface.ips.length > 0) return iface.ips[0];
+        }
+        for (const iface of node.interfaces) {
+            if (iface.mac) return iface.mac;
+        }
+    }
+    return '??';
+}
+
 export function getNodeIdentifiers(node) {
     const ids = [];
     if (node.names) {
