@@ -204,7 +204,11 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 	ifHCInOctets := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.6")
 	ifHCOutOctets := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.10")
 	ifHCInUcastPkts := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.7")
+	ifHCInMcastPkts := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.8")
+	ifHCInBcastPkts := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.9")
 	ifHCOutUcastPkts := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.11")
+	ifHCOutMcastPkts := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.12")
+	ifHCOutBcastPkts := t.getInterfaceTable64(snmp, "1.3.6.1.2.1.31.1.1.1.13")
 
 	poeStats := t.getPoEStats(snmp, ifNames)
 	now := time.Now()
@@ -240,12 +244,13 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 			stats.OutErrors = uint64(outErr)
 		}
 
-		inPkts, hasInPkts := ifHCInUcastPkts[ifIndex]
-		outPkts, hasOutPkts := ifHCOutUcastPkts[ifIndex]
 		inBytes, hasInBytes := ifHCInOctets[ifIndex]
 		outBytes, hasOutBytes := ifHCOutOctets[ifIndex]
 
-		if hasInPkts && hasOutPkts && hasInBytes && hasOutBytes {
+		inPkts := ifHCInUcastPkts[ifIndex] + ifHCInMcastPkts[ifIndex] + ifHCInBcastPkts[ifIndex]
+		outPkts := ifHCOutUcastPkts[ifIndex] + ifHCOutMcastPkts[ifIndex] + ifHCOutBcastPkts[ifIndex]
+
+		if hasInBytes && hasOutBytes {
 			key := node.ID + ":" + name
 			ifaceTracker.mu.Lock()
 			prev, hasPrev := ifaceTracker.counters[key]

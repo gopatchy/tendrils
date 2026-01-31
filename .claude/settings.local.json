@@ -90,7 +90,8 @@
       "Bash(git -C /home/flamingcow/multicast diff --name-only)",
       "Bash(du:*)",
       "Bash(tree:*)",
-      "Bash(go get:*)"
+      "Bash(go get:*)",
+      "Bash(go test:*)"
     ],
     "ask": [
       "Bash(rm *)"
