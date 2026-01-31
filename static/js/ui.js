@@ -34,7 +34,7 @@ export function buildClickableList(container, items, label, plainFormat, flowInf
         val.addEventListener('click', (e) => {
             e.stopPropagation();
             if (flowInfo && flowInfo.universes && flowInfo.universes[idx] !== undefined) {
-                openFlowHash(flowInfo.protocol, flowInfo.universes[idx], flowInfo.nodeId);
+                openFlowHash(flowInfo.protocol, flowInfo.universes[idx], flowInfo.nodeName);
             } else {
                 navigator.clipboard.writeText(item);
             }
@@ -69,10 +69,10 @@ export function buildLinkStats(container, portLabel, speed, errIn, errOut, rates
     });
 }
 
-export function buildDanteDetail(container, entries, arrow, sourceNodeId, peerNodeIds) {
+export function buildDanteDetail(container, entries, arrow, sourceNodeName, peerNodeNames) {
     const plainLines = [];
     entries.forEach((entry, entryIdx) => {
-        const peerNodeId = peerNodeIds ? peerNodeIds[entryIdx] : null;
+        const peerNodeName = peerNodeNames ? peerNodeNames[entryIdx] : null;
         entry.split('\n').forEach((line, lineIdx) => {
             if (entryIdx > 0 && lineIdx === 0) {
                 container.appendChild(document.createTextNode('\n\n'));
@@ -81,8 +81,8 @@ export function buildDanteDetail(container, entries, arrow, sourceNodeId, peerNo
                 container.appendChild(document.createTextNode('\n'));
             }
             if (line.startsWith(' ')) {
-                container.appendChild(document.createTextNode('      ' + line.trim()));
-                plainLines.push('      ' + line.trim());
+                container.appendChild(document.createTextNode('   ' + line.trim()));
+                plainLines.push('   ' + line.trim());
             } else {
                 const lbl = document.createElement('span');
                 lbl.className = 'lbl';
@@ -94,9 +94,9 @@ export function buildDanteDetail(container, entries, arrow, sourceNodeId, peerNo
                 val.textContent = line;
                 val.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (sourceNodeId && peerNodeId) {
-                        const src = arrow === '→' ? sourceNodeId : peerNodeId;
-                        const dst = arrow === '→' ? peerNodeId : sourceNodeId;
+                    if (sourceNodeName && peerNodeName) {
+                        const src = arrow === '→' ? sourceNodeName : peerNodeName;
+                        const dst = arrow === '→' ? peerNodeName : sourceNodeName;
                         openFlowHash('dante', src, 'to', dst);
                     } else {
                         navigator.clipboard.writeText(line);

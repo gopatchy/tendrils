@@ -1,4 +1,4 @@
-import { getLabel, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates } from './nodes.js';
+import { getLabel, getFirstName, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates } from './nodes.js';
 import { buildSwitchUplinks } from './topology.js';
 import { escapeHtml, formatUniverse } from './format.js';
 import { tableData, tableSortKeys, setTableSortKeys } from './state.js';
@@ -65,9 +65,9 @@ export function renderTable() {
             sortTable(th.dataset.sort);
             renderTable();
         });
-        const sortKey = tableSortKeys.find(k => k.column === th.dataset.sort);
-        if (sortKey) {
-            th.classList.add(sortKey.asc ? 'sorted-asc' : 'sorted-desc');
+        const primarySort = tableSortKeys[0];
+        if (primarySort && primarySort.column === th.dataset.sort) {
+            th.classList.add(primarySort.asc ? 'sorted-asc' : 'sorted-desc');
         }
     });
 }
@@ -217,15 +217,19 @@ export function renderDanteTable() {
     nodes.forEach(node => nodesByTypeId.set(node.id, node));
     let rows = [];
     nodes.forEach(node => {
-        const name = getLabel(node);
+        const name = getFirstName(node);
+        const nameTitle = getLabel(node);
         const tx = node.dante_flows?.tx || [];
         tx.forEach(peer => {
             const peerNode = nodesByTypeId.get(peer.node_id);
-            const peerName = peerNode ? getLabel(peerNode) : '??';
+            const peerName = peerNode ? getFirstName(peerNode) : '??';
+            const peerTitle = peerNode ? getLabel(peerNode) : '??';
             (peer.channels || []).forEach(ch => {
                 rows.push({
                     source: name,
+                    sourceTitle: nameTitle,
                     dest: peerName,
+                    destTitle: peerTitle,
                     txChannel: ch.tx_channel,
                     rxChannel: ch.rx_channel,
                     type: ch.type || '',
@@ -233,7 +237,7 @@ export function renderDanteTable() {
                 });
             });
             if (!peer.channels || peer.channels.length === 0) {
-                rows.push({ source: name, dest: peerName, txChannel: '', rxChannel: 0, type: '', status: 'active' });
+                rows.push({ source: name, sourceTitle: nameTitle, dest: peerName, destTitle: peerTitle, txChannel: '', rxChannel: 0, type: '', status: 'active' });
             }
         });
     });
@@ -252,9 +256,9 @@ export function renderDanteTable() {
     rows.forEach(r => {
         const statusClass = r.status === 'no-source' ? 'status-warn' : 'status-ok';
         html += '<tr>';
-        html += '<td>' + escapeHtml(r.source) + '</td>';
+        html += '<td' + (r.sourceTitle !== r.source ? ' data-tooltip="' + escapeHtml(r.sourceTitle) + '"' : '') + '>' + escapeHtml(r.source) + '</td>';
         html += '<td>' + escapeHtml(r.txChannel) + '</td>';
-        html += '<td>' + escapeHtml(r.dest) + '</td>';
+        html += '<td' + (r.destTitle !== r.dest ? ' data-tooltip="' + escapeHtml(r.destTitle) + '"' : '') + '>' + escapeHtml(r.dest) + '</td>';
         html += '<td class="numeric">' + (r.rxChannel || '') + '</td>';
         html += '<td>' + escapeHtml(r.type) + '</td>';
         html += '<td class="' + statusClass + '">' + escapeHtml(r.status) + '</td>';
@@ -271,14 +275,15 @@ export function renderArtnetTable() {
     const rxByUniverse = new Map();
 
     nodes.forEach(node => {
-        const name = getLabel(node);
+        const name = getFirstName(node);
+        const title = getLabel(node);
         (node.artnet_inputs || []).forEach(u => {
             if (!txByUniverse.has(u)) txByUniverse.set(u, []);
-            txByUniverse.get(u).push(name);
+            txByUniverse.get(u).push({ name, title });
         });
         (node.artnet_outputs || []).forEach(u => {
             if (!rxByUniverse.has(u)) rxByUniverse.set(u, []);
-            rxByUniverse.get(u).push(name);
+            rxByUniverse.get(u).push({ name, title });
         });
     });
 
@@ -292,8 +297,10 @@ export function renderArtnetTable() {
             rows.push({
                 universe: u,
                 universeStr: formatUniverse(u),
-                tx: txNodes[i] || '',
-                rx: rxNodes[i] || ''
+                tx: txNodes[i]?.name || '',
+                txTitle: txNodes[i]?.title || '',
+                rx: rxNodes[i]?.name || '',
+                rxTitle: rxNodes[i]?.title || ''
             });
         }
     });
@@ -308,9 +315,9 @@ export function renderArtnetTable() {
 
     rows.forEach(r => {
         html += '<tr>';
-        html += '<td>' + escapeHtml(r.tx) + '</td>';
+        html += '<td' + (r.txTitle && r.txTitle !== r.tx ? ' data-tooltip="' + escapeHtml(r.txTitle) + '"' : '') + '>' + escapeHtml(r.tx) + '</td>';
         html += '<td>' + r.universeStr + '</td>';
-        html += '<td>' + escapeHtml(r.rx) + '</td>';
+        html += '<td' + (r.rxTitle && r.rxTitle !== r.rx ? ' data-tooltip="' + escapeHtml(r.rxTitle) + '"' : '') + '>' + escapeHtml(r.rx) + '</td>';
         html += '</tr>';
     });
 
@@ -324,24 +331,26 @@ export function renderSacnTable() {
     const rxByUniverse = new Map();
 
     nodes.forEach(node => {
-        const name = getLabel(node);
+        const name = getFirstName(node);
+        const title = getLabel(node);
         (node.sacn_outputs || []).forEach(u => {
             if (!txByUniverse.has(u)) txByUniverse.set(u, []);
-            txByUniverse.get(u).push(name);
+            txByUniverse.get(u).push({ name, title });
         });
         (node.multicast_groups || []).forEach(g => {
             if (typeof g === 'string' && g.startsWith('sacn:')) {
                 const u = parseInt(g.substring(5), 10);
                 if (!isNaN(u)) {
                     if (!rxByUniverse.has(u)) rxByUniverse.set(u, []);
-                    rxByUniverse.get(u).push(name);
+                    rxByUniverse.get(u).push({ name, title });
                 }
             }
         });
         (node.sacn_unicast_inputs || []).forEach(u => {
             if (!rxByUniverse.has(u)) rxByUniverse.set(u, []);
-            if (!rxByUniverse.get(u).includes(name)) {
-                rxByUniverse.get(u).push(name);
+            const existing = rxByUniverse.get(u);
+            if (!existing.some(e => e.name === name)) {
+                existing.push({ name, title });
             }
         });
     });
@@ -355,8 +364,10 @@ export function renderSacnTable() {
         for (let i = 0; i < maxLen; i++) {
             rows.push({
                 universe: u,
-                tx: txNodes[i] || '',
-                rx: rxNodes[i] || ''
+                tx: txNodes[i]?.name || '',
+                txTitle: txNodes[i]?.title || '',
+                rx: rxNodes[i]?.name || '',
+                rxTitle: rxNodes[i]?.title || ''
             });
         }
     });
@@ -371,9 +382,9 @@ export function renderSacnTable() {
 
     rows.forEach(r => {
         html += '<tr>';
-        html += '<td>' + escapeHtml(r.tx) + '</td>';
+        html += '<td' + (r.txTitle && r.txTitle !== r.tx ? ' data-tooltip="' + escapeHtml(r.txTitle) + '"' : '') + '>' + escapeHtml(r.tx) + '</td>';
         html += '<td class="numeric">' + r.universe + '</td>';
-        html += '<td>' + escapeHtml(r.rx) + '</td>';
+        html += '<td' + (r.rxTitle && r.rxTitle !== r.rx ? ' data-tooltip="' + escapeHtml(r.rxTitle) + '"' : '') + '>' + escapeHtml(r.rx) + '</td>';
         html += '</tr>';
     });
 

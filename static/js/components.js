@@ -1,4 +1,4 @@
-import { getLabel, getShortLabel, isSwitch, getSpeedClass } from './nodes.js';
+import { getLabel, getShortLabel, getFirstName, isSwitch, getSpeedClass } from './nodes.js';
 import { addClickableValue, buildLinkStats, buildDanteDetail, buildClickableList } from './ui.js';
 import { nodeElements, locationElements, usedNodeIds, usedLocationIds } from './state.js';
 
@@ -186,7 +186,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
 
         const detail = container.querySelector('.dante-detail');
         detail.innerHTML = '';
-        buildDanteDetail(detail, danteInfo.txTo, '→', node.id, danteInfo.txToPeerIds);
+        buildDanteDetail(detail, danteInfo.txTo, '→', danteInfo.nodeName, danteInfo.txToPeerNames);
     } else {
         const container = div.querySelector(':scope > .dante-tx-hover');
         if (container) container.remove();
@@ -207,7 +207,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
 
         const detail = container.querySelector('.dante-detail');
         detail.innerHTML = '';
-        buildDanteDetail(detail, danteInfo.rxFrom, '←', node.id, danteInfo.rxFromPeerIds);
+        buildDanteDetail(detail, danteInfo.rxFrom, '←', danteInfo.nodeName, danteInfo.rxFromPeerNames);
     } else {
         const container = div.querySelector(':scope > .dante-rx-hover');
         if (container) container.remove();
@@ -230,7 +230,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         const detail = container.querySelector('.artnet-detail');
         detail.innerHTML = '';
         buildClickableList(detail, artnetInfo.outputs.map(o => o.display), '←', (l, v) => l + ' ' + v,
-            { protocol: 'artnet', nodeId: node.id, universes: artnetInfo.outputs.map(o => o.universe) });
+            { protocol: 'artnet', nodeName: getFirstName(node), universes: artnetInfo.outputs.map(o => o.universe) });
     } else {
         const container = div.querySelector(':scope > .artnet-out-hover');
         if (container) container.remove();
@@ -253,7 +253,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         const detail = container.querySelector('.artnet-detail');
         detail.innerHTML = '';
         buildClickableList(detail, artnetInfo.inputs.map(i => i.display), '→', (l, v) => l + ' ' + v,
-            { protocol: 'artnet', nodeId: node.id, universes: artnetInfo.inputs.map(i => i.universe) });
+            { protocol: 'artnet', nodeName: getFirstName(node), universes: artnetInfo.inputs.map(i => i.universe) });
     } else {
         const container = div.querySelector(':scope > .artnet-in-hover');
         if (container) container.remove();
@@ -276,7 +276,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         const detail = container.querySelector('.sacn-detail');
         detail.innerHTML = '';
         buildClickableList(detail, sacnInfo.outputs.map(o => o.display), '←', (l, v) => l + ' ' + v,
-            { protocol: 'sacn', nodeId: node.id, universes: sacnInfo.outputs.map(o => o.universe) });
+            { protocol: 'sacn', nodeName: getFirstName(node), universes: sacnInfo.outputs.map(o => o.universe) });
     } else {
         const container = div.querySelector(':scope > .sacn-out-hover');
         if (container) container.remove();
@@ -299,7 +299,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         const detail = container.querySelector('.sacn-detail');
         detail.innerHTML = '';
         buildClickableList(detail, sacnInfo.inputs.map(i => i.display), '→', (l, v) => l + ' ' + v,
-            { protocol: 'sacn', nodeId: node.id, universes: sacnInfo.inputs.map(i => i.universe) });
+            { protocol: 'sacn', nodeName: getFirstName(node), universes: sacnInfo.inputs.map(i => i.universe) });
     } else {
         const container = div.querySelector(':scope > .sacn-in-hover');
         if (container) container.remove();

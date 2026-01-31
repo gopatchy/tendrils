@@ -1,4 +1,4 @@
-import { getShortLabel, isSwitch, findInterface } from './nodes.js';
+import { getShortLabel, getFirstName, isSwitch, findInterface } from './nodes.js';
 import { flowViewData, currentMode, currentView } from './state.js';
 
 function scrollToNode(typeid) {
@@ -89,7 +89,7 @@ export function showFlowView(flowSpec) {
             else {
                 const sourceNode = nodesByTypeId.get(sourceId);
                 const destNode = nodesByTypeId.get(destId);
-                title = 'Dante: ' + getShortLabel(sourceNode) + ' → ' + getShortLabel(destNode);
+                title = 'Dante: ' + getFirstName(sourceNode) + ' → ' + getFirstName(destNode);
                 const path = findPath(graph, sourceId, destId);
                 if (path) paths.push({ path, sourceId, destId });
                 else error = 'No path found between nodes';
@@ -102,7 +102,7 @@ export function showFlowView(flowSpec) {
             else {
                 const sourceNode = nodesByTypeId.get(sourceId);
                 const danteTx = sourceNode.dante_flows?.tx || [];
-                title = 'Dante TX: ' + getShortLabel(sourceNode) + (txChannel ? ' ch ' + txChannel : '');
+                title = 'Dante TX: ' + getFirstName(sourceNode) + (txChannel ? ' ch ' + txChannel : '');
                 const destIds = new Set();
                 danteTx.forEach(peer => {
                     if (txChannel) {
@@ -149,8 +149,8 @@ export function showFlowView(flowSpec) {
                     const isSource = sourceIds.includes(clickedNodeId);
                     const isDest = destIds.includes(clickedNodeId);
                     if (isSource) {
-                        const destNames = destIds.filter(id => id !== clickedNodeId).map(id => getShortLabel(nodesByTypeId.get(id))).join(', ');
-                        title = protoName + ' ' + universe + ': ' + getShortLabel(clickedNode) + ' → ' + (destNames || '?');
+                        const destNames = destIds.filter(id => id !== clickedNodeId).map(id => getFirstName(nodesByTypeId.get(id))).join(', ');
+                        title = protoName + ' ' + universe + ': ' + getFirstName(clickedNode) + ' → ' + (destNames || '?');
                         destIds.forEach(destId => {
                             if (destId !== clickedNodeId) {
                                 const path = findPath(graph, clickedNodeId, destId);
@@ -158,8 +158,8 @@ export function showFlowView(flowSpec) {
                             }
                         });
                     } else if (isDest) {
-                        const sourceNames = sourceIds.map(id => getShortLabel(nodesByTypeId.get(id))).join(', ');
-                        title = protoName + ' ' + universe + ': ' + (sourceNames || '?') + ' → ' + getShortLabel(clickedNode);
+                        const sourceNames = sourceIds.map(id => getFirstName(nodesByTypeId.get(id))).join(', ');
+                        title = protoName + ' ' + universe + ': ' + (sourceNames || '?') + ' → ' + getFirstName(clickedNode);
                         sourceIds.forEach(sourceId => {
                             const path = findPath(graph, sourceId, clickedNodeId);
                             if (path) paths.push({ path, sourceId, destId: clickedNodeId });
@@ -324,8 +324,9 @@ export function renderFlowPath(pathInfo, nodesByTypeId, flowUniverse, flowProtoc
 
         const nodeEl = document.createElement('div');
         nodeEl.className = 'flow-node';
+        const isSourceNode = step.nodeId === sourceId && sourceId !== destId;
         if (isSwitch(node)) nodeEl.classList.add('switch');
-        if (step.nodeId === sourceId && sourceId !== destId) nodeEl.classList.add('source');
+        if (isSourceNode) nodeEl.classList.add('source');
         else if (step.nodeId === destId) nodeEl.classList.add('dest');
         nodeEl.textContent = getShortLabel(node);
         nodeEl.addEventListener('click', (e) => {
@@ -333,29 +334,51 @@ export function renderFlowPath(pathInfo, nodesByTypeId, flowUniverse, flowProtoc
             closeFlowView();
             scrollToNode(step.nodeId);
         });
-        container.appendChild(nodeEl);
 
+        let mappingsEl = null;
         if (node.artmap_mappings && node.artmap_mappings.length > 0 && flowUniverse !== undefined) {
             const relevantMappings = getRelevantMappings(node.artmap_mappings, flowProtocol, flowUniverse);
             if (relevantMappings.length > 0) {
-                const mappingsEl = document.createElement('div');
+                mappingsEl = document.createElement('div');
                 mappingsEl.className = 'flow-artmap-mappings';
+                if (isSourceNode) mappingsEl.classList.add('before-node');
+                const currentPrefix = flowProtocol + ':' + flowUniverse;
+                const nodeName = getFirstName(node);
                 relevantMappings.forEach(m => {
                     const mappingEl = document.createElement('div');
                     mappingEl.className = 'artmap-mapping';
-                    mappingEl.textContent = m.from + ' → ' + m.to;
+                    const fromSpan = document.createElement('span');
+                    fromSpan.className = 'from';
+                    fromSpan.textContent = m.from;
+                    const arrowSpan = document.createElement('span');
+                    arrowSpan.textContent = '→';
+                    const toSpan = document.createElement('span');
+                    toSpan.className = 'to';
+                    toSpan.textContent = m.to;
+                    mappingEl.appendChild(fromSpan);
+                    mappingEl.appendChild(arrowSpan);
+                    mappingEl.appendChild(toSpan);
                     mappingEl.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const toProto = m.to.split(':')[0];
-                        const toUniverse = parseInt(m.to.split(':')[1], 10);
-                        if (!isNaN(toUniverse)) {
-                            openFlowHash(toProto, toUniverse);
+                        const fromBase = m.from.split(':').slice(0, 2).join(':');
+                        const target = fromBase === currentPrefix ? m.to : m.from;
+                        const targetProto = target.split(':')[0];
+                        const targetUniverse = parseInt(target.split(':')[1], 10);
+                        if (!isNaN(targetUniverse)) {
+                            openFlowHash(targetProto, targetUniverse, nodeName);
                         }
                     });
                     mappingsEl.appendChild(mappingEl);
                 });
-                container.appendChild(mappingsEl);
             }
+        }
+
+        if (mappingsEl && isSourceNode) {
+            container.appendChild(mappingsEl);
+        }
+        container.appendChild(nodeEl);
+        if (mappingsEl && !isSourceNode) {
+            container.appendChild(mappingsEl);
         }
     });
 

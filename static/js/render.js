@@ -123,7 +123,7 @@ export function render(data, config) {
             const peerName = peerNode ? getFirstName(peerNode) : '??';
             const channels = (peer.channels || []).map(formatDanteChannel);
             const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
-            return { text: peerName + channelSummary, peerId: peer.node_id };
+            return { text: peerName + channelSummary, peerName };
         });
 
         const rxEntries = danteRx.map(peer => {
@@ -131,7 +131,7 @@ export function render(data, config) {
             const peerName = peerNode ? getFirstName(peerNode) : '??';
             const channels = (peer.channels || []).map(formatDanteChannel);
             const channelSummary = channels.length > 0 ? '\n  ' + channels.join('\n  ') : '';
-            return { text: peerName + channelSummary, peerId: peer.node_id };
+            return { text: peerName + channelSummary, peerName };
         });
 
         txEntries.sort((a, b) => a.text.split('\n')[0].localeCompare(b.text.split('\n')[0]));
@@ -141,9 +141,10 @@ export function render(data, config) {
             isTx: danteTx.length > 0,
             isRx: danteRx.length > 0,
             txTo: txEntries.map(e => e.text),
-            txToPeerIds: txEntries.map(e => e.peerId),
+            txToPeerNames: txEntries.map(e => e.peerName),
             rxFrom: rxEntries.map(e => e.text),
-            rxFromPeerIds: rxEntries.map(e => e.peerId)
+            rxFromPeerNames: rxEntries.map(e => e.peerName),
+            nodeName: getFirstName(node)
         });
     });
 

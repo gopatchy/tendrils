@@ -379,6 +379,37 @@ body.table-view #table-container {
     color: #f44;
 }
 
+.data-table td[data-tooltip] {
+    position: relative;
+    cursor: default;
+}
+
+.data-table td[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 0;
+    top: 100%;
+    margin-top: 4px;
+    background: #000;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: pre;
+    pointer-events: none;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    border: 1px solid #555;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s;
+}
+
+.data-table td[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
 body.dante-mode .node {
     opacity: 0.3;
 }
@@ -851,19 +882,35 @@ body.sacn-mode .node.sacn-out.sacn-in .sacn-in-hover .sacn-detail-wrapper {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    margin-left: 20px;
+    margin-top: 8px;
     padding: 8px 12px;
     background: #1a1a2e;
     border-radius: 6px;
-    border-left: 3px solid #5a5aff;
+    box-shadow: 0 0 0 2px #5a5aff;
+}
+
+.flow-artmap-mappings.before-node {
+    margin-top: 0;
+    margin-bottom: 8px;
 }
 
 .artmap-mapping {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 6px;
     font-size: 11px;
     color: #aaf;
     cursor: pointer;
     padding: 2px 4px;
     border-radius: 3px;
+}
+
+.artmap-mapping .from {
+    text-align: right;
+}
+
+.artmap-mapping .to {
+    text-align: left;
 }
 
 .artmap-mapping:hover {
