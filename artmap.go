@@ -74,11 +74,25 @@ func (t *Tendrils) probeArtmap(ip net.IP) {
 		log.Printf("[artmap] found ip=%s targets=%d mappings=%d", ip, len(cfg.Targets), len(cfg.Mappings))
 	}
 
-	t.processArtmapConfig(&cfg)
+	artmapNode := t.nodes.GetByIP(ip)
+	t.processArtmapConfig(&cfg, artmapNode)
 }
 
-func (t *Tendrils) processArtmapConfig(cfg *artmapConfig) {
+func (t *Tendrils) processArtmapConfig(cfg *artmapConfig, artmapNode *Node) {
 	updated := false
+
+	if artmapNode != nil && len(cfg.Mappings) > 0 {
+		mappings := make([]ArtmapMapping, len(cfg.Mappings))
+		for i, m := range cfg.Mappings {
+			mappings[i] = ArtmapMapping{
+				From: formatArtmapAddr(m.From),
+				To:   formatArtmapToAddr(m.To),
+			}
+		}
+		t.nodes.UpdateArtmapMappings(artmapNode, mappings)
+		updated = true
+	}
+
 	for _, target := range cfg.Targets {
 		ip := parseTargetIP(target.Address)
 		if ip == nil {
@@ -151,4 +165,33 @@ func parseTargetIP(addr string) net.IP {
 		}
 	}
 	return net.ParseIP(host)
+}
+
+func formatArtmapAddr(a artmapFromAddr) string {
+	u := formatArtmapUniverse(a.Universe)
+	if a.ChannelStart == 1 && a.ChannelEnd == 512 {
+		return u
+	}
+	if a.ChannelStart == a.ChannelEnd {
+		return fmt.Sprintf("%s:%d", u, a.ChannelStart)
+	}
+	return fmt.Sprintf("%s:%d-%d", u, a.ChannelStart, a.ChannelEnd)
+}
+
+func formatArtmapToAddr(a artmapToAddr) string {
+	u := formatArtmapUniverse(a.Universe)
+	if a.ChannelStart == 1 {
+		return u
+	}
+	return fmt.Sprintf("%s:%d", u, a.ChannelStart)
+}
+
+func formatArtmapUniverse(u artmapUniverse) string {
+	return fmt.Sprintf("%s:%d", u.Protocol, u.Number)
+}
+
+func (n *Nodes) UpdateArtmapMappings(node *Node, mappings []ArtmapMapping) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	node.ArtmapMappings = mappings
 }

@@ -75,6 +75,7 @@ export function showFlowView(flowSpec) {
     const parts = flowSpec.split('/');
     const protocol = parts[0];
     let title = '', paths = [], error = '';
+    let flowProtocol, flowUniverse;
 
     if (protocol === 'dante') {
         if (parts.includes('to')) {
@@ -123,6 +124,8 @@ export function showFlowView(flowSpec) {
         const universe = parseInt(parts[1], 10);
         const sourceIdent = parts[2];
         const protoName = protocol === 'sacn' ? 'sACN' : 'Art-Net';
+        flowUniverse = universe;
+        flowProtocol = protocol;
         if (isNaN(universe)) { error = 'Invalid universe'; }
         else {
             const sourceIds = [];
@@ -182,10 +185,10 @@ export function showFlowView(flowSpec) {
         error = 'Unknown protocol: ' + protocol;
     }
 
-    renderFlowOverlay(title, paths, error, nodesByTypeId);
+    renderFlowOverlay(title, paths, error, nodesByTypeId, flowProtocol, flowUniverse);
 }
 
-export function renderFlowOverlay(title, paths, error, nodesByTypeId) {
+export function renderFlowOverlay(title, paths, error, nodesByTypeId, flowProtocol, flowUniverse) {
     let overlay = document.getElementById('flow-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -224,7 +227,7 @@ export function renderFlowOverlay(title, paths, error, nodesByTypeId) {
     }
 
     if (paths.length === 1) {
-        const pathEl = renderFlowPath(paths[0], nodesByTypeId);
+        const pathEl = renderFlowPath(paths[0], nodesByTypeId, flowUniverse, flowProtocol);
         pathEl.addEventListener('click', (e) => e.stopPropagation());
         overlay.appendChild(pathEl);
     } else {
@@ -241,7 +244,7 @@ export function renderFlowOverlay(title, paths, error, nodesByTypeId) {
                 : paths.length + ' flow paths (click to expand)';
         });
         paths.forEach(p => {
-            const pathEl = renderFlowPath(p, nodesByTypeId);
+            const pathEl = renderFlowPath(p, nodesByTypeId, flowUniverse, flowProtocol);
             pathEl.addEventListener('click', (e) => e.stopPropagation());
             listEl.appendChild(pathEl);
         });
@@ -254,7 +257,7 @@ export function renderFlowOverlay(title, paths, error, nodesByTypeId) {
     }
 }
 
-export function renderFlowPath(pathInfo, nodesByTypeId) {
+export function renderFlowPath(pathInfo, nodesByTypeId, flowUniverse, flowProtocol) {
     const { path, sourceId, destId } = pathInfo;
     const container = document.createElement('div');
     container.className = 'flow-path';
@@ -331,9 +334,41 @@ export function renderFlowPath(pathInfo, nodesByTypeId) {
             scrollToNode(step.nodeId);
         });
         container.appendChild(nodeEl);
+
+        if (node.artmap_mappings && node.artmap_mappings.length > 0 && flowUniverse !== undefined) {
+            const relevantMappings = getRelevantMappings(node.artmap_mappings, flowProtocol, flowUniverse);
+            if (relevantMappings.length > 0) {
+                const mappingsEl = document.createElement('div');
+                mappingsEl.className = 'flow-artmap-mappings';
+                relevantMappings.forEach(m => {
+                    const mappingEl = document.createElement('div');
+                    mappingEl.className = 'artmap-mapping';
+                    mappingEl.textContent = m.from + ' → ' + m.to;
+                    mappingEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const toProto = m.to.split(':')[0];
+                        const toUniverse = parseInt(m.to.split(':')[1], 10);
+                        if (!isNaN(toUniverse)) {
+                            openFlowHash(toProto, toUniverse);
+                        }
+                    });
+                    mappingsEl.appendChild(mappingEl);
+                });
+                container.appendChild(mappingsEl);
+            }
+        }
     });
 
     return container;
+}
+
+function getRelevantMappings(mappings, protocol, universe) {
+    const prefix = protocol + ':' + universe;
+    return mappings.filter(m => {
+        const fromBase = m.from.split(':').slice(0, 2).join(':');
+        const toBase = m.to.split(':').slice(0, 2).join(':');
+        return fromBase === prefix || toBase === prefix;
+    });
 }
 
 export function closeFlowView() {

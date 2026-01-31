@@ -99,6 +99,11 @@ func (s SACNUniverseSet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Universes())
 }
 
+type ArtmapMapping struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
 type MulticastGroupID int
 
 const (
@@ -452,6 +457,7 @@ type Node struct {
 	ArtNetOutputs         ArtNetUniverseSet      `json:"artnet_outputs,omitempty"`
 	SACNUnicastInputs     SACNUniverseSet        `json:"sacn_unicast_inputs,omitempty"`
 	SACNOutputs           SACNUniverseSet        `json:"sacn_outputs,omitempty"`
+	ArtmapMappings        []ArtmapMapping        `json:"artmap_mappings,omitempty"`
 	Unreachable           bool                   `json:"unreachable,omitempty"`
 	errors                *ErrorTracker
 	pollTrigger           chan struct{}

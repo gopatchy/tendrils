@@ -847,6 +847,30 @@ body.sacn-mode .node.sacn-out.sacn-in .sacn-in-hover .sacn-detail-wrapper {
     display: flex;
 }
 
+.flow-artmap-mappings {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-left: 20px;
+    padding: 8px 12px;
+    background: #1a1a2e;
+    border-radius: 6px;
+    border-left: 3px solid #5a5aff;
+}
+
+.artmap-mapping {
+    font-size: 11px;
+    color: #aaf;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.artmap-mapping:hover {
+    background: #2a2a4e;
+    color: #ccf;
+}
+
 .node.has-error {
     box-shadow: 0 0 0 3px #f66;
 }
