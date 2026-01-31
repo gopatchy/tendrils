@@ -47,9 +47,8 @@ func (t *Tendrils) startHTTPServer() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/status", t.handleAPIStatus)
-	mux.HandleFunc("/api/status/stream", t.handleAPIStatusStream)
-	mux.HandleFunc("/api/errors/clear", t.handleClearError)
+	mux.HandleFunc("/tendrils/api/status", t.handleAPIStatus)
+	mux.HandleFunc("/tendrils/api/errors/clear", t.handleClearError)
 	mux.Handle("/", noCacheHandler(http.FileServer(http.Dir("static"))))
 
 	log.Printf("[https] listening on :443")
@@ -122,6 +121,10 @@ func ensureCert() error {
 }
 
 func (t *Tendrils) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Accept") == "text/event-stream" {
+		t.handleAPIStatusStream(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	data, err := t.GetStatusJSON()
 	if err != nil {

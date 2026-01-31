@@ -135,11 +135,11 @@ export function scrollToNode(typeid) {
 }
 
 export async function clearError(id) {
-    await fetch('/api/errors/clear?id=' + encodeURIComponent(id), { method: 'POST' });
+    await fetch('/tendrils/api/errors/clear?id=' + encodeURIComponent(id), { method: 'POST' });
 }
 
 export async function clearAllErrors() {
-    await fetch('/api/errors/clear?all=true', { method: 'POST' });
+    await fetch('/tendrils/api/errors/clear?all=true', { method: 'POST' });
 }
 
 export function updateErrorPanel() {

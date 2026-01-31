@@ -10,7 +10,7 @@ import {
 let currentConfig = null;
 
 function connectSSE() {
-    const evtSource = new EventSource('/api/status/stream');
+    const evtSource = new EventSource('/tendrils/api/status');
     let heartbeatTimeout = null;
 
     function resetHeartbeat() {

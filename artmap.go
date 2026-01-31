@@ -50,7 +50,7 @@ type artmapToAddr struct {
 var artmapClient = &http.Client{Timeout: 2 * time.Second}
 
 func (t *Tendrils) probeArtmap(ip net.IP) {
-	url := fmt.Sprintf("http://%s:8080/api/config", ip)
+	url := fmt.Sprintf("http://%s:8080/artmap/api/status", ip)
 
 	resp, err := artmapClient.Get(url)
 	if err != nil {
