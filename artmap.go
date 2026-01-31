@@ -93,23 +93,22 @@ func (t *Tendrils) processArtmapConfig(cfg *artmapConfig, artmapNode *Node) {
 		updated = true
 	}
 
+	// Targets are destinations that receive ArtNet/sACN from artmap.
+	// They have artnet_outputs (output to DMX, input from network).
 	for _, target := range cfg.Targets {
 		ip := parseTargetIP(target.Address)
 		if ip == nil {
 			continue
 		}
 
-		node := t.nodes.GetByIP(ip)
-		if node == nil {
-			continue
-		}
+		node := t.nodes.Update(nil, nil, []net.IP{ip}, "", "", "artmap")
 
 		universe := int(target.Universe.Number)
 		switch target.Universe.Protocol {
 		case "artnet":
-			t.nodes.UpdateArtNet(node, []int{universe}, nil)
+			t.nodes.UpdateArtNet(node, nil, []int{universe})
 			if t.DebugArtmap {
-				log.Printf("[artmap] marked %s (%s) as artnet input for universe %d", node.DisplayName(), ip, universe)
+				log.Printf("[artmap] marked %s (%s) as artnet output for universe %d", node.DisplayName(), ip, universe)
 			}
 		case "sacn":
 			t.nodes.UpdateSACNUnicastInputs(node, []int{universe})
@@ -122,23 +121,22 @@ func (t *Tendrils) processArtmapConfig(cfg *artmapConfig, artmapNode *Node) {
 		updated = true
 	}
 
+	// Senders are sources that send ArtNet/sACN to artmap.
+	// They have artnet_inputs (input from DMX, output to network).
 	for _, sender := range cfg.Senders {
 		ip := net.ParseIP(sender.IP)
 		if ip == nil {
 			continue
 		}
 
-		node := t.nodes.GetByIP(ip)
-		if node == nil {
-			continue
-		}
+		node := t.nodes.Update(nil, nil, []net.IP{ip}, "", "", "artmap")
 
 		universe := int(sender.Universe.Number)
 		switch sender.Universe.Protocol {
 		case "artnet":
-			t.nodes.UpdateArtNet(node, nil, []int{universe})
+			t.nodes.UpdateArtNet(node, []int{universe}, nil)
 			if t.DebugArtmap {
-				log.Printf("[artmap] marked %s (%s) as artnet output for universe %d", node.DisplayName(), ip, universe)
+				log.Printf("[artmap] marked %s (%s) as artnet input for universe %d", node.DisplayName(), ip, universe)
 			}
 		case "sacn":
 			t.nodes.UpdateSACN(node, []int{universe})

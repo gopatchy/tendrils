@@ -137,8 +137,10 @@ export function showFlowView(flowSpec) {
                     const unicastInputs = node.sacn_unicast_inputs || [];
                     if (groups.some(g => g === 'sacn:' + universe) || unicastInputs.includes(universe)) destIds.push(node.id);
                 } else {
-                    if ((node.artnet_outputs || []).includes(universe)) sourceIds.push(node.id);
-                    if ((node.artnet_inputs || []).includes(universe)) destIds.push(node.id);
+                    // artnet_inputs = sources (input from DMX, send to network)
+                    // artnet_outputs = destinations (output to DMX, receive from network)
+                    if ((node.artnet_inputs || []).includes(universe)) sourceIds.push(node.id);
+                    if ((node.artnet_outputs || []).includes(universe)) destIds.push(node.id);
                 }
             });
             if (sourceIdent) {
