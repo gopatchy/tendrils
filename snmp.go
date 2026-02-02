@@ -6,29 +6,10 @@ import (
 	"net"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
 )
-
-type ifaceCounters struct {
-	inPkts    uint64
-	outPkts   uint64
-	inBytes   uint64
-	outBytes  uint64
-	uptime    uint64
-	timestamp time.Time
-}
-
-type counterTracker struct {
-	mu       sync.Mutex
-	counters map[string]*ifaceCounters
-}
-
-var ifaceTracker = &counterTracker{
-	counters: map[string]*ifaceCounters{},
-}
 
 var portNameRewrites = []struct {
 	re   *regexp.Regexp
@@ -289,21 +270,19 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 		inPkts := ifHCInUcastPkts[ifIndex] + ifHCInMcastPkts[ifIndex] + ifHCInBcastPkts[ifIndex]
 		outPkts := ifHCOutUcastPkts[ifIndex] + ifHCOutMcastPkts[ifIndex] + ifHCOutBcastPkts[ifIndex]
 
-		key := node.ID + ":" + name
-		ifaceTracker.mu.Lock()
-		prev, hasPrev := ifaceTracker.counters[key]
+		hasPrev := !iface.prevTimestamp.IsZero()
 		if hasPrev {
-			if prev.uptime > 0 && stats.Uptime > 0 && stats.Uptime < prev.uptime {
-				log.Printf("[ERROR] port flap on %s %s: uptime dropped from %d to %d seconds", node.DisplayName(), name, prev.uptime, stats.Uptime)
+			if iface.prevUptime > 0 && stats.Uptime > 0 && stats.Uptime < iface.prevUptime {
+				log.Printf("[ERROR] port flap on %s %s: uptime dropped from %d to %d seconds", node.DisplayName(), name, iface.prevUptime, stats.Uptime)
 				t.errors.AddPortFlap(node, name)
 			}
 			if hasInBytes && hasOutBytes {
-				elapsed := now.Sub(prev.timestamp).Seconds()
+				elapsed := now.Sub(iface.prevTimestamp).Seconds()
 				if elapsed > 0 {
-					stats.InPktsRate = float64(inPkts-prev.inPkts) / elapsed
-					stats.OutPktsRate = float64(outPkts-prev.outPkts) / elapsed
-					stats.InBytesRate = float64(inBytes-prev.inBytes) / elapsed
-					stats.OutBytesRate = float64(outBytes-prev.outBytes) / elapsed
+					stats.InPktsRate = float64(inPkts-iface.prevInPkts) / elapsed
+					stats.OutPktsRate = float64(outPkts-iface.prevOutPkts) / elapsed
+					stats.InBytesRate = float64(inBytes-iface.prevInBytes) / elapsed
+					stats.OutBytesRate = float64(outBytes-iface.prevOutBytes) / elapsed
 
 					maxBytesRate := float64(stats.Speed) / 8 * 2
 					if stats.InBytesRate < 0 || stats.InBytesRate > maxBytesRate {
@@ -317,19 +296,15 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 				}
 			}
 		}
-		storedUptime := stats.Uptime
-		if storedUptime == 0 && hasPrev {
-			storedUptime = prev.uptime
+
+		iface.prevInPkts = inPkts
+		iface.prevOutPkts = outPkts
+		iface.prevInBytes = inBytes
+		iface.prevOutBytes = outBytes
+		if stats.Uptime > 0 {
+			iface.prevUptime = stats.Uptime
 		}
-		ifaceTracker.counters[key] = &ifaceCounters{
-			inPkts:    inPkts,
-			outPkts:   outPkts,
-			inBytes:   inBytes,
-			outBytes:  outBytes,
-			uptime:    storedUptime,
-			timestamp: now,
-		}
-		ifaceTracker.mu.Unlock()
+		iface.prevTimestamp = now
 
 		if poe, ok := poeStats[name]; ok {
 			stats.PoE = poe

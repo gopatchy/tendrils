@@ -362,6 +362,13 @@ type Interface struct {
 	IPs   IPSet           `json:"ips,omitempty"`
 	Up    bool            `json:"up,omitempty"`
 	Stats *InterfaceStats `json:"stats,omitempty"`
+
+	prevInPkts    uint64
+	prevOutPkts   uint64
+	prevInBytes   uint64
+	prevOutBytes  uint64
+	prevUptime    uint64
+	prevTimestamp time.Time
 }
 
 func (i *Interface) MarshalJSON() ([]byte, error) {
