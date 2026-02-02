@@ -300,7 +300,7 @@ export function renderNetworkTable() {
         html += '<td class="' + statusClass + '">' + r.status + '</td>';
         html += '<td>';
         if (r.removable) {
-            html += '<button class="remove-node-btn" data-node-id="' + escapeHtml(r.nodeId) + '" title="Remove node">×</button>';
+            html += '<button class="remove-node-btn" data-node-id="' + escapeHtml(r.nodeId) + '" title="Remove node">X</button>';
         }
         html += '</td>';
         html += '</tr>';

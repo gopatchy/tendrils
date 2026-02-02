@@ -312,7 +312,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         if (!removeBtn) {
             removeBtn = document.createElement('button');
             removeBtn.className = 'remove-node-btn';
-            removeBtn.textContent = '×';
+            removeBtn.textContent = 'X';
             removeBtn.title = 'Remove node';
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();

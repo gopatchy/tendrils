@@ -1056,7 +1056,8 @@ body.sacn-mode .node:not(.sacn-out):not(.sacn-in):hover .node-info-wrapper {
 .node:has(.uplink-hover:hover) .node-info-wrapper,
 .node:has(.dante-hover:hover) .node-info-wrapper,
 .node:has(.artnet-hover:hover) .node-info-wrapper,
-.node:has(.sacn-hover:hover) .node-info-wrapper {
+.node:has(.sacn-hover:hover) .node-info-wrapper,
+.node:has(.remove-node-btn:hover) .node-info-wrapper {
     display: none;
 }
 
@@ -1276,8 +1277,24 @@ body.sacn-mode .node:not(.sacn-out):not(.sacn-in):hover .node-info-wrapper {
 
 .node .remove-node-btn {
     position: absolute;
-    bottom: 2px;
-    right: 2px;
+    top: -8px;
+    right: -4px;
+    width: auto;
+    height: auto;
+    padding: 1px 6px;
+    font-size: 10px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #833;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+}
+
+.node .remove-node-btn:hover {
+    background: #a44;
 }
 
 .data-table .remove-node-btn {
