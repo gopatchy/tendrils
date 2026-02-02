@@ -138,6 +138,7 @@ func (e *ErrorTracker) AddUtilizationError(node *Node, portName string, utilizat
 		FirstSeen:   now,
 		LastUpdated: now,
 	}
+	log.Printf("[ERROR] high utilization on %s %s: %.0f%%", node.DisplayName(), portName, utilization)
 	e.t.NotifyUpdate()
 }
 

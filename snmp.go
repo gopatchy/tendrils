@@ -304,16 +304,14 @@ func (t *Tendrils) queryInterfaceStats(snmp *gosnmp.GoSNMP, node *Node, ifNames 
 					stats.OutPktsRate = float64(outPkts-prev.outPkts) / elapsed
 					stats.InBytesRate = float64(inBytes-prev.inBytes) / elapsed
 					stats.OutBytesRate = float64(outBytes-prev.outBytes) / elapsed
-					if stats.InPktsRate < 0 {
+
+					maxBytesRate := float64(stats.Speed) / 8 * 2
+					if stats.InBytesRate < 0 || stats.InBytesRate > maxBytesRate {
 						stats.InPktsRate = 0
-					}
-					if stats.OutPktsRate < 0 {
-						stats.OutPktsRate = 0
-					}
-					if stats.InBytesRate < 0 {
 						stats.InBytesRate = 0
 					}
-					if stats.OutBytesRate < 0 {
+					if stats.OutBytesRate < 0 || stats.OutBytesRate > maxBytesRate {
+						stats.OutPktsRate = 0
 						stats.OutBytesRate = 0
 					}
 				}
