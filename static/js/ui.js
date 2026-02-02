@@ -289,20 +289,24 @@ export function updateErrorPanel() {
         timestampEl.textContent = 'First: ' + formatLocalTime(err.first_seen) + ' / Last: ' + formatLocalTime(err.last_seen);
         item.appendChild(timestampEl);
 
+        const buttonsEl = document.createElement('div');
+        buttonsEl.className = 'error-buttons';
+
         const node = tableData?.nodes?.find(n => n.id === err.node_id);
         if (node && node.unreachable && !node.in_config) {
             const removeBtn = document.createElement('button');
             removeBtn.className = 'remove-btn';
             removeBtn.textContent = 'Remove node';
             removeBtn.addEventListener('click', () => removeNode(err.node_id));
-            item.appendChild(removeBtn);
+            buttonsEl.appendChild(removeBtn);
         }
 
         const dismissBtn = document.createElement('button');
         dismissBtn.textContent = 'Dismiss';
         dismissBtn.addEventListener('click', () => clearError(err.id));
-        item.appendChild(dismissBtn);
+        buttonsEl.appendChild(dismissBtn);
 
+        item.appendChild(buttonsEl);
         listEl.appendChild(item);
     });
 }

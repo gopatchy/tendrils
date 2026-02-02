@@ -1157,8 +1157,13 @@ body.sacn-mode .node:not(.sacn-out):not(.sacn-in):hover .node-info-wrapper {
     margin-top: 2px;
 }
 
-.error-item button {
+.error-item .error-buttons {
+    display: flex;
+    gap: 6px;
     align-self: flex-end;
+}
+
+.error-item button {
     padding: 2px 6px;
     border: none;
     background: #555;
