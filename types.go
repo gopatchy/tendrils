@@ -476,6 +476,7 @@ type Node struct {
 	ArtmapMappings        []ArtmapMapping        `json:"artmap_mappings,omitempty"`
 	Unreachable           bool                   `json:"unreachable,omitempty"`
 	Avoid                 bool                   `json:"avoid,omitempty"`
+	InConfig              bool                   `json:"in_config,omitempty"`
 	errors                *ErrorTracker
 	pollTrigger           chan struct{}
 	cancelFunc            context.CancelFunc

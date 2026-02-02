@@ -49,6 +49,7 @@ func (t *Tendrils) startHTTPServer() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tendrils/api/status", t.handleAPIStatus)
 	mux.HandleFunc("/tendrils/api/errors/clear", t.handleClearError)
+	mux.HandleFunc("/tendrils/api/nodes/remove", t.handleRemoveNode)
 	mux.Handle("/", noCacheHandler(http.FileServer(http.Dir("static"))))
 
 	log.Printf("[https] listening on :443")
@@ -178,6 +179,28 @@ func (t *Tendrils) handleClearError(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.WriteHeader(http.StatusOK)
+}
+
+func (t *Tendrils) handleRemoveNode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "missing id parameter", http.StatusBadRequest)
+		return
+	}
+
+	if err := t.nodes.RemoveNodeByID(id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("removed node %s", id)
+	t.NotifyUpdate()
 	w.WriteHeader(http.StatusOK)
 }
 

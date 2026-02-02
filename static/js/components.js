@@ -1,5 +1,5 @@
 import { getLabel, getShortLabel, getFirstName, isSwitch, getSpeedClass } from './nodes.js';
-import { addClickableValue, buildLinkStats, buildDanteDetail, buildClickableList } from './ui.js';
+import { addClickableValue, buildLinkStats, buildDanteDetail, buildClickableList, removeNode } from './ui.js';
 import { nodeElements, locationElements, usedNodeIds, usedLocationIds } from './state.js';
 
 export function createNodeElement(node, switchConnection, nodeLocation, uplinkInfo, danteInfo, artnetInfo, sacnInfo, hasError, isUnreachable) {
@@ -305,6 +305,24 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
     } else {
         const container = div.querySelector(':scope > .sacn-in-hover');
         if (container) container.remove();
+    }
+
+    if (node.unreachable && !node.in_config) {
+        let removeBtn = div.querySelector(':scope > .remove-node-btn');
+        if (!removeBtn) {
+            removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-node-btn';
+            removeBtn.textContent = '×';
+            removeBtn.title = 'Remove node';
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeNode(node.id);
+            });
+            div.appendChild(removeBtn);
+        }
+    } else {
+        const removeBtn = div.querySelector(':scope > .remove-node-btn');
+        if (removeBtn) removeBtn.remove();
     }
 
     return div;

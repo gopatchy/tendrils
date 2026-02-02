@@ -2,6 +2,7 @@ import { getLabel, getFirstName, isSwitch, getInterfaceSpeed, getInterfaceErrors
 import { buildSwitchUplinks } from './topology.js';
 import { escapeHtml, formatUniverse } from './format.js';
 import { tableData, tableSortKeys, setTableSortKeys } from './state.js';
+import { removeNode } from './ui.js';
 
 export function sortTable(column) {
     const existingIdx = tableSortKeys.findIndex(k => k.column === column);
@@ -78,6 +79,12 @@ export function renderTable() {
         if (primarySort && primarySort.column === th.dataset.sort) {
             th.classList.add(primarySort.asc ? 'sorted-asc' : 'sorted-desc');
         }
+    });
+
+    scrollDiv.querySelectorAll('.remove-node-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            removeNode(btn.dataset.nodeId);
+        });
     });
 }
 
@@ -223,6 +230,7 @@ export function renderNetworkTable() {
         const outRateVal = rates == null ? null : (useLocalPerspective ? rates.outBytes : rates.inBytes);
 
         return {
+            nodeId: node.id,
             name,
             ip: ips[0] || '',
             upstream,
@@ -240,7 +248,8 @@ export function renderNetworkTable() {
             uptime,
             uptimeStr: formatUptime(uptime),
             lastErrorTime,
-            lastErrorStr: formatTimeSince(lastErrorTime)
+            lastErrorStr: formatTimeSince(lastErrorTime),
+            removable: node.unreachable && !node.in_config
         };
     });
 
@@ -251,7 +260,7 @@ export function renderNetworkTable() {
     html += '<th colspan="4"></th>';
     html += '<th colspan="4" class="group-in">In</th>';
     html += '<th colspan="4" class="group-out">Out</th>';
-    html += '<th colspan="3"></th>';
+    html += '<th colspan="4"></th>';
     html += '</tr><tr>';
     html += '<th data-sort="name">Name</th>';
     html += '<th data-sort="ip">IP</th>';
@@ -268,6 +277,7 @@ export function renderNetworkTable() {
     html += '<th data-sort="uptime">Uptime</th>';
     html += '<th data-sort="lastErrorTime">Last Err</th>';
     html += '<th data-sort="status">Status</th>';
+    html += '<th></th>';
     html += '</tr></thead><tbody>';
 
     rows.forEach(r => {
@@ -288,6 +298,11 @@ export function renderNetworkTable() {
         html += '<td class="numeric">' + r.uptimeStr + '</td>';
         html += '<td class="numeric">' + r.lastErrorStr + '</td>';
         html += '<td class="' + statusClass + '">' + r.status + '</td>';
+        html += '<td>';
+        if (r.removable) {
+            html += '<button class="remove-node-btn" data-node-id="' + escapeHtml(r.nodeId) + '" title="Remove node">×</button>';
+        }
+        html += '</td>';
         html += '</tr>';
     });
 

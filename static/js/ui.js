@@ -1,6 +1,6 @@
 import { formatBytes, formatPackets, formatMbps, formatPps, formatLinkSpeed } from './format.js';
 import { openFlowHash } from './flow.js';
-import { portErrors, setErrorPanelCollapsed, errorPanelCollapsed } from './state.js';
+import { portErrors, setErrorPanelCollapsed, errorPanelCollapsed, tableData } from './state.js';
 
 export function addClickableValue(container, label, value, plainLines, plainFormat) {
     const lbl = document.createElement('span');
@@ -193,6 +193,10 @@ export async function clearAllErrors() {
     await fetch('/tendrils/api/errors/clear?all=true', { method: 'POST' });
 }
 
+export async function removeNode(nodeId) {
+    await fetch('/tendrils/api/nodes/remove?id=' + encodeURIComponent(nodeId), { method: 'POST' });
+}
+
 function formatLocalTime(utcString) {
     if (!utcString) return '';
     const date = new Date(utcString);
@@ -284,6 +288,15 @@ export function updateErrorPanel() {
         timestampEl.className = 'error-timestamp';
         timestampEl.textContent = 'First: ' + formatLocalTime(err.first_seen) + ' / Last: ' + formatLocalTime(err.last_seen);
         item.appendChild(timestampEl);
+
+        const node = tableData?.nodes?.find(n => n.id === err.node_id);
+        if (node && node.unreachable && !node.in_config) {
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-btn';
+            removeBtn.textContent = 'Remove node';
+            removeBtn.addEventListener('click', () => removeNode(err.node_id));
+            item.appendChild(removeBtn);
+        }
 
         const dismissBtn = document.createElement('button');
         dismissBtn.textContent = 'Dismiss';

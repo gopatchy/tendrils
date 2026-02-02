@@ -441,6 +441,56 @@ func (n *Nodes) removeNode(node *Node) {
 	}
 }
 
+func (n *Nodes) RemoveNodeByID(nodeID string) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	var node *Node
+	for _, nd := range n.nodes {
+		if nd.ID == nodeID {
+			node = nd
+			break
+		}
+	}
+
+	if node == nil {
+		return fmt.Errorf("node not found")
+	}
+
+	if !node.Unreachable {
+		return fmt.Errorf("node is reachable")
+	}
+
+	if node.InConfig {
+		return fmt.Errorf("node is in config")
+	}
+
+	for name := range node.Names {
+		delete(n.nameIndex, name)
+	}
+
+	for _, iface := range node.Interfaces {
+		if iface.MAC != "" {
+			delete(n.macIndex, string(iface.MAC))
+		}
+		for ipStr := range iface.IPs {
+			delete(n.ipIndex, ipStr)
+		}
+	}
+
+	if node.cancelFunc != nil {
+		node.cancelFunc()
+	}
+
+	n.removeNode(node)
+
+	if n.t != nil && n.t.errors != nil {
+		n.t.errors.RemoveUnreachable(node)
+	}
+
+	return nil
+}
+
 func (n *Nodes) GetByIP(ip net.IP) *Node {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -702,6 +752,10 @@ func (n *Nodes) applyNodeConfig(nc *NodeConfig) {
 	if nc.Avoid {
 		n.setAvoid(target)
 	}
+
+	n.mu.Lock()
+	target.InConfig = true
+	n.mu.Unlock()
 }
 
 func (n *Nodes) setAvoid(node *Node) {

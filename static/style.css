@@ -1172,6 +1172,14 @@ body.sacn-mode .node:not(.sacn-out):not(.sacn-in):hover .node-info-wrapper {
     background: #666;
 }
 
+.error-item button.remove-btn {
+    background: #833;
+}
+
+.error-item button.remove-btn:hover {
+    background: #a44;
+}
+
 .node.scroll-highlight {
     outline: 3px solid white;
 }
@@ -1242,4 +1250,32 @@ body.sacn-mode .node:not(.sacn-out):not(.sacn-in):hover .node-info-wrapper {
 
 #broadcast-stats .bucket-rate {
     color: #eee;
+}
+
+.remove-node-btn {
+    padding: 0;
+    width: 16px;
+    height: 16px;
+    font-size: 14px;
+    line-height: 14px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    background: #833;
+    color: white;
+}
+
+.remove-node-btn:hover {
+    background: #a44;
+}
+
+.node .remove-node-btn {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+}
+
+.data-table .remove-node-btn {
+    width: 18px;
+    height: 18px;
 }
