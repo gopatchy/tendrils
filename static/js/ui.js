@@ -48,6 +48,22 @@ export function buildClickableList(container, items, label, plainFormat, flowInf
     });
 }
 
+function formatShortMbps(bytesPerSec) {
+    const mbps = (bytesPerSec * 8) / 1000000;
+    return Math.round(mbps) + 'Mb';
+}
+
+function formatShortKpps(pps) {
+    const kpps = pps / 1000;
+    return kpps.toFixed(1) + 'Kp';
+}
+
+function formatUtilization(bytesPerSec, speed) {
+    if (!speed) return '?%';
+    const util = (bytesPerSec * 8 / speed) * 100;
+    return util.toFixed(0) + '%';
+}
+
 export function buildLinkStats(container, portLabel, speed, errIn, errOut, rates) {
     const plainLines = [];
     if (portLabel) {
@@ -58,10 +74,12 @@ export function buildLinkStats(container, portLabel, speed, errIn, errOut, rates
     container.appendChild(document.createTextNode('\n'));
     addClickableValue(container, 'ERR', 'RX ' + errIn + ' / TX ' + errOut, plainLines);
     if (rates) {
+        const rxUtil = formatUtilization(rates.rxBytes, speed);
+        const txUtil = formatUtilization(rates.txBytes, speed);
         container.appendChild(document.createTextNode('\n'));
-        addClickableValue(container, 'RX', formatMbps(rates.rxBytes) + ' (' + formatPps(rates.rxPkts) + ')', plainLines);
+        addClickableValue(container, 'RX', rxUtil + ' ' + formatShortMbps(rates.rxBytes) + ' ' + formatShortKpps(rates.rxPkts), plainLines);
         container.appendChild(document.createTextNode('\n'));
-        addClickableValue(container, 'TX', formatMbps(rates.txBytes) + ' (' + formatPps(rates.txPkts) + ')', plainLines);
+        addClickableValue(container, 'TX', txUtil + ' ' + formatShortMbps(rates.txBytes) + ' ' + formatShortKpps(rates.txPkts), plainLines);
     }
     container.addEventListener('click', (e) => {
         e.stopPropagation();
