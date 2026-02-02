@@ -48,19 +48,28 @@ export function renderTable() {
                  document.body.classList.contains('artnet-mode') ? 'artnet' :
                  document.body.classList.contains('sacn-mode') ? 'sacn' : 'network';
 
-    let html = '';
+    let tableHtml = '';
     if (mode === 'network') {
-        html = renderNetworkTable();
+        tableHtml = renderNetworkTable();
     } else if (mode === 'dante') {
-        html = renderDanteTable();
+        tableHtml = renderDanteTable();
     } else if (mode === 'artnet') {
-        html = renderArtnetTable();
+        tableHtml = renderArtnetTable();
     } else if (mode === 'sacn') {
-        html = renderSacnTable();
+        tableHtml = renderSacnTable();
     }
-    container.innerHTML = html;
 
-    container.querySelectorAll('th[data-sort]').forEach(th => {
+    let scrollDiv = container.querySelector('.table-scroll');
+    if (!scrollDiv) {
+        scrollDiv = document.createElement('div');
+        scrollDiv.className = 'table-scroll';
+        container.appendChild(scrollDiv);
+    }
+    const scrollTop = scrollDiv.scrollTop;
+    scrollDiv.innerHTML = tableHtml;
+    scrollDiv.scrollTop = scrollTop;
+
+    scrollDiv.querySelectorAll('th[data-sort]').forEach(th => {
         th.addEventListener('click', () => {
             sortTable(th.dataset.sort);
             renderTable();
@@ -143,7 +152,17 @@ export function renderNetworkTable() {
 
     const formatMbpsLocal = (bytesPerSec) => {
         const mbps = (bytesPerSec * 8) / 1000000;
-        return mbps.toFixed(1);
+        return Math.round(mbps);
+    };
+
+    const formatKppsLocal = (pps) => {
+        return (pps / 1000).toFixed(1);
+    };
+
+    const formatUtilLocal = (bytesPerSec, speed) => {
+        if (!speed) return '';
+        const util = (bytesPerSec * 8 / speed) * 100;
+        return util.toFixed(0);
     };
 
     let rows = nodes.map(node => {
@@ -164,6 +183,9 @@ export function renderNetworkTable() {
         const isUnreachable = node.unreachable;
         const speedStr = speed == null ? '' : (speed >= 1e9 ? (speed/1e9)+'G' : speed >= 1e6 ? (speed/1e6)+'M' : speed > 0 ? speed : '0');
 
+        const inRateVal = rates == null ? null : (useLocalPerspective ? rates.inBytes : rates.outBytes);
+        const outRateVal = rates == null ? null : (useLocalPerspective ? rates.outBytes : rates.inBytes);
+
         return {
             name,
             ip: ips[0] || '',
@@ -172,23 +194,37 @@ export function renderNetworkTable() {
             speedStr,
             inErrors: errors == null ? null : (useLocalPerspective ? errors.in : errors.out),
             outErrors: errors == null ? null : (useLocalPerspective ? errors.out : errors.in),
-            inRate: rates == null ? null : (useLocalPerspective ? rates.inBytes : rates.outBytes),
-            outRate: rates == null ? null : (useLocalPerspective ? rates.outBytes : rates.inBytes),
+            inRate: inRateVal,
+            outRate: outRateVal,
+            inUtil: inRateVal == null || !speed ? null : (inRateVal * 8 / speed) * 100,
+            outUtil: outRateVal == null || !speed ? null : (outRateVal * 8 / speed) * 100,
+            inPkts: rates == null ? null : (useLocalPerspective ? rates.inPkts : rates.outPkts),
+            outPkts: rates == null ? null : (useLocalPerspective ? rates.outPkts : rates.inPkts),
             status: isUnreachable ? 'unreachable' : (errors && (errors.in + errors.out) > 0 ? 'errors' : 'ok')
         };
     });
 
     rows = sortRows(rows, tableSortKeys);
 
-    let html = '<table class="data-table"><thead><tr>';
+    let html = '<table class="data-table"><thead>';
+    html += '<tr class="header-group">';
+    html += '<th colspan="4"></th>';
+    html += '<th colspan="4" class="group-in">In</th>';
+    html += '<th colspan="4" class="group-out">Out</th>';
+    html += '<th></th>';
+    html += '</tr><tr>';
     html += '<th data-sort="name">Name</th>';
     html += '<th data-sort="ip">IP</th>';
     html += '<th data-sort="upstream">Upstream</th>';
     html += '<th data-sort="speed">Speed</th>';
-    html += '<th data-sort="inErrors">In Err</th>';
-    html += '<th data-sort="outErrors">Out Err</th>';
-    html += '<th data-sort="inRate">In Mbit/s</th>';
-    html += '<th data-sort="outRate">Out Mbit/s</th>';
+    html += '<th data-sort="inErrors" class="group-in">Err</th>';
+    html += '<th data-sort="inUtil" class="group-in">%</th>';
+    html += '<th data-sort="inRate" class="group-in">Mb</th>';
+    html += '<th data-sort="inPkts" class="group-in">Kp</th>';
+    html += '<th data-sort="outErrors" class="group-out">Err</th>';
+    html += '<th data-sort="outUtil" class="group-out">%</th>';
+    html += '<th data-sort="outRate" class="group-out">Mb</th>';
+    html += '<th data-sort="outPkts" class="group-out">Kp</th>';
     html += '<th data-sort="status">Status</th>';
     html += '</tr></thead><tbody>';
 
@@ -199,10 +235,14 @@ export function renderNetworkTable() {
         html += '<td>' + escapeHtml(r.ip) + '</td>';
         html += '<td>' + escapeHtml(r.upstream) + '</td>';
         html += '<td class="numeric">' + r.speedStr + '</td>';
-        html += '<td class="numeric">' + (r.inErrors == null ? '' : r.inErrors) + '</td>';
-        html += '<td class="numeric">' + (r.outErrors == null ? '' : r.outErrors) + '</td>';
-        html += '<td class="numeric">' + (r.inRate == null ? '' : formatMbpsLocal(r.inRate)) + '</td>';
-        html += '<td class="numeric">' + (r.outRate == null ? '' : formatMbpsLocal(r.outRate)) + '</td>';
+        html += '<td class="numeric group-in">' + (r.inErrors == null ? '' : r.inErrors) + '</td>';
+        html += '<td class="numeric group-in">' + (r.inRate == null ? '' : formatUtilLocal(r.inRate, r.speed)) + '</td>';
+        html += '<td class="numeric group-in">' + (r.inRate == null ? '' : formatMbpsLocal(r.inRate)) + '</td>';
+        html += '<td class="numeric group-in">' + (r.inPkts == null ? '' : formatKppsLocal(r.inPkts)) + '</td>';
+        html += '<td class="numeric group-out">' + (r.outErrors == null ? '' : r.outErrors) + '</td>';
+        html += '<td class="numeric group-out">' + (r.outRate == null ? '' : formatUtilLocal(r.outRate, r.speed)) + '</td>';
+        html += '<td class="numeric group-out">' + (r.outRate == null ? '' : formatMbpsLocal(r.outRate)) + '</td>';
+        html += '<td class="numeric group-out">' + (r.outPkts == null ? '' : formatKppsLocal(r.outPkts)) + '</td>';
         html += '<td class="' + statusClass + '">' + r.status + '</td>';
         html += '</tr>';
     });

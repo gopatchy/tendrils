@@ -341,6 +341,11 @@ body.sacn-mode .node .sacn-hover {
     padding: 10px;
 }
 
+.table-scroll {
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+}
+
 body.table-view #container {
     display: none;
 }
@@ -353,7 +358,6 @@ body.table-view #table-container {
     border-collapse: collapse;
     background: #222;
     border-radius: 8px;
-    overflow: hidden;
     font-size: 11px;
     margin: 0 auto;
 }
@@ -362,6 +366,16 @@ body.table-view #table-container {
     padding: 6px 20px;
     text-align: left;
     border-bottom: 1px solid #333;
+}
+
+.data-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.data-table thead th {
+    background: #333;
 }
 
 .data-table th {
@@ -435,6 +449,37 @@ body.table-view #table-container {
 .data-table td[data-tooltip]:hover::after {
     opacity: 1;
     visibility: visible;
+}
+
+.data-table .header-group th {
+    text-align: center;
+    border-bottom: none;
+    padding-bottom: 2px;
+    background: #2a2a2a;
+}
+
+.data-table th.group-in {
+    background: #2a3a4a;
+}
+
+.data-table th.group-out {
+    background: #3a3528;
+}
+
+.data-table td.group-in {
+    background: rgba(100, 149, 237, 0.1);
+}
+
+.data-table td.group-out {
+    background: rgba(255, 165, 0, 0.1);
+}
+
+.data-table .header-group th.group-in {
+    background: #3a4a5a;
+}
+
+.data-table .header-group th.group-out {
+    background: #4a4538;
 }
 
 body.dante-mode .node {
