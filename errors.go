@@ -27,7 +27,8 @@ type Error struct {
 	InDelta     uint64    `json:"in_delta,omitempty"`
 	OutDelta    uint64    `json:"out_delta,omitempty"`
 	Utilization float64   `json:"utilization,omitempty"`
-	FirstSeen   time.Time `json:"first_seen,omitempty"`
+	FirstSeen   time.Time `json:"first_seen"`
+	LastSeen    time.Time `json:"last_seen"`
 	LastUpdated time.Time `json:"last_updated,omitempty"`
 }
 
@@ -50,19 +51,22 @@ func (e *ErrorTracker) AddUnreachable(node *Node) {
 	defer e.mu.Unlock()
 
 	key := "unreachable:" + node.ID
-	if _, exists := e.errors[key]; exists {
+	now := time.Now().UTC()
+
+	if existing, exists := e.errors[key]; exists {
+		existing.LastSeen = now
+		e.t.NotifyUpdate()
 		return
 	}
 
-	now := time.Now()
 	e.nextID++
 	e.errors[key] = &Error{
-		ID:          fmt.Sprintf("err-%d", e.nextID),
-		NodeID:      node.ID,
-		NodeName:    node.DisplayName(),
-		Type:        ErrorTypeUnreachable,
-		FirstSeen:   now,
-		LastUpdated: now,
+		ID:        fmt.Sprintf("err-%d", e.nextID),
+		NodeID:    node.ID,
+		NodeName:  node.DisplayName(),
+		Type:      ErrorTypeUnreachable,
+		FirstSeen: now,
+		LastSeen:  now,
 	}
 	e.t.NotifyUpdate()
 }
@@ -83,13 +87,14 @@ func (e *ErrorTracker) AddPortError(node *Node, portName string, stats *Interfac
 	defer e.mu.Unlock()
 
 	key := node.ID + ":" + portName
-	now := time.Now()
+	now := time.Now().UTC()
 
 	if existing, ok := e.errors[key]; ok {
 		existing.InErrors = stats.InErrors
 		existing.OutErrors = stats.OutErrors
 		existing.InDelta += inDelta
 		existing.OutDelta += outDelta
+		existing.LastSeen = now
 		existing.LastUpdated = now
 	} else {
 		e.nextID++
@@ -104,6 +109,7 @@ func (e *ErrorTracker) AddPortError(node *Node, portName string, stats *Interfac
 			InDelta:     inDelta,
 			OutDelta:    outDelta,
 			FirstSeen:   now,
+			LastSeen:    now,
 			LastUpdated: now,
 		}
 		log.Printf("[ERROR] port errors on %s %s: in=%d out=%d", node.DisplayName(), portName, inDelta, outDelta)
@@ -116,14 +122,15 @@ func (e *ErrorTracker) AddUtilizationError(node *Node, portName string, utilizat
 	defer e.mu.Unlock()
 
 	key := "util:" + node.ID + ":" + portName
-	now := time.Now()
+	now := time.Now().UTC()
 
 	if existing, ok := e.errors[key]; ok {
+		existing.LastSeen = now
 		if utilization > existing.Utilization {
 			existing.Utilization = utilization
 			existing.LastUpdated = now
-			e.t.NotifyUpdate()
 		}
+		e.t.NotifyUpdate()
 		return
 	}
 
@@ -136,10 +143,27 @@ func (e *ErrorTracker) AddUtilizationError(node *Node, portName string, utilizat
 		Type:        ErrorTypeHighUtilization,
 		Utilization: utilization,
 		FirstSeen:   now,
+		LastSeen:    now,
 		LastUpdated: now,
 	}
 	log.Printf("[ERROR] high utilization on %s %s: %.0f%%", node.DisplayName(), portName, utilization)
 	e.t.NotifyUpdate()
+}
+
+func (e *ErrorTracker) UpdateUtilizationLastSeen(node *Node, portName string, utilization float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := "util:" + node.ID + ":" + portName
+	if existing, ok := e.errors[key]; ok {
+		now := time.Now().UTC()
+		existing.LastSeen = now
+		if utilization > existing.Utilization {
+			existing.Utilization = utilization
+			existing.LastUpdated = now
+		}
+		e.t.NotifyUpdate()
+	}
 }
 
 func (e *ErrorTracker) AddPortFlap(node *Node, portName string) {
@@ -147,9 +171,10 @@ func (e *ErrorTracker) AddPortFlap(node *Node, portName string) {
 	defer e.mu.Unlock()
 
 	key := "flap:" + node.ID + ":" + portName
-	now := time.Now()
+	now := time.Now().UTC()
 
 	if existing, ok := e.errors[key]; ok {
+		existing.LastSeen = now
 		existing.LastUpdated = now
 		e.t.NotifyUpdate()
 		return
@@ -157,13 +182,13 @@ func (e *ErrorTracker) AddPortFlap(node *Node, portName string) {
 
 	e.nextID++
 	e.errors[key] = &Error{
-		ID:          fmt.Sprintf("err-%d", e.nextID),
-		NodeID:      node.ID,
-		NodeName:    node.DisplayName(),
-		Port:        portName,
-		Type:        ErrorTypePortFlap,
-		FirstSeen:   now,
-		LastUpdated: now,
+		ID:        fmt.Sprintf("err-%d", e.nextID),
+		NodeID:    node.ID,
+		NodeName:  node.DisplayName(),
+		Port:      portName,
+		Type:      ErrorTypePortFlap,
+		FirstSeen: now,
+		LastSeen:  now,
 	}
 	e.t.NotifyUpdate()
 }
@@ -173,9 +198,10 @@ func (e *ErrorTracker) AddPortDown(node *Node, portName string) {
 	defer e.mu.Unlock()
 
 	key := "down:" + node.ID + ":" + portName
-	now := time.Now()
+	now := time.Now().UTC()
 
 	if existing, ok := e.errors[key]; ok {
+		existing.LastSeen = now
 		existing.LastUpdated = now
 		e.t.NotifyUpdate()
 		return
@@ -183,13 +209,13 @@ func (e *ErrorTracker) AddPortDown(node *Node, portName string) {
 
 	e.nextID++
 	e.errors[key] = &Error{
-		ID:          fmt.Sprintf("err-%d", e.nextID),
-		NodeID:      node.ID,
-		NodeName:    node.DisplayName(),
-		Port:        portName,
-		Type:        ErrorTypePortDown,
-		FirstSeen:   now,
-		LastUpdated: now,
+		ID:        fmt.Sprintf("err-%d", e.nextID),
+		NodeID:    node.ID,
+		NodeName:  node.DisplayName(),
+		Port:      portName,
+		Type:      ErrorTypePortDown,
+		FirstSeen: now,
+		LastSeen:  now,
 	}
 	e.t.NotifyUpdate()
 }

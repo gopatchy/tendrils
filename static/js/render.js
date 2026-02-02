@@ -1,4 +1,4 @@
-import { getLabel, getShortLabel, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates, getFirstName } from './nodes.js';
+import { getLabel, getShortLabel, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates, getInterfaceUptime, getInterfaceLastError, getFirstName } from './nodes.js';
 import { buildSwitchUplinks, buildLocationTree, buildNodeIndex, findLocationForNode, findEffectiveSwitch } from './topology.js';
 import { formatUniverse } from './format.js';
 import { createNodeElement, renderLocation } from './components.js';
@@ -71,7 +71,11 @@ export function render(data, config) {
                 errorsA: getInterfaceErrors(nodeA, link.interface_a),
                 errorsB: getInterfaceErrors(nodeB, link.interface_b),
                 ratesA: getInterfaceRates(nodeA, link.interface_a),
-                ratesB: getInterfaceRates(nodeB, link.interface_b)
+                ratesB: getInterfaceRates(nodeB, link.interface_b),
+                uptimeA: getInterfaceUptime(nodeA, link.interface_a),
+                uptimeB: getInterfaceUptime(nodeB, link.interface_b),
+                lastErrorA: getInterfaceLastError(nodeA, link.interface_a),
+                lastErrorB: getInterfaceLastError(nodeB, link.interface_b)
             });
         } else if (aIsSwitch && !bIsSwitch) {
             const nodeLoc = nodeLocations.get(nodeB.id);
@@ -84,7 +88,9 @@ export function render(data, config) {
                 external: effectiveSwitch && !isLocalSwitch,
                 speed: getInterfaceSpeed(nodeA, link.interface_a),
                 errors: getInterfaceErrors(nodeA, link.interface_a),
-                rates: getInterfaceRates(nodeA, link.interface_a)
+                rates: getInterfaceRates(nodeA, link.interface_a),
+                uptime: getInterfaceUptime(nodeA, link.interface_a),
+                lastError: getInterfaceLastError(nodeA, link.interface_a)
             });
         } else if (bIsSwitch && !aIsSwitch) {
             const nodeLoc = nodeLocations.get(nodeA.id);
@@ -97,7 +103,9 @@ export function render(data, config) {
                 external: effectiveSwitch && !isLocalSwitch,
                 speed: getInterfaceSpeed(nodeB, link.interface_b),
                 errors: getInterfaceErrors(nodeB, link.interface_b),
-                rates: getInterfaceRates(nodeB, link.interface_b)
+                rates: getInterfaceRates(nodeB, link.interface_b),
+                uptime: getInterfaceUptime(nodeB, link.interface_b),
+                lastError: getInterfaceLastError(nodeB, link.interface_b)
             });
         }
     });

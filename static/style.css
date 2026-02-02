@@ -1151,6 +1151,12 @@ body.sacn-mode .node:not(.sacn-out):not(.sacn-in):hover .node-info-wrapper {
     color: #888;
 }
 
+.error-item .error-timestamp {
+    font-size: 10px;
+    color: #666;
+    margin-top: 2px;
+}
+
 .error-item button {
     align-self: flex-end;
     padding: 2px 6px;

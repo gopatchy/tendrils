@@ -15,7 +15,9 @@ export function buildSwitchUplinks(allSwitches, switchLinks) {
             remotePort: link.portB,
             localSpeed: link.speedA,
             localErrors: link.errorsA,
-            localRates: link.ratesA
+            localRates: link.ratesA,
+            localUptime: link.uptimeA,
+            localLastError: link.lastErrorA
         });
         adjacency.get(link.switchB.id).push({
             neighbor: link.switchA,
@@ -23,7 +25,9 @@ export function buildSwitchUplinks(allSwitches, switchLinks) {
             remotePort: link.portA,
             localSpeed: link.speedB,
             localErrors: link.errorsB,
-            localRates: link.ratesB
+            localRates: link.ratesB,
+            localUptime: link.uptimeB,
+            localLastError: link.lastErrorB
         });
     });
 
@@ -81,7 +85,9 @@ export function buildSwitchUplinks(allSwitches, switchLinks) {
                     parentName: getLabel(current),
                     speed: reverseEdge?.localSpeed || 0,
                     errors: reverseEdge?.localErrors || null,
-                    rates: reverseEdge?.localRates || null
+                    rates: reverseEdge?.localRates || null,
+                    uptime: reverseEdge?.localUptime || 0,
+                    lastError: reverseEdge?.localLastError || null
                 });
                 queue.push(edge.neighbor);
             }

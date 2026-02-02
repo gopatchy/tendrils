@@ -54,7 +54,8 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         const errOut = switchConnection.errors?.out || 0;
         const r = switchConnection.rates;
         buildLinkStats(statsEl, portLabel, switchConnection.speed, errIn, errOut,
-            r ? {rxBytes: r.outBytes, rxPkts: r.outPkts, txBytes: r.inBytes, txPkts: r.inPkts} : null);
+            r ? {rxBytes: r.outBytes, rxPkts: r.outPkts, txBytes: r.inBytes, txPkts: r.inPkts} : null,
+            switchConnection.uptime, switchConnection.lastError);
     } else {
         const container = div.querySelector(':scope > .port-hover');
         if (container) container.remove();
@@ -163,7 +164,8 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         const errOut = uplinkInfo.errors?.out || 0;
         const r = uplinkInfo.rates;
         buildLinkStats(statsEl, uplinkLabel, uplinkInfo.speed, errIn, errOut,
-            r ? {rxBytes: r.inBytes, rxPkts: r.inPkts, txBytes: r.outBytes, txPkts: r.outPkts} : null);
+            r ? {rxBytes: r.inBytes, rxPkts: r.inPkts, txBytes: r.outBytes, txPkts: r.outPkts} : null,
+            uplinkInfo.uptime, uplinkInfo.lastError);
     } else {
         const rootEl = div.querySelector(':scope > .root-label');
         if (rootEl) rootEl.remove();

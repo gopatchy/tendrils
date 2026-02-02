@@ -1,4 +1,4 @@
-import { getLabel, getFirstName, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates } from './nodes.js';
+import { getLabel, getFirstName, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates, getInterfaceUptime, getInterfaceLastError } from './nodes.js';
 import { buildSwitchUplinks } from './topology.js';
 import { escapeHtml, formatUniverse } from './format.js';
 import { tableData, tableSortKeys, setTableSortKeys } from './state.js';
@@ -107,6 +107,8 @@ export function renderNetworkTable() {
                 speed: getInterfaceSpeed(nodeA, link.interface_a),
                 errors: getInterfaceErrors(nodeA, link.interface_a),
                 rates: getInterfaceRates(nodeA, link.interface_a),
+                uptime: getInterfaceUptime(nodeA, link.interface_a),
+                lastError: getInterfaceLastError(nodeA, link.interface_a),
                 isLocalPort: false
             });
         } else if (bIsSwitch && !aIsSwitch) {
@@ -116,6 +118,8 @@ export function renderNetworkTable() {
                 speed: getInterfaceSpeed(nodeB, link.interface_b),
                 errors: getInterfaceErrors(nodeB, link.interface_b),
                 rates: getInterfaceRates(nodeB, link.interface_b),
+                uptime: getInterfaceUptime(nodeB, link.interface_b),
+                lastError: getInterfaceLastError(nodeB, link.interface_b),
                 isLocalPort: false
             });
         } else if (aIsSwitch && bIsSwitch) {
@@ -129,7 +133,11 @@ export function renderNetworkTable() {
                 errorsA: getInterfaceErrors(nodeA, link.interface_a),
                 errorsB: getInterfaceErrors(nodeB, link.interface_b),
                 ratesA: getInterfaceRates(nodeA, link.interface_a),
-                ratesB: getInterfaceRates(nodeB, link.interface_b)
+                ratesB: getInterfaceRates(nodeB, link.interface_b),
+                uptimeA: getInterfaceUptime(nodeA, link.interface_a),
+                uptimeB: getInterfaceUptime(nodeB, link.interface_b),
+                lastErrorA: getInterfaceLastError(nodeA, link.interface_a),
+                lastErrorB: getInterfaceLastError(nodeB, link.interface_b)
             });
         }
     });
@@ -145,6 +153,8 @@ export function renderNetworkTable() {
                 speed: uplink.speed,
                 errors: uplink.errors,
                 rates: uplink.rates,
+                uptime: uplink.uptime,
+                lastError: uplink.lastError,
                 isLocalPort: true
             });
         }
@@ -165,6 +175,30 @@ export function renderNetworkTable() {
         return util.toFixed(0);
     };
 
+    const formatUptime = (seconds) => {
+        if (!seconds || seconds <= 0) return '';
+        const d = Math.floor(seconds / 86400);
+        const h = Math.floor((seconds % 86400) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return d + 'd' + (h > 0 ? ' ' + h + 'h' : '');
+        if (h > 0) return h + 'h' + (m > 0 ? ' ' + m + 'm' : '');
+        return m + 'm';
+    };
+
+    const formatTimeSince = (utcString) => {
+        if (!utcString) return '';
+        const date = new Date(utcString);
+        const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+        if (seconds < 0) return '';
+        const d = Math.floor(seconds / 86400);
+        const h = Math.floor((seconds % 86400) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return d + 'd' + (h > 0 ? ' ' + h + 'h' : '');
+        if (h > 0) return h + 'h' + (m > 0 ? ' ' + m + 'm' : '');
+        if (m > 0) return m + 'm';
+        return '<1m';
+    };
+
     let rows = nodes.map(node => {
         const name = getLabel(node);
         const ips = [];
@@ -178,6 +212,8 @@ export function renderNetworkTable() {
         const speed = isRoot ? null : (conn?.speed || 0);
         const errors = isRoot ? null : (conn?.errors || { in: 0, out: 0 });
         const rates = isRoot ? null : (conn?.rates || { inBytes: 0, outBytes: 0 });
+        const uptime = isRoot ? null : (conn?.uptime || 0);
+        const lastErrorTime = isRoot ? null : (conn?.lastError || null);
         const useLocalPerspective = isRoot || conn?.isLocalPort;
 
         const isUnreachable = node.unreachable;
@@ -200,7 +236,11 @@ export function renderNetworkTable() {
             outUtil: outRateVal == null || !speed ? null : (outRateVal * 8 / speed) * 100,
             inPkts: rates == null ? null : (useLocalPerspective ? rates.inPkts : rates.outPkts),
             outPkts: rates == null ? null : (useLocalPerspective ? rates.outPkts : rates.inPkts),
-            status: isUnreachable ? 'unreachable' : (errors && (errors.in + errors.out) > 0 ? 'errors' : 'ok')
+            status: isUnreachable ? 'unreachable' : (errors && (errors.in + errors.out) > 0 ? 'errors' : 'ok'),
+            uptime,
+            uptimeStr: formatUptime(uptime),
+            lastErrorTime,
+            lastErrorStr: formatTimeSince(lastErrorTime)
         };
     });
 
@@ -211,7 +251,7 @@ export function renderNetworkTable() {
     html += '<th colspan="4"></th>';
     html += '<th colspan="4" class="group-in">In</th>';
     html += '<th colspan="4" class="group-out">Out</th>';
-    html += '<th></th>';
+    html += '<th colspan="3"></th>';
     html += '</tr><tr>';
     html += '<th data-sort="name">Name</th>';
     html += '<th data-sort="ip">IP</th>';
@@ -225,6 +265,8 @@ export function renderNetworkTable() {
     html += '<th data-sort="outUtil" class="group-out">%</th>';
     html += '<th data-sort="outRate" class="group-out">Mb</th>';
     html += '<th data-sort="outPkts" class="group-out">Kp</th>';
+    html += '<th data-sort="uptime">Uptime</th>';
+    html += '<th data-sort="lastErrorTime">Last Err</th>';
     html += '<th data-sort="status">Status</th>';
     html += '</tr></thead><tbody>';
 
@@ -243,6 +285,8 @@ export function renderNetworkTable() {
         html += '<td class="numeric group-out">' + (r.outRate == null ? '' : formatUtilLocal(r.outRate, r.speed)) + '</td>';
         html += '<td class="numeric group-out">' + (r.outRate == null ? '' : formatMbpsLocal(r.outRate)) + '</td>';
         html += '<td class="numeric group-out">' + (r.outPkts == null ? '' : formatKppsLocal(r.outPkts)) + '</td>';
+        html += '<td class="numeric">' + r.uptimeStr + '</td>';
+        html += '<td class="numeric">' + r.lastErrorStr + '</td>';
         html += '<td class="' + statusClass + '">' + r.status + '</td>';
         html += '</tr>';
     });

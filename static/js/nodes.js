@@ -99,3 +99,13 @@ export function getInterfaceRates(node, ifaceName) {
         outBytes: iface.stats.out_bytes_rate || 0
     };
 }
+
+export function getInterfaceUptime(node, ifaceName) {
+    const iface = findInterface(node, ifaceName);
+    return iface?.stats?.uptime || 0;
+}
+
+export function getInterfaceLastError(node, ifaceName) {
+    const iface = findInterface(node, ifaceName);
+    return iface?.stats?.last_error || null;
+}

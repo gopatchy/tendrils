@@ -64,7 +64,31 @@ function formatUtilization(bytesPerSec, speed) {
     return util.toFixed(0) + '%';
 }
 
-export function buildLinkStats(container, portLabel, speed, errIn, errOut, rates) {
+function formatUptime(seconds) {
+    if (!seconds || seconds <= 0) return '?';
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return d + 'd' + (h > 0 ? ' ' + h + 'h' : '');
+    if (h > 0) return h + 'h' + (m > 0 ? ' ' + m + 'm' : '');
+    return m + 'm';
+}
+
+function formatTimeSince(utcString) {
+    if (!utcString) return '';
+    const date = new Date(utcString);
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (seconds < 0) return '';
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return d + 'd' + (h > 0 ? ' ' + h + 'h' : '');
+    if (h > 0) return h + 'h' + (m > 0 ? ' ' + m + 'm' : '');
+    if (m > 0) return m + 'm';
+    return '<1m';
+}
+
+export function buildLinkStats(container, portLabel, speed, errIn, errOut, rates, uptime, lastError) {
     const plainLines = [];
     if (portLabel) {
         addClickableValue(container, 'PORT', portLabel, plainLines);
@@ -80,6 +104,15 @@ export function buildLinkStats(container, portLabel, speed, errIn, errOut, rates
         addClickableValue(container, 'RX', rxUtil + ' ' + formatShortMbps(rates.rxBytes) + ' ' + formatShortKpps(rates.rxPkts), plainLines);
         container.appendChild(document.createTextNode('\n'));
         addClickableValue(container, 'TX', txUtil + ' ' + formatShortMbps(rates.txBytes) + ' ' + formatShortKpps(rates.txPkts), plainLines);
+    }
+    if (uptime) {
+        container.appendChild(document.createTextNode('\n'));
+        addClickableValue(container, 'UP', formatUptime(uptime), plainLines);
+    }
+    if (lastError) {
+        const errorAge = formatTimeSince(lastError);
+        container.appendChild(document.createTextNode('\n'));
+        addClickableValue(container, 'LERR', errorAge + ' ago', plainLines);
     }
     container.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -158,6 +191,12 @@ export async function clearError(id) {
 
 export async function clearAllErrors() {
     await fetch('/tendrils/api/errors/clear?all=true', { method: 'POST' });
+}
+
+function formatLocalTime(utcString) {
+    if (!utcString) return '';
+    const date = new Date(utcString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 export function updateErrorPanel() {
@@ -240,6 +279,11 @@ export function updateErrorPanel() {
             typeEl.textContent = 'New errors detected';
             item.appendChild(typeEl);
         }
+
+        const timestampEl = document.createElement('div');
+        timestampEl.className = 'error-timestamp';
+        timestampEl.textContent = 'First: ' + formatLocalTime(err.first_seen) + ' / Last: ' + formatLocalTime(err.last_seen);
+        item.appendChild(timestampEl);
 
         const dismissBtn = document.createElement('button');
         dismissBtn.textContent = 'Dismiss';

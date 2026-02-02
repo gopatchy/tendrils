@@ -386,15 +386,16 @@ func (i *Interface) MarshalJSON() ([]byte, error) {
 }
 
 type InterfaceStats struct {
-	Speed        uint64    `json:"speed,omitempty"`
-	Uptime       uint64    `json:"uptime,omitempty"`
-	InErrors     uint64    `json:"in_errors,omitempty"`
-	OutErrors    uint64    `json:"out_errors,omitempty"`
-	InPktsRate   float64   `json:"in_pkts_rate,omitempty"`
-	OutPktsRate  float64   `json:"out_pkts_rate,omitempty"`
-	InBytesRate  float64   `json:"in_bytes_rate,omitempty"`
-	OutBytesRate float64   `json:"out_bytes_rate,omitempty"`
-	PoE          *PoEStats `json:"poe,omitempty"`
+	Speed        uint64     `json:"speed,omitempty"`
+	Uptime       uint64     `json:"uptime,omitempty"`
+	InErrors     uint64     `json:"in_errors,omitempty"`
+	OutErrors    uint64     `json:"out_errors,omitempty"`
+	InPktsRate   float64    `json:"in_pkts_rate,omitempty"`
+	OutPktsRate  float64    `json:"out_pkts_rate,omitempty"`
+	InBytesRate  float64    `json:"in_bytes_rate,omitempty"`
+	OutBytesRate float64    `json:"out_bytes_rate,omitempty"`
+	LastError    *time.Time `json:"last_error,omitempty"`
+	PoE          *PoEStats  `json:"poe,omitempty"`
 }
 
 func round2(v float64) float64 {
@@ -403,15 +404,16 @@ func round2(v float64) float64 {
 
 func (s *InterfaceStats) MarshalJSON() ([]byte, error) {
 	type statsJSON struct {
-		Speed        uint64    `json:"speed,omitempty"`
-		Uptime       uint64    `json:"uptime,omitempty"`
-		InErrors     uint64    `json:"in_errors,omitempty"`
-		OutErrors    uint64    `json:"out_errors,omitempty"`
-		InPktsRate   float64   `json:"in_pkts_rate,omitempty"`
-		OutPktsRate  float64   `json:"out_pkts_rate,omitempty"`
-		InBytesRate  float64   `json:"in_bytes_rate,omitempty"`
-		OutBytesRate float64   `json:"out_bytes_rate,omitempty"`
-		PoE          *PoEStats `json:"poe,omitempty"`
+		Speed        uint64     `json:"speed,omitempty"`
+		Uptime       uint64     `json:"uptime,omitempty"`
+		InErrors     uint64     `json:"in_errors,omitempty"`
+		OutErrors    uint64     `json:"out_errors,omitempty"`
+		InPktsRate   float64    `json:"in_pkts_rate,omitempty"`
+		OutPktsRate  float64    `json:"out_pkts_rate,omitempty"`
+		InBytesRate  float64    `json:"in_bytes_rate,omitempty"`
+		OutBytesRate float64    `json:"out_bytes_rate,omitempty"`
+		LastError    *time.Time `json:"last_error,omitempty"`
+		PoE          *PoEStats  `json:"poe,omitempty"`
 	}
 	return json.Marshal(statsJSON{
 		Speed:        s.Speed,
@@ -422,6 +424,7 @@ func (s *InterfaceStats) MarshalJSON() ([]byte, error) {
 		OutPktsRate:  round2(s.OutPktsRate),
 		InBytesRate:  round2(s.InBytesRate),
 		OutBytesRate: round2(s.OutBytesRate),
+		LastError:    s.LastError,
 		PoE:          s.PoE,
 	})
 }
@@ -503,6 +506,10 @@ func (n *Node) SetInterfaceStats(portName string, stats *InterfaceStats) {
 		return
 	}
 
+	if oldStats != nil {
+		stats.LastError = oldStats.LastError
+	}
+
 	var inDelta, outDelta uint64
 	if oldStats != nil {
 		if stats.InErrors > oldStats.InErrors {
@@ -512,7 +519,15 @@ func (n *Node) SetInterfaceStats(portName string, stats *InterfaceStats) {
 			outDelta = stats.OutErrors - oldStats.OutErrors
 		}
 	}
-	if inDelta > 0 || outDelta > 0 {
+
+	hasErrors := stats.InErrors > 0 || stats.OutErrors > 0
+	hasNewErrors := inDelta > 0 || outDelta > 0
+	if hasErrors && (hasNewErrors || stats.LastError == nil) {
+		now := time.Now().UTC()
+		stats.LastError = &now
+	}
+
+	if hasNewErrors {
 		n.errors.AddPortError(n, portName, stats, inDelta, outDelta)
 	}
 
@@ -535,6 +550,8 @@ func (n *Node) SetInterfaceStats(portName string, stats *InterfaceStats) {
 
 		if oldUtilization < 70.0 && utilization >= 70.0 {
 			n.errors.AddUtilizationError(n, portName, utilization)
+		} else if utilization >= 70.0 {
+			n.errors.UpdateUtilizationLastSeen(n, portName, utilization)
 		}
 	}
 }
