@@ -19,6 +19,15 @@ func newID(prefix string) string {
 	return tid.String()
 }
 
+type NodeType string
+
+const (
+	NodeTypeSwitch         NodeType = "switch"
+	NodeTypeAP             NodeType = "ap"
+	NodeTypeWirelessClient NodeType = "wireless_client"
+	NodeTypeWiredClient    NodeType = "wired_client"
+)
+
 type ArtNetUniverse int
 
 func (u ArtNetUniverse) Net() int {
@@ -464,6 +473,7 @@ type Node struct {
 	Names                 NameSet                `json:"names"`
 	Interfaces            InterfaceMap           `json:"interfaces"`
 	MACTable              map[string]string      `json:"mac_table,omitempty"`
+	Type                  NodeType               `json:"type,omitempty"`
 	PoEBudget             *PoEBudget             `json:"poe_budget,omitempty"`
 	DanteTxChannels       int                    `json:"dante_tx_channels,omitempty"`
 	DanteClockMasterSeen  time.Time              `json:"-"`

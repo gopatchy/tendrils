@@ -1,4 +1,4 @@
-import { getLabel, getShortLabel, getFirstName, isSwitch, getSpeedClass } from './nodes.js';
+import { getLabel, getShortLabel, getFirstName, isSwitch, isAP, getSpeedClass } from './nodes.js';
 import { addClickableValue, buildLinkStats, buildDanteDetail, buildClickableList, removeNode } from './ui.js';
 import { nodeElements, locationElements, usedNodeIds, usedLocationIds } from './state.js';
 
@@ -20,7 +20,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
     }
     div._nodeData = node;
 
-    div.className = 'node' + (isSwitch(node) ? ' switch' : '');
+    div.className = 'node' + (isSwitch(node) ? ' switch' : '') + (isAP(node) ? ' ap' : '');
     if (hasError) div.classList.add('has-error');
     if (isUnreachable) div.classList.add('unreachable');
     if (danteInfo?.isTx) div.classList.add('dante-tx');
@@ -129,7 +129,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         if (wrapper) wrapper.remove();
     }
 
-    if (isSwitch(node) && uplinkInfo === 'ROOT') {
+    if ((isSwitch(node) || isAP(node)) && uplinkInfo === 'ROOT') {
         const container = div.querySelector(':scope > .uplink-hover');
         if (container) container.remove();
 
@@ -140,7 +140,7 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
             rootEl.textContent = 'ROOT';
             div.appendChild(rootEl);
         }
-    } else if (isSwitch(node) && uplinkInfo) {
+    } else if ((isSwitch(node) || isAP(node)) && uplinkInfo) {
         const rootEl = div.querySelector(':scope > .root-label');
         if (rootEl) rootEl.remove();
 
@@ -155,7 +155,9 @@ export function createNodeElement(node, switchConnection, nodeLocation, uplinkIn
         uplinkEl.className = 'uplink';
         const speedClass = getSpeedClass(uplinkInfo.speed);
         if (speedClass) uplinkEl.classList.add(speedClass);
-        const uplinkLabel = uplinkInfo.localPort + ' → ' + uplinkInfo.parentName + ':' + uplinkInfo.remotePort;
+        const uplinkLabel = isAP(node)
+            ? uplinkInfo.parentName + ':' + uplinkInfo.remotePort
+            : uplinkInfo.localPort + ' → ' + uplinkInfo.parentName + ':' + uplinkInfo.remotePort;
         uplinkEl.textContent = uplinkLabel;
 
         const statsEl = container.querySelector('.link-stats');
@@ -348,7 +350,8 @@ export function renderLocation(loc, assignedNodes, isTopLevel, switchConnections
         locationElements.set(loc.id, container);
     }
     let classes = 'location';
-    if (loc.anonymous) classes += ' anonymous';
+    if (loc.anonymous && !loc.isAPLocation) classes += ' anonymous';
+    if (loc.isAPLocation) classes += ' ap-location';
     if (isTopLevel) classes += ' top-level';
     container.className = classes;
 
@@ -364,8 +367,8 @@ export function renderLocation(loc, assignedNodes, isTopLevel, switchConnections
     const nodeRowId = loc.id + '_nd';
 
     if (hasNodes) {
-        const switches = nodes.filter(n => isSwitch(n));
-        const nonSwitches = nodes.filter(n => !isSwitch(n));
+        const switches = nodes.filter(n => isSwitch(n) || isAP(n));
+        const nonSwitches = nodes.filter(n => !isSwitch(n) && !isAP(n));
 
         if (switches.length > 0) {
             let switchRow = container.querySelector(':scope > .node-row[data-rowid="' + switchRowId + '"]');

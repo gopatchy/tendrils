@@ -59,7 +59,11 @@ export function getNodeIdentifiers(node) {
 }
 
 export function isSwitch(node) {
-    return !!(node.poe_budget);
+    return node.type === 'switch';
+}
+
+export function isAP(node) {
+    return node.type === 'ap';
 }
 
 export function getSpeedClass(speed) {

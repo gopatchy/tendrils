@@ -1,4 +1,4 @@
-import { getLabel, getShortLabel, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates, getInterfaceUptime, getInterfaceLastError, getFirstName } from './nodes.js';
+import { getLabel, getShortLabel, isSwitch, isAP, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates, getInterfaceUptime, getInterfaceLastError, getFirstName } from './nodes.js';
 import { buildSwitchUplinks, buildLocationTree, buildNodeIndex, findLocationForNode, findEffectiveSwitch } from './topology.js';
 import { formatUniverse } from './format.js';
 import { createNodeElement, renderLocation } from './components.js';
@@ -48,17 +48,74 @@ export function render(data, config) {
         }
     });
 
+    const apClients = new Map();
+    links.forEach(link => {
+        const nodeA = nodesByTypeId.get(link.node_a_id);
+        const nodeB = nodesByTypeId.get(link.node_b_id);
+        if (!nodeA || !nodeB) return;
+
+        if (isAP(nodeA) && link.interface_a === 'wifi' && !isSwitch(nodeB) && !isAP(nodeB)) {
+            if (!apClients.has(nodeA)) apClients.set(nodeA, []);
+            apClients.get(nodeA).push(nodeB);
+        } else if (isAP(nodeB) && link.interface_b === 'wifi' && !isSwitch(nodeA) && !isAP(nodeA)) {
+            if (!apClients.has(nodeB)) apClients.set(nodeB, []);
+            apClients.get(nodeB).push(nodeA);
+        }
+    });
+
+    apClients.forEach((clients, ap) => {
+        const apLoc = nodeLocations.get(ap.id);
+        const apSubLoc = {
+            id: 'ap_' + ap.id,
+            name: '',
+            anonymous: true,
+            isAPLocation: true,
+            direction: 'horizontal',
+            nodeRefs: [],
+            parent: apLoc || null,
+            children: []
+        };
+
+        if (apLoc) {
+            const apLocNodes = assignedNodes.get(apLoc) || [];
+            const idx = apLocNodes.indexOf(ap);
+            if (idx !== -1) apLocNodes.splice(idx, 1);
+            apLoc.children.push(apSubLoc);
+        } else {
+            const idx = unassignedNodes.indexOf(ap);
+            if (idx !== -1) unassignedNodes.splice(idx, 1);
+            locationTree.push(apSubLoc);
+        }
+
+        assignedNodes.set(apSubLoc, [ap]);
+        nodeLocations.set(ap.id, apSubLoc);
+
+        clients.forEach(client => {
+            const clientLoc = nodeLocations.get(client.id);
+            if (clientLoc && clientLoc !== apSubLoc) {
+                const clientLocNodes = assignedNodes.get(clientLoc) || [];
+                const idx = clientLocNodes.indexOf(client);
+                if (idx !== -1) clientLocNodes.splice(idx, 1);
+            } else {
+                const idx = unassignedNodes.indexOf(client);
+                if (idx !== -1) unassignedNodes.splice(idx, 1);
+            }
+            assignedNodes.get(apSubLoc).push(client);
+            nodeLocations.set(client.id, apSubLoc);
+        });
+    });
+
     const switchConnections = new Map();
     const switchLinks = [];
-    const allSwitches = nodes.filter(n => isSwitch(n));
+    const allSwitches = nodes.filter(n => isSwitch(n) || isAP(n));
 
     links.forEach(link => {
         const nodeA = nodesByTypeId.get(link.node_a_id);
         const nodeB = nodesByTypeId.get(link.node_b_id);
         if (!nodeA || !nodeB) return;
 
-        const aIsSwitch = isSwitch(nodeA);
-        const bIsSwitch = isSwitch(nodeB);
+        const aIsSwitch = isSwitch(nodeA) || isAP(nodeA);
+        const bIsSwitch = isSwitch(nodeB) || isAP(nodeB);
 
         if (aIsSwitch && bIsSwitch) {
             switchLinks.push({

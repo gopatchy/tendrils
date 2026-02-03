@@ -82,6 +82,13 @@ func (n *Nodes) getDirectLinks() []*Link {
 				key := makeLinkKey(lh.node, lh.port, target, targetIface)
 				if !seen[key] {
 					seen[key] = true
+					if target.Type == "" {
+						if lh.node.Type == NodeTypeSwitch {
+							target.Type = NodeTypeWiredClient
+						} else if lh.node.Type == NodeTypeAP {
+							target.Type = NodeTypeWirelessClient
+						}
+					}
 					links = append(links, &Link{
 						ID:         newID("link"),
 						NodeA:      lh.node,

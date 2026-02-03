@@ -194,7 +194,7 @@ locations:
       - names: ["showpi1"]
       - names: ["showpi2"]
         macs: ["d8:3a:dd:e3:5b:db"]
-      - names: ["AP"]
+      - names: ["EAP770"]
         macs: ["a8:29:48:ca:11:40"]
 
     - name: Sound Control

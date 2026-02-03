@@ -1,4 +1,4 @@
-import { getLabel, getNodeIdentifiers, isSwitch } from './nodes.js';
+import { getLabel, getNodeIdentifiers, isSwitch, isAP } from './nodes.js';
 import { incrementAnonCounter } from './state.js';
 
 export function buildSwitchUplinks(allSwitches, switchLinks) {
@@ -83,11 +83,11 @@ export function buildSwitchUplinks(allSwitches, switchLinks) {
                     remotePort: reverseEdge?.remotePort || '?',
                     parentNode: current,
                     parentName: getLabel(current),
-                    speed: reverseEdge?.localSpeed || 0,
-                    errors: reverseEdge?.localErrors || null,
-                    rates: reverseEdge?.localRates || null,
-                    uptime: reverseEdge?.localUptime || 0,
-                    lastError: reverseEdge?.localLastError || null
+                    speed: reverseEdge?.localSpeed || edge.localSpeed || 0,
+                    errors: reverseEdge?.localErrors || edge.localErrors || null,
+                    rates: reverseEdge?.localRates || edge.localRates || null,
+                    uptime: reverseEdge?.localUptime || edge.localUptime || 0,
+                    lastError: reverseEdge?.localLastError || edge.localLastError || null
                 });
                 queue.push(edge.neighbor);
             }
@@ -130,10 +130,10 @@ export function getSwitchesInLocation(loc, assignedNodes) {
     const switches = [];
     const nodes = assignedNodes.get(loc) || [];
     nodes.forEach(n => {
-        if (isSwitch(n)) switches.push(n);
+        if (isSwitch(n) || isAP(n)) switches.push(n);
     });
     loc.children.forEach(child => {
-        if (child.anonymous) {
+        if (child.anonymous || child.isAPLocation) {
             switches.push(...getSwitchesInLocation(child, assignedNodes));
         }
     });

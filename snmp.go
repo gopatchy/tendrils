@@ -6,6 +6,7 @@ import (
 	"net"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
@@ -96,6 +97,23 @@ func (t *Tendrils) connectSNMP(ip net.IP) (*gosnmp.GoSNMP, error) {
 	}
 
 	return snmp, nil
+}
+
+func (t *Tendrils) pollSNMP(node *Node, ip net.IP) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		t.queryWirelessAP(node, ip)
+	}()
+
+	go func() {
+		defer wg.Done()
+		t.querySNMPDevice(node, ip)
+	}()
+
+	wg.Wait()
 }
 
 func (t *Tendrils) querySNMPDevice(node *Node, ip net.IP) {
@@ -339,6 +357,7 @@ func (t *Tendrils) queryPoEBudget(snmp *gosnmp.GoSNMP, node *Node) {
 	if maxPower > 0 {
 		t.nodes.mu.Lock()
 		node.PoEBudget = &PoEBudget{Power: power, MaxPower: maxPower}
+		node.Type = NodeTypeSwitch
 		t.nodes.mu.Unlock()
 	}
 }
@@ -649,4 +668,105 @@ func (t *Tendrils) queryDHCPBindings(snmp *gosnmp.GoSNMP) {
 		}
 		t.nodes.Update(nil, mac, []net.IP{ip}, "", "", "dhcp")
 	}
+}
+
+func (t *Tendrils) connectSNMPv2c(ip net.IP, community string) (*gosnmp.GoSNMP, error) {
+	snmp := &gosnmp.GoSNMP{
+		Target:    ip.String(),
+		Port:      161,
+		Version:   gosnmp.Version2c,
+		Community: community,
+		Timeout:   5 * time.Second,
+		Retries:   1,
+	}
+
+	err := snmp.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	return snmp, nil
+}
+
+func (t *Tendrils) queryWirelessAP(node *Node, ip net.IP) bool {
+	snmp, err := t.connectSNMPv2c(ip, "tendrils12!")
+	if err != nil {
+		return false
+	}
+	defer snmp.Conn.Close()
+
+	sysObjID := t.getSysObjectID(snmp)
+	if !strings.HasPrefix(sysObjID, "1.3.6.1.4.1.11863.") {
+		return false
+	}
+
+	t.nodes.mu.Lock()
+	node.Type = NodeTypeAP
+	t.nodes.mu.Unlock()
+
+	ifNames := t.getInterfaceNames(snmp)
+	t.querySysName(snmp, node)
+	t.queryInterfaceMACs(snmp, node, ifNames)
+	t.queryTPLinkWirelessClients(snmp, node)
+
+	return true
+}
+
+func (t *Tendrils) getSysObjectID(snmp *gosnmp.GoSNMP) string {
+	oid := "1.3.6.1.2.1.1.2.0"
+
+	result, err := snmp.Get([]string{oid})
+	if err != nil {
+		return ""
+	}
+
+	if len(result.Variables) == 0 {
+		return ""
+	}
+
+	variable := result.Variables[0]
+	if variable.Type != gosnmp.ObjectIdentifier {
+		return ""
+	}
+
+	return strings.TrimPrefix(variable.Value.(string), ".")
+}
+
+func (t *Tendrils) queryTPLinkWirelessClients(snmp *gosnmp.GoSNMP, node *Node) {
+	clientMACOID := "1.3.6.1.4.1.11863.10.1.1.2.1.2"
+
+	results, err := snmp.BulkWalkAll(clientMACOID)
+	if err != nil {
+		if t.DebugSNMP {
+			log.Printf("[snmp] %s: tp-link client walk failed: %v", snmp.Target, err)
+		}
+		return
+	}
+
+	t.nodes.ClearMACTable(node)
+
+	for _, result := range results {
+		if result.Type != gosnmp.OctetString {
+			continue
+		}
+
+		macText := string(result.Value.([]byte))
+		macText = strings.TrimRight(macText, "\x00")
+		macText = strings.ReplaceAll(macText, "-", ":")
+		mac, err := net.ParseMAC(macText)
+		if err != nil {
+			if t.DebugSNMP {
+				log.Printf("[snmp] %s: invalid wireless client mac %q: %v", snmp.Target, macText, err)
+			}
+			continue
+		}
+
+		t.nodes.UpdateMACTable(node, mac, "wifi")
+
+		if t.DebugSNMP {
+			log.Printf("[snmp] %s: wireless client mac=%s", snmp.Target, mac.String())
+		}
+	}
+
+	t.NotifyUpdate()
 }

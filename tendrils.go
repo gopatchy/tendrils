@@ -333,7 +333,7 @@ func (t *Tendrils) pollNode(node *Node) {
 
 	if !t.DisableSNMP {
 		for _, ip := range ips {
-			t.querySNMPDevice(node, ip)
+			t.pollSNMP(node, ip)
 		}
 	}
 

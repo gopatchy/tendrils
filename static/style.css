@@ -80,6 +80,15 @@ body {
     display: none;
 }
 
+.location.ap-location {
+    background: #1a2a2a;
+    border: 1px solid #28a;
+}
+
+.location.ap-location > .location-name {
+    display: none;
+}
+
 .node-row {
     display: flex;
     flex-direction: row;
@@ -271,6 +280,11 @@ body.sacn-mode .node .sacn-hover {
 
 .node.switch {
     background: #2a2;
+    font-weight: bold;
+}
+
+.node.ap {
+    background: #28a;
     font-weight: bold;
 }
 
