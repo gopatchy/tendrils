@@ -220,6 +220,7 @@ locations:
       nodes:
       - names: ["sunset"]
       - names: ["RX-CONTROL-1"]
+      - names: ["showpi3"]
 
 shared_names:
   - "ULXD4Q G50 REV5"
