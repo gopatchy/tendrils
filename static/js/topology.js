@@ -130,7 +130,8 @@ export function getSwitchesInLocation(loc, assignedNodes) {
     const switches = [];
     const nodes = assignedNodes.get(loc) || [];
     nodes.forEach(n => {
-        if (isSwitch(n) || isAP(n)) switches.push(n);
+        if (isSwitch(n)) switches.push(n);
+        if (isAP(n) && loc.isAPLocation) switches.push(n);
     });
     loc.children.forEach(child => {
         if (child.anonymous || child.isAPLocation) {

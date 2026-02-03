@@ -1,4 +1,4 @@
-import { getLabel, getFirstName, isSwitch, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates, getInterfaceUptime, getInterfaceLastError } from './nodes.js';
+import { getLabel, getFirstName, isSwitch, isAP, getInterfaceSpeed, getInterfaceErrors, getInterfaceRates, getInterfaceUptime, getInterfaceLastError } from './nodes.js';
 import { buildSwitchUplinks } from './topology.js';
 import { escapeHtml, formatUniverse } from './format.js';
 import { tableData, tableSortKeys, setTableSortKeys } from './state.js';
@@ -96,7 +96,7 @@ export function renderNetworkTable() {
     nodes.forEach(node => nodesByTypeId.set(node.id, node));
 
     const upstreamConnections = new Map();
-    const allSwitches = nodes.filter(n => isSwitch(n));
+    const allSwitches = nodes.filter(n => isSwitch(n) || isAP(n));
     const switchLinks = [];
 
     links.forEach(link => {
@@ -104,8 +104,8 @@ export function renderNetworkTable() {
         const nodeB = nodesByTypeId.get(link.node_b_id);
         if (!nodeA || !nodeB) return;
 
-        const aIsSwitch = isSwitch(nodeA);
-        const bIsSwitch = isSwitch(nodeB);
+        const aIsSwitch = isSwitch(nodeA) || isAP(nodeA);
+        const bIsSwitch = isSwitch(nodeB) || isAP(nodeB);
 
         if (aIsSwitch && !bIsSwitch) {
             upstreamConnections.set(nodeB.id, {
