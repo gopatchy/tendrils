@@ -50,12 +50,20 @@ func (t *Tendrils) startHTTPServer() {
 	mux.HandleFunc("/tendrils/api/status", t.handleAPIStatus)
 	mux.HandleFunc("/tendrils/api/errors/clear", t.handleClearError)
 	mux.HandleFunc("/tendrils/api/nodes/remove", t.handleRemoveNode)
+	mux.Handle("/tendrils/mcp/", t.newMCPServer())
 	mux.Handle("/", noCacheHandler(http.FileServer(http.Dir("static"))))
 
 	log.Printf("[https] listening on :443")
 	go func() {
 		if err := http.ListenAndServeTLS(":443", certFile, keyFile, mux); err != nil {
 			log.Printf("[ERROR] https server failed: %v", err)
+		}
+	}()
+
+	log.Printf("[http] listening on :80")
+	go func() {
+		if err := http.ListenAndServe(":80", mux); err != nil {
+			log.Printf("[ERROR] http server failed: %v", err)
 		}
 	}()
 }

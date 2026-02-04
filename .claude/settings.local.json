@@ -98,7 +98,15 @@
       "Bash(while read id)",
       "Bash(do cat /home/flamingcow/tendrils/status)",
       "Bash(for id in node_01kgay2wynew8tjh1bpr9sd11e node_01kgay2wynew2t7qmfvtkrq2nb node_01kgay2wykevgbkxfvavxgpq30 node_01kgay2wynew5b80p45h8mdtpj node_01kgay2wynevtsrw26tprvqysw node_01kgay2wynevy9gp10a6rr4y2d)",
-      "Bash(do)"
+      "Bash(do)",
+      "WebFetch(domain:deepwiki.com)",
+      "Bash(claude mcp add --help:*)",
+      "mcp__tendrils__get_topology",
+      "mcp__tendrils__list_nodes",
+      "mcp__tendrils__list_errors",
+      "mcp__tendrils__list_links",
+      "mcp__tendrils__search_nodes",
+      "mcp__tendrils__get_node"
     ],
     "ask": [
       "Bash(rm *)"
