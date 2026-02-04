@@ -138,6 +138,18 @@ func (pm *PingManager) Ping(ipStr string, timeout time.Duration) bool {
 	}
 }
 
+func (pm *PingManager) TransferFailures(fromID, toID string) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	fromFailures := pm.failures[fromID]
+	toFailures := pm.failures[toID]
+	if fromFailures > toFailures {
+		pm.failures[toID] = fromFailures
+	}
+	delete(pm.failures, fromID)
+}
+
 func (t *Tendrils) pingNode(node *Node) {
 	t.nodes.mu.RLock()
 	if node.Avoid {

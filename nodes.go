@@ -388,9 +388,6 @@ func (n *Nodes) mergeNodes(keep, merge *Node) {
 		return
 	}
 
-	keepWasUnreachable := keep.Unreachable
-	mergeWasUnreachable := merge.Unreachable
-
 	for name := range merge.Names {
 		if keep.Names == nil {
 			keep.Names = NameSet{}
@@ -428,28 +425,20 @@ func (n *Nodes) mergeNodes(keep, merge *Node) {
 	n.mergeMulticast(keep, merge)
 	n.mergeDante(keep, merge)
 
-	if merge.cancelFunc != nil {
-		merge.cancelFunc()
+	if merge.InConfig {
+		keep.InConfig = true
 	}
 
-	hasIPs := false
-	for _, iface := range keep.Interfaces {
-		if len(iface.IPs) > 0 {
-			hasIPs = true
-			break
-		}
+	if merge.Unreachable {
+		keep.Unreachable = true
 	}
-	if hasIPs && (keepWasUnreachable || mergeWasUnreachable) {
-		keep.Unreachable = false
-		if n.t != nil && n.t.errors != nil {
-			n.t.errors.RemoveUnreachable(keep)
-		}
-		if keepWasUnreachable {
-			log.Printf("[merge] %s is now reachable (merged with node that has IPs)", keep.DisplayName())
-		}
-		if mergeWasUnreachable {
-			log.Printf("[merge] %s is now reachable (merged into %s)", merge.DisplayName(), keep.DisplayName())
-		}
+
+	if n.t != nil && n.t.ping != nil {
+		n.t.ping.TransferFailures(merge.ID, keep.ID)
+	}
+
+	if merge.cancelFunc != nil {
+		merge.cancelFunc()
 	}
 
 	n.removeNode(merge)
