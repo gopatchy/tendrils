@@ -203,6 +203,7 @@ locations:
       - names: ["SQ-7"]
         macs: ["00:04:c4:15:07:a4"]
       - names: ["BT"]
+        macs: ["00:1d:c1:55:80:6b"]
 
     - name: Camera Control
       nodes:

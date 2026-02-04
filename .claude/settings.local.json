@@ -106,7 +106,9 @@
       "mcp__tendrils__list_errors",
       "mcp__tendrils__list_links",
       "mcp__tendrils__search_nodes",
-      "mcp__tendrils__get_node"
+      "mcp__tendrils__get_node",
+      "Bash(claude mcp:*)",
+      "Bash(ping:*)"
     ],
     "ask": [
       "Bash(rm *)"
