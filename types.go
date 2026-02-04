@@ -494,6 +494,7 @@ type Node struct {
 	Unreachable           bool                   `json:"unreachable,omitempty"`
 	Avoid                 bool                   `json:"avoid,omitempty"`
 	InConfig              bool                   `json:"in_config,omitempty"`
+	IsSelf                bool                   `json:"is_self,omitempty"`
 	errors                *ErrorTracker
 	pollTrigger           chan struct{}
 	cancelFunc            context.CancelFunc

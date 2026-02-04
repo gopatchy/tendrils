@@ -200,6 +200,9 @@ func (t *Tendrils) populateLocalAddresses() {
 		t.nodes.Update(target, netIface.HardwareAddr, ips, netIface.Name, hostname, "local")
 		if target == nil {
 			target = t.nodes.GetByMAC(netIface.HardwareAddr)
+			if target != nil {
+				target.IsSelf = true
+			}
 		}
 	}
 }

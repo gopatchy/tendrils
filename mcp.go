@@ -76,7 +76,11 @@ func (t *Tendrils) mcpListNodes(ctx context.Context, req mcp.CallToolRequest) (*
 			nodeType = "unknown"
 		}
 
-		sb.WriteString(fmt.Sprintf("• %s [%s]\n", name, nodeType))
+		if node.IsSelf {
+			sb.WriteString(fmt.Sprintf("• %s [%s] ← THIS SERVER\n", name, nodeType))
+		} else {
+			sb.WriteString(fmt.Sprintf("• %s [%s]\n", name, nodeType))
+		}
 
 		for _, iface := range node.Interfaces {
 			sb.WriteString(fmt.Sprintf("  - %s", iface.MAC))
@@ -149,6 +153,9 @@ func formatNodeDetails(node *Node, links []*Link) string {
 	sb.WriteString(fmt.Sprintf("ID: %s\n", node.ID))
 	if node.Type != "" {
 		sb.WriteString(fmt.Sprintf("Type: %s\n", node.Type))
+	}
+	if node.IsSelf {
+		sb.WriteString("This Server: YES (tendrils is running here)\n")
 	}
 	if node.Unreachable {
 		sb.WriteString("Status: UNREACHABLE\n")
@@ -297,7 +304,11 @@ func (t *Tendrils) mcpSearchNodes(ctx context.Context, req mcp.CallToolRequest) 
 			nodeType = "unknown"
 		}
 
-		sb.WriteString(fmt.Sprintf("• %s [%s]\n", name, nodeType))
+		if node.IsSelf {
+			sb.WriteString(fmt.Sprintf("• %s [%s] ← THIS SERVER\n", name, nodeType))
+		} else {
+			sb.WriteString(fmt.Sprintf("• %s [%s]\n", name, nodeType))
+		}
 		for _, iface := range node.Interfaces {
 			sb.WriteString(fmt.Sprintf("  - %s", iface.MAC))
 			if len(iface.IPs) > 0 {
@@ -339,6 +350,7 @@ func (t *Tendrils) mcpGetTopology(ctx context.Context, req mcp.CallToolRequest) 
 
 	typeCounts := map[string]int{}
 	var unreachable int
+	var selfNode *Node
 	for _, node := range nodes {
 		nodeType := string(node.Type)
 		if nodeType == "" {
@@ -348,11 +360,17 @@ func (t *Tendrils) mcpGetTopology(ctx context.Context, req mcp.CallToolRequest) 
 		if node.Unreachable {
 			unreachable++
 		}
+		if node.IsSelf {
+			selfNode = node
+		}
 	}
 
 	var sb strings.Builder
 	sb.WriteString("Network Topology Summary\n")
 	sb.WriteString("========================\n\n")
+	if selfNode != nil {
+		sb.WriteString(fmt.Sprintf("This server: %s\n", selfNode.DisplayName()))
+	}
 	sb.WriteString(fmt.Sprintf("Total nodes: %d\n", len(nodes)))
 	sb.WriteString(fmt.Sprintf("Total links: %d\n", len(links)))
 	sb.WriteString(fmt.Sprintf("Active errors: %d\n", len(errors)))
