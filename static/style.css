@@ -167,6 +167,7 @@ body {
     border-radius: 6px;
     padding: 6px 8px;
     line-height: 1.4;
+    cursor: pointer;
 }
 
 .link-stats .lbl,
@@ -567,6 +568,7 @@ body.dante-mode .node .root-label {
     border-radius: 6px;
     padding: 6px 8px;
     line-height: 1.4;
+    cursor: pointer;
 }
 
 .node .dante-hover::after {
@@ -677,6 +679,7 @@ body.artnet-mode .node .root-label {
     border-radius: 6px;
     padding: 6px 8px;
     line-height: 1.4;
+    cursor: pointer;
 }
 
 .node .artnet-hover::after {
@@ -787,6 +790,7 @@ body.sacn-mode .node .root-label {
     border-radius: 6px;
     padding: 6px 8px;
     line-height: 1.4;
+    cursor: pointer;
 }
 
 .node .sacn-hover::after {
