@@ -192,6 +192,7 @@ locations:
       - names: ["SK_RACKPRO2 [452514]"]
       - names: ["pigeon"]
       - names: ["showpi1"]
+        macs: ["2c:cf:67:10:21:65"]
       - names: ["showpi2"]
         macs: ["d8:3a:dd:e3:5b:db"]
       - names: ["EAP770"]
