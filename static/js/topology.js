@@ -134,7 +134,7 @@ export function getSwitchesInLocation(loc, assignedNodes) {
         if (isAP(n) && loc.isAPLocation) switches.push(n);
     });
     loc.children.forEach(child => {
-        if (child.anonymous || child.isAPLocation) {
+        if (child.anonymous && !child.isAPLocation) {
             switches.push(...getSwitchesInLocation(child, assignedNodes));
         }
     });
