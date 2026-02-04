@@ -395,7 +395,7 @@ export function renderArtnetTable() {
         for (let i = 0; i < maxLen; i++) {
             rows.push({
                 universe: u,
-                universeStr: formatUniverse(u),
+                universeStr: formatUniverse(u, 'artnet'),
                 tx: txNodes[i]?.name || '',
                 txTitle: txNodes[i]?.title || '',
                 rx: rxNodes[i]?.name || '',

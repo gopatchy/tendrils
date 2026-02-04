@@ -248,7 +248,7 @@ export function render(data, config) {
 
         const inputs = sortedInputs.map(u => {
             const sources = collapseNames(universeOutputs.get(u) || []);
-            const uniStr = formatUniverse(u);
+            const uniStr = formatUniverse(u, 'artnet');
             if (sources.length > 0) {
                 return { display: sources[0] + ' [' + uniStr + ']', firstTarget: sources[0], universe: u };
             }
@@ -256,7 +256,7 @@ export function render(data, config) {
         });
         const outputs = sortedOutputs.map(u => {
             const dests = collapseNames(universeInputs.get(u) || []);
-            const uniStr = formatUniverse(u);
+            const uniStr = formatUniverse(u, 'artnet');
             if (dests.length > 0) {
                 return { display: dests[0] + ' [' + uniStr + ']', firstTarget: dests[0], universe: u };
             }

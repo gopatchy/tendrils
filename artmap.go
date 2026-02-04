@@ -85,8 +85,17 @@ func (t *Tendrils) processArtmapConfig(cfg *artmapConfig, artmapNode *Node) {
 		mappings := make([]ArtmapMapping, len(cfg.Mappings))
 		for i, m := range cfg.Mappings {
 			mappings[i] = ArtmapMapping{
-				From: formatArtmapAddr(m.From),
-				To:   formatArtmapToAddr(m.To),
+				From: ArtmapAddr{
+					Protocol:     m.From.Universe.Protocol,
+					Universe:     int(m.From.Universe.Number),
+					ChannelStart: m.From.ChannelStart,
+					ChannelEnd:   m.From.ChannelEnd,
+				},
+				To: ArtmapAddr{
+					Protocol:     m.To.Universe.Protocol,
+					Universe:     int(m.To.Universe.Number),
+					ChannelStart: m.To.ChannelStart,
+				},
 			}
 		}
 		t.nodes.UpdateArtmapMappings(artmapNode, mappings)
@@ -165,28 +174,6 @@ func parseTargetIP(addr string) net.IP {
 	return net.ParseIP(host)
 }
 
-func formatArtmapAddr(a artmapFromAddr) string {
-	u := formatArtmapUniverse(a.Universe)
-	if a.ChannelStart == 1 && a.ChannelEnd == 512 {
-		return u
-	}
-	if a.ChannelStart == a.ChannelEnd {
-		return fmt.Sprintf("%s:%d", u, a.ChannelStart)
-	}
-	return fmt.Sprintf("%s:%d-%d", u, a.ChannelStart, a.ChannelEnd)
-}
-
-func formatArtmapToAddr(a artmapToAddr) string {
-	u := formatArtmapUniverse(a.Universe)
-	if a.ChannelStart == 1 {
-		return u
-	}
-	return fmt.Sprintf("%s:%d", u, a.ChannelStart)
-}
-
-func formatArtmapUniverse(u artmapUniverse) string {
-	return fmt.Sprintf("%s:%d", u.Protocol, u.Number)
-}
 
 func (n *Nodes) UpdateArtmapMappings(node *Node, mappings []ArtmapMapping) {
 	n.mu.Lock()
