@@ -1,5 +1,6 @@
 import { getShortLabel, getFirstName, isSwitch, findInterface } from './nodes.js';
 import { flowViewData, currentMode, currentView } from './state.js';
+import { formatUniverse, formatArtmapAddr } from './format.js';
 
 function scrollToNode(typeid) {
     const nodeEl = document.querySelector('.node[data-id="' + typeid + '"]');
@@ -124,6 +125,7 @@ export function showFlowView(flowSpec) {
         const universe = parseInt(parts[1], 10);
         const sourceIdent = parts[2];
         const protoName = protocol === 'sacn' ? 'sACN' : 'Art-Net';
+        const universeDisplay = formatUniverse(universe, protocol);
         flowUniverse = universe;
         flowProtocol = protocol;
         if (isNaN(universe)) { error = 'Invalid universe'; }
@@ -152,7 +154,7 @@ export function showFlowView(flowSpec) {
                     const isDest = destIds.includes(clickedNodeId);
                     if (isSource) {
                         const destNames = destIds.filter(id => id !== clickedNodeId).map(id => getFirstName(nodesByTypeId.get(id))).join(', ');
-                        title = protoName + ' ' + universe + ': ' + getFirstName(clickedNode) + ' → ' + (destNames || '?');
+                        title = protoName + ' ' + universeDisplay + ': ' + getFirstName(clickedNode) + ' → ' + (destNames || '?');
                         destIds.forEach(destId => {
                             if (destId !== clickedNodeId) {
                                 const path = findPath(graph, clickedNodeId, destId);
@@ -161,17 +163,17 @@ export function showFlowView(flowSpec) {
                         });
                     } else if (isDest) {
                         const sourceNames = sourceIds.map(id => getFirstName(nodesByTypeId.get(id))).join(', ');
-                        title = protoName + ' ' + universe + ': ' + (sourceNames || '?') + ' → ' + getFirstName(clickedNode);
+                        title = protoName + ' ' + universeDisplay + ': ' + (sourceNames || '?') + ' → ' + getFirstName(clickedNode);
                         sourceIds.forEach(sourceId => {
                             const path = findPath(graph, sourceId, clickedNodeId);
                             if (path) paths.push({ path, sourceId, destId: clickedNodeId });
                         });
                     } else {
-                        error = 'Node is not a source or destination for universe ' + universe;
+                        error = 'Node is not a source or destination for universe ' + universeDisplay;
                     }
                 }
             } else {
-                title = protoName + ' Universe ' + universe;
+                title = protoName + ' Universe ' + universeDisplay;
                 sourceIds.forEach(sourceId => {
                     destIds.forEach(destId => {
                         if (sourceId !== destId) {
@@ -181,7 +183,7 @@ export function showFlowView(flowSpec) {
                     });
                 });
             }
-            if (!error && paths.length === 0) error = 'No active flows for universe ' + universe;
+            if (!error && paths.length === 0) error = 'No active flows for universe ' + universeDisplay;
         }
     } else {
         error = 'Unknown protocol: ' + protocol;
@@ -344,31 +346,41 @@ export function renderFlowPath(pathInfo, nodesByTypeId, flowUniverse, flowProtoc
                 mappingsEl = document.createElement('div');
                 mappingsEl.className = 'flow-artmap-mappings';
                 if (isSourceNode) mappingsEl.classList.add('before-node');
-                const currentPrefix = flowProtocol + ':' + flowUniverse;
                 const nodeName = getFirstName(node);
                 relevantMappings.forEach(m => {
                     const mappingEl = document.createElement('div');
                     mappingEl.className = 'artmap-mapping';
+                    const fromMatches = m.from.protocol === flowProtocol && m.from.universe === flowUniverse;
+                    const target = fromMatches ? m.to : m.from;
+                    const targetValid = hasValidFlow(nodesByTypeId, target.protocol, target.universe);
+                    const leftIcon = document.createElement('span');
+                    leftIcon.className = 'flow-validity-icon left';
+                    const rightIcon = document.createElement('span');
+                    rightIcon.className = 'flow-validity-icon right';
+                    const activeIcon = fromMatches ? rightIcon : leftIcon;
+                    if (targetValid) {
+                        activeIcon.textContent = '●';
+                        activeIcon.classList.add('valid');
+                    } else {
+                        activeIcon.textContent = '⊘';
+                        activeIcon.classList.add('invalid');
+                    }
                     const fromSpan = document.createElement('span');
                     fromSpan.className = 'from';
-                    fromSpan.textContent = m.from;
+                    fromSpan.textContent = formatArtmapAddr(m.from);
                     const arrowSpan = document.createElement('span');
                     arrowSpan.textContent = '→';
                     const toSpan = document.createElement('span');
                     toSpan.className = 'to';
-                    toSpan.textContent = m.to;
+                    toSpan.textContent = formatArtmapAddr(m.to);
+                    mappingEl.appendChild(leftIcon);
                     mappingEl.appendChild(fromSpan);
                     mappingEl.appendChild(arrowSpan);
                     mappingEl.appendChild(toSpan);
+                    mappingEl.appendChild(rightIcon);
                     mappingEl.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const fromBase = m.from.split(':').slice(0, 2).join(':');
-                        const target = fromBase === currentPrefix ? m.to : m.from;
-                        const targetProto = target.split(':')[0];
-                        const targetUniverse = parseInt(target.split(':')[1], 10);
-                        if (!isNaN(targetUniverse)) {
-                            openFlowHash(targetProto, targetUniverse, nodeName);
-                        }
+                        openFlowHash(target.protocol, target.universe, nodeName);
                     });
                     mappingsEl.appendChild(mappingEl);
                 });
@@ -388,12 +400,29 @@ export function renderFlowPath(pathInfo, nodesByTypeId, flowUniverse, flowProtoc
 }
 
 function getRelevantMappings(mappings, protocol, universe) {
-    const prefix = protocol + ':' + universe;
     return mappings.filter(m => {
-        const fromBase = m.from.split(':').slice(0, 2).join(':');
-        const toBase = m.to.split(':').slice(0, 2).join(':');
-        return fromBase === prefix || toBase === prefix;
+        const fromMatches = m.from.protocol === protocol && m.from.universe === universe;
+        const toMatches = m.to.protocol === protocol && m.to.universe === universe;
+        return fromMatches || toMatches;
     });
+}
+
+function hasValidFlow(nodesByTypeId, protocol, universe) {
+    let hasSources = false;
+    let hasDests = false;
+    for (const node of nodesByTypeId.values()) {
+        if (protocol === 'sacn') {
+            if ((node.sacn_outputs || []).includes(universe)) hasSources = true;
+            const groups = node.multicast_groups || [];
+            const unicastInputs = node.sacn_unicast_inputs || [];
+            if (groups.some(g => g === 'sacn:' + universe) || unicastInputs.includes(universe)) hasDests = true;
+        } else if (protocol === 'artnet') {
+            if ((node.artnet_inputs || []).includes(universe)) hasSources = true;
+            if ((node.artnet_outputs || []).includes(universe)) hasDests = true;
+        }
+        if (hasSources && hasDests) return true;
+    }
+    return false;
 }
 
 export function closeFlowView() {

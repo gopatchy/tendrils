@@ -43,7 +43,7 @@ func (u ArtNetUniverse) Universe() int {
 }
 
 func (u ArtNetUniverse) String() string {
-	return fmt.Sprintf("%d/%d/%d", u.Net(), u.Subnet(), u.Universe())
+	return fmt.Sprintf("%d:%d:%d (%d)", u.Net(), u.Subnet(), u.Universe(), int(u))
 }
 
 type ArtNetUniverseSet map[ArtNetUniverse]time.Time
@@ -109,8 +109,15 @@ func (s SACNUniverseSet) MarshalJSON() ([]byte, error) {
 }
 
 type ArtmapMapping struct {
-	From string `json:"from"`
-	To   string `json:"to"`
+	From ArtmapAddr `json:"from"`
+	To   ArtmapAddr `json:"to"`
+}
+
+type ArtmapAddr struct {
+	Protocol     string `json:"protocol"`
+	Universe     int    `json:"universe"`
+	ChannelStart int    `json:"channel_start,omitempty"`
+	ChannelEnd   int    `json:"channel_end,omitempty"`
 }
 
 type MulticastGroupID int

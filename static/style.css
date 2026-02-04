@@ -982,13 +982,33 @@ body.sacn-mode .node.sacn-out.sacn-in .sacn-in-hover .sacn-detail-wrapper {
 
 .artmap-mapping {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: 1em 1fr auto 1fr 1em;
     gap: 6px;
     font-size: 11px;
     color: #aaf;
     cursor: pointer;
     padding: 2px 4px;
     border-radius: 3px;
+}
+
+.artmap-mapping .flow-validity-icon {
+    font-size: 10px;
+}
+
+.artmap-mapping .flow-validity-icon.left {
+    text-align: left;
+}
+
+.artmap-mapping .flow-validity-icon.right {
+    text-align: right;
+}
+
+.artmap-mapping .flow-validity-icon.valid {
+    color: #4c4;
+}
+
+.artmap-mapping .flow-validity-icon.invalid {
+    color: #e44;
 }
 
 .artmap-mapping .from {
@@ -1002,6 +1022,14 @@ body.sacn-mode .node.sacn-out.sacn-in .sacn-in-hover .sacn-detail-wrapper {
 .artmap-mapping:hover {
     background: #2a2a4e;
     color: #ccf;
+}
+
+.artmap-mapping:hover .flow-validity-icon.valid {
+    color: #6f6;
+}
+
+.artmap-mapping:hover .flow-validity-icon.invalid {
+    color: #f66;
 }
 
 .node.has-error {

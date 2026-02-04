@@ -26,11 +26,29 @@ export function formatLinkSpeed(bps) {
     return mbps.toLocaleString() + ' Mbit/s';
 }
 
-export function formatUniverse(u) {
-    const net = (u >> 8) & 0x7f;
-    const subnet = (u >> 4) & 0x0f;
-    const universe = u & 0x0f;
-    return net + ':' + subnet + ':' + universe + ' (' + u + ')';
+export function formatUniverse(u, protocol) {
+    if (protocol === 'artnet') {
+        const net = (u >> 8) & 0x7f;
+        const subnet = (u >> 4) & 0x0f;
+        const universe = u & 0x0f;
+        return net + ':' + subnet + ':' + universe + ' (' + u + ')';
+    }
+    return String(u);
+}
+
+export function formatArtmapAddr(addr) {
+    const uniStr = formatUniverse(addr.universe, addr.protocol);
+    let result = addr.protocol + ' ' + uniStr;
+    if (addr.channel_start && addr.channel_end && !(addr.channel_start === 1 && addr.channel_end === 512)) {
+        if (addr.channel_start === addr.channel_end) {
+            result += ' ch' + addr.channel_start;
+        } else {
+            result += ' ch' + addr.channel_start + '-' + addr.channel_end;
+        }
+    } else if (addr.channel_start && addr.channel_start !== 1) {
+        result += ' ch' + addr.channel_start;
+    }
+    return result;
 }
 
 export function escapeHtml(str) {
