@@ -169,7 +169,7 @@ export function showFlowView(flowSpec) {
                             if (path) paths.push({ path, sourceId, destId: clickedNodeId });
                         });
                     } else {
-                        error = 'Node is not a source or destination for universe ' + universe;
+                        error = 'Node is not a source or destination for universe ' + universeDisplay;
                     }
                 }
             } else {
@@ -183,7 +183,7 @@ export function showFlowView(flowSpec) {
                     });
                 });
             }
-            if (!error && paths.length === 0) error = 'No active flows for universe ' + universe;
+            if (!error && paths.length === 0) error = 'No active flows for universe ' + universeDisplay;
         }
     } else {
         error = 'Unknown protocol: ' + protocol;
@@ -350,6 +350,21 @@ export function renderFlowPath(pathInfo, nodesByTypeId, flowUniverse, flowProtoc
                 relevantMappings.forEach(m => {
                     const mappingEl = document.createElement('div');
                     mappingEl.className = 'artmap-mapping';
+                    const fromMatches = m.from.protocol === flowProtocol && m.from.universe === flowUniverse;
+                    const target = fromMatches ? m.to : m.from;
+                    const targetValid = hasValidFlow(nodesByTypeId, target.protocol, target.universe);
+                    const leftIcon = document.createElement('span');
+                    leftIcon.className = 'flow-validity-icon left';
+                    const rightIcon = document.createElement('span');
+                    rightIcon.className = 'flow-validity-icon right';
+                    const activeIcon = fromMatches ? rightIcon : leftIcon;
+                    if (targetValid) {
+                        activeIcon.textContent = '●';
+                        activeIcon.classList.add('valid');
+                    } else {
+                        activeIcon.textContent = '⊘';
+                        activeIcon.classList.add('invalid');
+                    }
                     const fromSpan = document.createElement('span');
                     fromSpan.className = 'from';
                     fromSpan.textContent = formatArtmapAddr(m.from);
@@ -358,13 +373,13 @@ export function renderFlowPath(pathInfo, nodesByTypeId, flowUniverse, flowProtoc
                     const toSpan = document.createElement('span');
                     toSpan.className = 'to';
                     toSpan.textContent = formatArtmapAddr(m.to);
+                    mappingEl.appendChild(leftIcon);
                     mappingEl.appendChild(fromSpan);
                     mappingEl.appendChild(arrowSpan);
                     mappingEl.appendChild(toSpan);
+                    mappingEl.appendChild(rightIcon);
                     mappingEl.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const fromMatches = m.from.protocol === flowProtocol && m.from.universe === flowUniverse;
-                        const target = fromMatches ? m.to : m.from;
                         openFlowHash(target.protocol, target.universe, nodeName);
                     });
                     mappingsEl.appendChild(mappingEl);
@@ -390,6 +405,24 @@ function getRelevantMappings(mappings, protocol, universe) {
         const toMatches = m.to.protocol === protocol && m.to.universe === universe;
         return fromMatches || toMatches;
     });
+}
+
+function hasValidFlow(nodesByTypeId, protocol, universe) {
+    let hasSources = false;
+    let hasDests = false;
+    for (const node of nodesByTypeId.values()) {
+        if (protocol === 'sacn') {
+            if ((node.sacn_outputs || []).includes(universe)) hasSources = true;
+            const groups = node.multicast_groups || [];
+            const unicastInputs = node.sacn_unicast_inputs || [];
+            if (groups.some(g => g === 'sacn:' + universe) || unicastInputs.includes(universe)) hasDests = true;
+        } else if (protocol === 'artnet') {
+            if ((node.artnet_inputs || []).includes(universe)) hasSources = true;
+            if ((node.artnet_outputs || []).includes(universe)) hasDests = true;
+        }
+        if (hasSources && hasDests) return true;
+    }
+    return false;
 }
 
 export function closeFlowView() {
